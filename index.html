@@ -2996,6 +2996,39 @@ async function openEntry(teamId){
 function entrySetPlayer(i, key, val){ state.entry.players[i][key]=val; }
 function entryAddPlayer(){ state.entry.players.push({ id:uid(), no:null, name:"", pos:"", grade:null }); render(); }
 function entryRemovePlayer(i){ state.entry.players.splice(i,1); render(); }
+function openEntryBulk(){
+  const el = document.createElement("div"); el.className = "modal";
+  el.innerHTML = `<div class="sheet">
+    <h3>選手をまとめて貼り付け</h3>
+    <p class="hint" style="margin-bottom:8px">1行に1人。<b>Excelやメモからそのまま貼り付け</b>できます（番号／氏名／かな／学年／位置）。<br>
+    手で打つときは「<b>10 山田太郎 6 FW</b>」のようにスペースで区切ってください。</p>
+    <textarea class="in" id="ebulk-tx" style="min-height:180px" placeholder="10 山田太郎 6 FW
+1 佐藤花子 5 GK
+7 鈴木一郎 4"></textarea>
+    <label class="f">入れ方</label>
+    <div class="seg" id="ebulk-mode">
+      <button class="on" data-v="add">いまの名簿に足す</button>
+      <button data-v="replace">いまの名簿を入れ替える</button>
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="ebulk-ok">取り込む</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  let mode = "add";
+  el.querySelectorAll("#ebulk-mode button").forEach(b=> b.onclick = ()=>{
+    el.querySelectorAll("#ebulk-mode button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); mode = b.dataset.v;
+  });
+  $("#ebulk-ok").onclick = ()=>{
+    const rows = $("#ebulk-tx").value.split("\n").map(parseMemberLine).filter(Boolean);
+    if(!rows.length){ toast("読み取れる行がありませんでした"); return; }
+    const add = rows.map(r=>({ id:uid(), memberId:null, no:r.no, name:r.name, pos:r.pos||"", grade:r.grade||null }));
+    state.entry.players = (mode==="replace") ? add : state.entry.players.concat(add);
+    el.remove(); render(); toast(`${rows.length}名を取り込みました`);
+  };
+}
 async function submitEntry(){
   const e = state.entry;
   const code = (document.getElementById("entrycode")?.value||"").trim().toUpperCase();
@@ -3003,6 +3036,7 @@ async function submitEntry(){
   const players = e.players.map(p=>({ id:p.id||uid(), memberId:p.memberId||null,
       no:(p.no===""||p.no==null)?null:num(p.no), name:(p.name||"").trim(),
       pos:p.pos||"", grade:p.grade?num(p.grade):null })).filter(p=>p.name);
+  if(!players.length && !confirm("選手が1人も入力されていません。このまま提出しますか？")) return;
   try{
     const ok = await DB.submitRoster(e.team.id, code, players);
     if(!ok){ toast("記入コードが違います"); return; }
@@ -3016,6 +3050,9 @@ function viewEntry(){
   if(e.error) return topbar({title:"名簿の記入"}) + `<div class="screen"><div class="empty">${esc(e.error)}</div></div>`;
   const note = cfgOf(e.t).entryNote || "";
   const POS = ["","GK","DF","MF","FW"];
+  const nums = e.players.map(p=>p.no).filter(n=>n!=null && n!=="");
+  const dups = [...new Set(nums.filter((n,i)=>nums.indexOf(n)!==i))];
+  const dupWarn = dups.length ? `<div class="callout" style="margin-top:8px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ 背番号が重なっています：${dups.join("、")}</div>` : "";
   return topbar({ title:"名簿の記入", sub:e.t.name })
   + `<div class="screen">
     <div class="card">
@@ -3033,11 +3070,15 @@ function viewEntry(){
           <td><button class="linkbtn" style="color:var(--bad)" onclick="entryRemovePlayer(${i})">削除</button></td>
         </tr>`).join("")}</tbody>
       </table></div>
-      <button class="btn ghost" style="margin-top:8px" onclick="entryAddPlayer()">＋ 選手を追加</button>
+      <div class="btnrow" style="margin-top:8px">
+        <button class="btn ghost" style="flex:1" onclick="entryAddPlayer()">＋ 選手を追加</button>
+        <button class="btn ghost" style="flex:1" onclick="openEntryBulk()">📋 まとめて貼り付け</button>
+      </div>
+      ${dupWarn}
     </div>
     <div class="card">
       <label class="lbl">記入コード（本部からもらった6文字）</label>
-      <input id="entrycode" class="in" style="text-transform:uppercase;letter-spacing:3px;font-size:18px" placeholder="ABC123" maxlength="6" value="${esc(e.code||"")}">
+      <input id="entrycode" class="in" style="text-transform:uppercase;letter-spacing:3px;font-size:18px" placeholder="ABC123" maxlength="6" value="${esc(e.code||"")}" oninput="this.value=this.value.toUpperCase()">
       <button class="btn" style="margin-top:12px" onclick="submitEntry()">この内容で提出する</button>
       ${e.done?`<div class="callout ok" style="margin-top:10px">✅ 提出できました。あとから直して再提出もできます。</div>`:""}
       <p class="hint">提出すると本部の大会に反映されます。締切や背番号の決まりは本部の連絡にしたがってください。</p>
@@ -3056,9 +3097,13 @@ function viewEntryLinks(){
   if(!state.t) return topbar({title:"記入リンクを配る", back:"go('home')"}) + `<div class="empty">大会が選ばれていません。</div>`;
   if(state.loading) return topbar({title:"記入リンクを配る", back:"go('t')"}) + `<div class="empty">準備中…</div>`;
   const map = state.entryMap||{};
+  const total = state.teams.length;
+  const done = state.teams.filter(t=>map[t.id]?.submitted_at).length;
   return topbar({ title:"記入リンクを配る", sub:state.t.name, back:"go('t')" })
   + `<div class="screen">
     <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分の名簿だけを入力・提出できます（他チームや結果は触れません）。</p>
+    <div class="callout ${done===total&&total?"ok":""}" style="margin-bottom:10px">提出状況：<b>${done} / ${total}</b> チーム${done===total&&total?"（全チーム提出ずみ）":"が提出ずみ"}</div>
+    <button class="btn ghost sm noprint" style="margin-bottom:10px" onclick="window.print()">🖨 一覧を印刷して配る</button>
     ${state.teams.map(t=>{
       const e = map[t.id]||{}; const link = entryLinkFor(t.id);
       const guide = `【${t.name}】メンバー名簿の記入をお願いします。\n下のリンクを開いて、記入コード ${e.code||""} を入れて提出してください。\n${link}`;
@@ -3090,10 +3135,14 @@ setInterval(async ()=>{
   try{
     const d = await DB.loadTournament(state.t.id);
     if(!d.t) return;
-    const before = JSON.stringify(state.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]));
+    // 結果（スコア・状態・メモ）に加え、名簿の提出（記入リンク）も自動で反映する
+    const sig = s => JSON.stringify([
+      s.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]),
+      s.teams.map(t=>[t.id, t.grp, (t.players||[]).length]),
+    ]);
+    const before = sig({matches:state.matches, teams:state.teams});
     state.t = d.t; state.teams = d.teams; state.matches = d.matches;
-    const after = JSON.stringify(state.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]));
-    if(before!==after) render();
+    if(before !== sig(d)) render();
   }catch(e){ /* 通信できないときは静かに次回へ */ }
 }, POLL_MS);
 
