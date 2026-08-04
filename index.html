@@ -17,9 +17,12 @@
   --ink:#0d1b3d; --paper:#f1f5f9; --line:#dbe2ee; --sub:#6b7280;
   --ok:#1f9d55; --na:#9aa4b2; --warn:#e0930c; --bad:#d6453d;
   --okbg:#e6f4ec; --nabg:#eef1f5; --warnbg:#fdf5e3; --badbg:#fbe7e5;
-  --brand:#0d1b3d; --accent:#1e3a8a; --accent2:#2a4fae; --accentbg:#e8edf9;
-  --gold:#d4af37; --goldbg:#faf3dd;
-  --shadow:0 1px 3px rgba(13,27,61,.08),0 4px 16px rgba(13,27,61,.07);
+  --brand:#0d1b3d; --accent:#2148c7; --accent2:#3b6fe0; --accentbg:#e7edfd;
+  --gold:#e2b93b; --goldbg:#faf3dd;
+  --grad:linear-gradient(135deg,#16266b 0%,#2148c7 55%,#3b6fe0 100%);
+  --grad-gold:linear-gradient(135deg,#caa233,#f0d178);
+  --shadow:0 1px 3px rgba(13,27,61,.07),0 6px 20px rgba(13,27,61,.09);
+  --shadow-lg:0 12px 32px rgba(21,38,107,.18);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;}
@@ -46,11 +49,12 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 /* ===== ヘッダー ===== */
 .topbar{
   position:sticky; top:0; z-index:50;
-  background:var(--brand); color:#fff;
-  border-bottom:2px solid var(--gold);
+  background:var(--grad); color:#fff;
+  border-bottom:2px solid transparent;
+  border-image:var(--grad-gold) 1;
   padding:calc(env(safe-area-inset-top) + 12px) 14px 12px;
   display:flex; align-items:center; gap:9px;
-  box-shadow:0 2px 10px rgba(13,27,61,.18);
+  box-shadow:0 4px 18px rgba(13,27,61,.28);
 }
 .topbar .back{
   font-size:14px; padding:6px 10px; margin-left:-4px;
@@ -65,17 +69,29 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 
 .screen{max-width:640px;margin:0 auto;padding:14px;}
 .lead{font-size:13.5px;color:var(--sub);margin:2px 0 14px;}
-.brandhero{text-align:center;padding:10px 0 2px;}
-.brandhero img{width:120px;height:120px;border-radius:26px;box-shadow:var(--shadow);}
+.brandhero{text-align:center;padding:18px 0 2px;position:relative;}
+.brandhero img{width:120px;height:120px;border-radius:28px;box-shadow:var(--shadow-lg);
+  position:relative;z-index:1;}
+.brandhero::before{content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+  width:190px;height:190px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(59,111,224,.20),rgba(59,111,224,0));z-index:0;}
 .brandhero .tag{margin-top:11px;font-size:13.5px;font-weight:800;color:var(--brand);letter-spacing:.03em;}
 .brandhero .tag::before,.brandhero .tag::after{content:"";display:inline-block;width:16px;height:2px;
   background:var(--gold);vertical-align:middle;margin:0 8px;}
+.hero{position:relative;overflow:hidden;border-radius:18px;margin-bottom:16px;
+  background:var(--grad);color:#fff;padding:20px 18px;box-shadow:var(--shadow-lg);}
+.hero::after{content:"🏆";position:absolute;right:2px;bottom:-16px;font-size:92px;opacity:.16;transform:rotate(-10deg);}
+.hero h2{margin:0;font-size:21px;font-weight:800;letter-spacing:.02em;position:relative;z-index:1;}
+.hero p{margin:6px 0 0;font-size:13px;opacity:.92;font-weight:500;position:relative;z-index:1;max-width:80%;}
+.hero .goldline{display:inline-block;width:36px;height:3px;border-radius:2px;background:var(--grad-gold);margin-top:11px;position:relative;z-index:1;}
 .block-label{font-size:12px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin:20px 4px 8px;}
 .block-label:first-child{margin-top:2px;}
 
 /* ===== カード ===== */
-.card{background:#fff;border:1.5px solid var(--line);border-radius:14px;
-  padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);}
+.card{background:#fff;border:1.5px solid var(--line);border-radius:16px;
+  padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);
+  transition:box-shadow .18s,transform .18s;}
+.card:hover{box-shadow:var(--shadow-lg);}
 .pick{display:flex;width:100%;text-align:left;align-items:center;justify-content:space-between;gap:10px;
   background:#fff;border:1.5px solid var(--line);border-radius:14px;
   padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);
@@ -93,8 +109,10 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 /* ===== ボタン ===== */
 .btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
   padding:14px;border-radius:12px;font-size:15.5px;font-weight:700;
-  background:var(--accent);color:#fff;box-shadow:var(--shadow);}
+  background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(33,72,199,.28);
+  transition:transform .08s,box-shadow .15s;}
 .btn:active{transform:scale(.985);}
+.btn:hover{box-shadow:0 6px 20px rgba(33,72,199,.38);}
 .btn.sec{background:#fff;color:var(--accent);border:1.5px solid var(--accent);}
 .btn.ghost{background:#fff;color:var(--sub);border:1.5px solid var(--line);}
 .btn.danger{background:#fff;color:var(--bad);border:1.5px solid #f0bdb9;}
@@ -123,7 +141,7 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .tabs::-webkit-scrollbar{display:none;}
 .tabs button{padding:8px 14px;border-radius:999px;font-size:13.5px;font-weight:700;
   color:var(--sub);background:#fff;border:1.5px solid var(--line);white-space:nowrap;}
-.tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+.tabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(33,72,199,.3);}
 
 /* ===== 試合カード ===== */
 .mcard{background:#fff;border:1.5px solid var(--line);border-radius:14px;
@@ -134,13 +152,17 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .mcard .mno{color:var(--gold);font-weight:800;}
 .mcard .mnote{margin:0 13px 10px;padding:7px 10px;background:var(--warnbg);border:1px solid #f0dca8;
   border-radius:8px;font-size:12.5px;color:#8a6206;font-weight:600;line-height:1.5;}
-.mcard .mbody{display:flex;align-items:center;padding:12px 13px;gap:8px;width:100%;text-align:left;}
-.mcard .side{flex:1;min-width:0;}
-.mcard .tname{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mcard .mbody{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  padding:12px 13px;gap:10px;width:100%;text-align:left;}
+.mcard .side{min-width:0;}
+.mcard .tname{font-size:15px;font-weight:700;line-height:1.25;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  word-break:break-word;overflow-wrap:anywhere;}
 .mcard .side.away{text-align:right;}
 .mcard .sc{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;
-  min-width:74px;text-align:center;letter-spacing:.02em;}
-.mcard .sc.pending{font-size:14px;color:var(--na);font-weight:700;letter-spacing:.1em;}
+  min-width:64px;flex-shrink:0;text-align:center;letter-spacing:.02em;
+  padding:2px 8px;border-radius:9px;background:var(--paper);}
+.mcard .sc.pending{font-size:14px;color:var(--na);font-weight:700;letter-spacing:.1em;background:transparent;}
 .mcard .pk{font-size:11px;color:var(--sub);font-weight:600;}
 .mcard .win{color:var(--accent);}
 .mcard .scorers{padding:0 13px 10px;font-size:11.5px;color:var(--sub);line-height:1.6;}
@@ -633,6 +655,22 @@ const DB = {
     if(error) throw error;
     return data === true;
   },
+  // チーム側：コードを添えて「現在の名簿」を読む（新年度の更新用）
+  async loadClubRosterByCode(clubId, code){
+    if(!sb){
+      const d = local.read();
+      const e = d.clubEntry.find(x=>x.club_id===clubId && x.code===code);
+      if(!e) return null;
+      const c = d.clubs.find(x=>x.id===clubId); if(!c) return null;
+      const players = d.members.filter(m=>m.club_id===clubId && m.status==="active")
+        .sort((a,b)=>(a.no??999)-(b.no??999)||(a.sort_order||0)-(b.sort_order||0))
+        .map(m=>({ id:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade, prev_team:m.prev_team }));
+      return { name:c.name, category:c.category, crest:c.crest||null, players };
+    }
+    const { data, error } = await sb.rpc("get_club_roster", { p_club:clubId, p_code:code });
+    if(error) throw error;
+    return data || null;
+  },
 };
 
 /* 記入コード（紛らわしい文字を避けた6桁） */
@@ -987,6 +1025,11 @@ function viewHome(){
       ? `<button class="act" onclick="logout()">${esc(state.user.code)} ⏻</button>`
       : `<button class="act" onclick="go('login')">運営ログイン</button>` })
   + `<div class="screen">
+    <div class="hero">
+      <h2>${state.user ? `${esc(state.user.code)} の大会運営` : "大会運営を、スマートに。"}</h2>
+      <p>結果を入れるだけで、順位表・トーナメント・得点ランキングが自動で完成。</p>
+      <span class="goldline"></span>
+    </div>
     ${!sb ? `<div class="setup-warn"><b>お試しモードです。</b>保存先（Supabase）が未設定なので、データはこの端末の中だけに残ります。複数の担当者で分担入力するには設定が必要です。</div>` : ""}
     ${state.user ? `<button class="btn" onclick="go('new')">＋ 大会をつくる</button>
       <div class="btnrow"><button class="btn sec" onclick="go('roster')">📋 チーム・選手の台帳（${orgYear()}年度）</button></div>` : ""}
@@ -1471,31 +1514,58 @@ async function saveSchedule(){
 }
 
 /* --- 順位表 --- */
+/* ブロックごとの昇格・降格・入れ替え戦の設定（旧・大会全体の promote/relegate も拾う） */
+function promoConfig(b, cfg){
+  const g = { up:num(cfg?.promote)||0, upPo:0, down:num(cfg?.relegate)||0, downPo:0 };
+  if(!b) return g;
+  const has = ["up","upPo","down","downPo"].some(k=> b[k]!=null && b[k]!=="");
+  if(!has) return g;
+  return { up:num(b.up)||0, upPo:num(b.upPo)||0, down:num(b.down)||0, downPo:num(b.downPo)||0 };
+}
+/* 順位 i（0始まり）が 自動昇格／昇格入替戦／降格入替戦／自動降格 のどれか */
+const STAND_ZONES = {
+  up:   { bg:"rgba(31,157,85,.17)",  mark:"▲", col:"var(--ok)",   label:"自動昇格" },
+  upPo: { bg:"rgba(42,157,120,.15)", mark:"△", col:"#1c8f6a",     label:"昇格入れ替え戦" },
+  downPo:{ bg:"rgba(224,147,12,.17)",mark:"▽", col:"#b8760a",     label:"降格入れ替え戦" },
+  down: { bg:"rgba(214,69,61,.15)",  mark:"▼", col:"var(--bad)",  label:"自動降格" },
+};
+function standZone(i, n, pc){
+  if(pc.up   && i < pc.up)                        return "up";
+  if(pc.upPo && i < pc.up + pc.upPo)              return "upPo";
+  if(pc.down && i >= n - pc.down)                 return "down";
+  if(pc.downPo && i >= n - pc.down - pc.downPo)   return "downPo";
+  return null;
+}
 function tabTable(){
   const cfg = cfgOf(state.t);
   const blocks = blocksOf(state.t);
   const one = blocks.length<=1;
   const adv = state.t.format==="league_ko" ? cfg.advance : 0;
-  const promote = num(cfg.promote)||0, relegate = num(cfg.relegate)||0;
-  return (blocks.length?blocks:[null]).map(b=>{
+  const usedZones = new Set();
+  const body = (blocks.length?blocks:[null]).map(b=>{
     const rows = standings(b?b.id:null);
     if(!rows.length) return "";
     const n = rows.length;
+    const pc = promoConfig(b, cfg);
     return `${(b && !one)?`<div class="block-label">${esc(b.name)}</div>`:""}
     <div class="tblwrap"><table>
       <thead><tr><th></th><th style="text-align:left">チーム</th><th>試</th><th>勝</th><th>分</th><th>負</th><th>得</th><th>失</th><th>差</th><th>点</th></tr></thead>
       <tbody>${rows.map((r,i)=>{
-        const isP = promote && i<promote, isR = relegate && i>=n-relegate;
-        const bg = isP?"background:rgba(31,157,85,.15)":isR?"background:rgba(214,69,61,.13)":"";
-        const mark = isP?`<span title="昇格" style="color:var(--ok);font-weight:800"> ▲</span>`:isR?`<span title="降格" style="color:var(--bad);font-weight:800"> ▼</span>`:"";
+        const z = standZone(i, n, pc); if(z) usedZones.add(z);
+        const zc = z ? STAND_ZONES[z] : null;
+        const bg = zc ? `background:${zc.bg}` : "";
+        const mark = zc ? `<span title="${zc.label}" style="color:${zc.col};font-weight:800"> ${zc.mark}</span>` : "";
         return `<tr class="${adv&&i<adv?"adv":""}" style="${bg}">
         <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}</td>
         <td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
         <td>${r.gf}</td><td>${r.ga}</td><td>${r.gd>0?"+":""}${r.gd}</td><td class="pt">${r.pts}</td>
       </tr>`;}).join("")}</tbody>
     </table></div>`;
-  }).join("")
-  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${adv?`色つきが決勝トーナメント進出（各ブロック${adv}位まで）。`:""}${promote?`<br><span style="color:var(--ok)">▲ 上位${promote}が昇格</span>`:""}${relegate?`${promote?"／":"<br>"}<span style="color:var(--bad)">▼ 下位${relegate}が降格</span>`:""}</p>`;
+  }).join("");
+  const legend = ["up","upPo","downPo","down"].filter(z=>usedZones.has(z))
+    .map(z=>`<span style="color:${STAND_ZONES[z].col};font-weight:700">${STAND_ZONES[z].mark} ${STAND_ZONES[z].label}</span>`).join("　");
+  return body
+  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${adv?`色つきが決勝トーナメント進出（各ブロック${adv}位まで）。`:""}${legend?`<br>${legend}`:""}</p>`;
 }
 
 /* --- 戦績表（星取表） --- */
@@ -3238,9 +3308,18 @@ function viewSettings(){
       </div>
     </div>
     ${blocksOf(t).length ? `<div class="card">
-      <label class="f">ブロック（部・組）の名前</label>
-      ${blocksOf(t).map((b,i)=>`<input class="in" style="margin-bottom:6px" value="${esc(b.name)}" onchange="renameBlockInTournament('${b.id}',this.value)">`).join("")}
-      <p class="hint">名前だけ変えられます。数を増減するときは、新しく大会を作り直してください。</p>
+      <label class="f">リーグ（部・組）ごとの設定</label>
+      <p class="hint" style="margin:0 0 10px">各リーグに <b style="color:var(--ok)">▲自動昇格</b> ／ <b style="color:#1c8f6a">△昇格入れ替え戦</b> ／ <b style="color:#b8760a">▽降格入れ替え戦</b> ／ <b style="color:var(--bad)">▼自動降格</b> の数を決められます（0でなし）。1部は降格だけ、2部は昇格だけ、のように別々にできます。自動と入れ替え戦の混在もOK。</p>
+      ${blocksOf(t).map((b)=>`<div style="border:1.5px solid var(--line);border-radius:12px;padding:10px 11px;margin-bottom:10px">
+        <input class="in" style="margin-bottom:8px;font-weight:700" value="${esc(b.name)}" onchange="renameBlockInTournament('${b.id}',this.value)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div class="hint" style="margin:0 0 3px;color:var(--ok)">▲ 自動昇格</div><input class="in" type="number" inputmode="numeric" min="0" value="${b.up||0}" onchange="setBlockPromo('${b.id}','up',this.value)"></div>
+          <div><div class="hint" style="margin:0 0 3px;color:#1c8f6a">△ 昇格入替戦</div><input class="in" type="number" inputmode="numeric" min="0" value="${b.upPo||0}" onchange="setBlockPromo('${b.id}','upPo',this.value)"></div>
+          <div><div class="hint" style="margin:0 0 3px;color:#b8760a">▽ 降格入替戦</div><input class="in" type="number" inputmode="numeric" min="0" value="${b.downPo||0}" onchange="setBlockPromo('${b.id}','downPo',this.value)"></div>
+          <div><div class="hint" style="margin:0 0 3px;color:var(--bad)">▼ 自動降格</div><input class="in" type="number" inputmode="numeric" min="0" value="${b.down||0}" onchange="setBlockPromo('${b.id}','down',this.value)"></div>
+        </div>
+      </div>`).join("")}
+      <p class="hint">リーグ名も直せます。順位表に色帯で反映されます。リーグ数を増減するときは大会を作り直してください。</p>
     </div>` : ""}
     <div class="card">
       <label class="f">記入リンクでチームに伝えること（任意）</label>
@@ -3255,14 +3334,6 @@ function viewSettings(){
         <div><div class="hint" style="margin:0 0 4px">負け</div><input class="in" type="number" value="${cfg.lose}" onchange="cfg_set('lose',+this.value)"></div>
       </div>
     </div>
-    ${FORMATS[t.format].hasLeague ? `<div class="card">
-      <label class="f">昇格・降格ライン（順位表に色帯で出ます）</label>
-      <div class="row2">
-        <div><div class="hint" style="margin:0 0 4px">上位◯が昇格</div><input class="in" type="number" inputmode="numeric" min="0" value="${cfg.promote||0}" onchange="cfg_set('promote',Math.max(0,+this.value||0))"></div>
-        <div><div class="hint" style="margin:0 0 4px">下位◯が降格</div><input class="in" type="number" inputmode="numeric" min="0" value="${cfg.relegate||0}" onchange="cfg_set('relegate',Math.max(0,+this.value||0))"></div>
-      </div>
-      <p class="hint">0にすると出ません。各ブロックごとに、上位◯チーム（▲）と下位◯チーム（▼）に色がつきます。</p>
-    </div>` : ""}
     <button class="btn" onclick="saveSettings()">保存する</button>
     <div class="btnrow"><button class="btn sec" onclick="go('teams')">チーム・選手を編集</button></div>
     <div class="btnrow"><button class="btn danger" onclick="deleteTournament()">この大会を削除する</button></div>
@@ -3272,6 +3343,12 @@ function t_set(k,v){ state.t[k] = v; }
 function cfg_set(k,v){ state.t.settings = Object.assign(cfgOf(state.t), {[k]:v}); }
 function renameBlockInTournament(id, name){
   const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, name} : b);
+  cfg_set("blocks", blocks);
+}
+/* リーグごとの昇格・降格・入れ替え戦の数を設定 */
+function setBlockPromo(id, key, val){
+  const v = Math.max(0, +val||0);
+  const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, [key]:v} : b);
   cfg_set("blocks", blocks);
 }
 async function saveSettings(){
@@ -3513,6 +3590,20 @@ function ceCrest(input){
   if(f.size > 6*1024*1024) return toast("画像が大きすぎます（6MBまで）");
   readImageResized(f, 128, durl=>{ state.clubEntry.crest = durl; render(); });
 }
+/* 新年度の更新：記入コードを添えて「現在の名簿」を読み込み、フォームに反映 */
+async function ceLoad(){
+  const code = (document.getElementById("celoadcode")?.value||"").trim().toUpperCase();
+  if(!code) return toast("記入コードを入れてください");
+  try{
+    const data = await DB.loadClubRosterByCode(state.clubEntry.clubId, code);
+    if(!data) return toast("記入コードが違います");
+    const e = state.clubEntry;
+    e.name = data.name||""; e.category = data.category||"elem"; e.crest = data.crest||null;
+    e.players = (data.players||[]).map(p=>({ id:p.id||uid(), no:p.no, name:p.name, pos:p.pos||"", grade:p.grade, prev_team:p.prev_team||"" }));
+    e.code = code; e.loaded = true; render();
+    toast("現在の名簿を読み込みました");
+  }catch(err){ toast("読み込めませんでした: "+(err.message||err)); }
+}
 function ceBulk(){
   const el = document.createElement("div"); el.className="modal";
   el.innerHTML = `<div class="sheet">
@@ -3557,6 +3648,14 @@ function viewClubEntry(){
   + `<div class="screen">
     <div class="card">
       <div class="lead" style="margin:0">本部からの依頼で、<b>チーム名と選手</b>を登録します。ログインは要りません。最後に本部からもらった<b>記入コード</b>を入れて提出してください。</div>
+    </div>
+    <div class="card">
+      <div class="lead" style="margin:0 0 8px"><b>新年度の更新のとき</b>は、記入コードを入れて「現在の名簿を読み込む」を押すと、いまの選手が<b>学年くり上がり済み</b>で出ます。卒業した子を「削除」、<b>新入生</b>を「＋選手を追加」で足して提出してください。</div>
+      <div style="display:flex;gap:8px">
+        <input id="celoadcode" class="in" style="text-transform:uppercase;letter-spacing:2px" placeholder="記入コード" maxlength="6" value="${esc(e.code||"")}" oninput="this.value=this.value.toUpperCase()">
+        <button class="btn sec sm" style="width:auto;white-space:nowrap" onclick="ceLoad()">現在の名簿を読み込む</button>
+      </div>
+      ${e.loaded?`<div class="callout ok" style="margin-top:8px">✅ 読み込みました。卒業した子は「削除」、新入生は「＋選手を追加」で足してください。</div>`:`<p class="hint">はじめて登録するチームは、そのまま下に入力すればOK（読み込みは不要）。</p>`}
     </div>
     <div class="card">
       <label class="f">チーム名</label>
@@ -3613,12 +3712,12 @@ function viewClubEntryLinks(){
   const total = clubs.length, done = clubs.filter(c=>map[c.id]?.submitted_at).length;
   return topbar({ title:"台帳の記入リンクを配る", sub:`${orgYear()}年度`, back:"go('roster')" })
   + `<div class="screen">
-    <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分のチーム名・選手を登録できます（初年度の登録に便利）。提出内容は台帳に反映されます。</p>
+    <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分のチーム名・選手を登録できます。<b>新年度は先に「新年度にする」で学年をくり上げてから</b>配ると、各チームが現在の名簿を読み込んで新入生を足すだけで済みます。提出内容は台帳に反映されます。</p>
     <div class="callout ${done===total&&total?"ok":""}" style="margin-bottom:10px">提出状況：<b>${done} / ${total}</b> チームが提出ずみ</div>
     <button class="btn ghost sm noprint" style="margin-bottom:10px" onclick="window.print()">🖨 一覧を印刷して配る</button>
     ${clubs.length ? clubs.map(c=>{
       const e = map[c.id]||{}; const link = clubEntryLinkFor(c.id);
-      const guide = `【${c.name}】チーム名と選手の登録をお願いします。\n下のリンクを開いて、記入コード ${e.code||""} を入れて提出してください。\n${link}`;
+      const guide = `【${c.name}】新年度のチーム名簿の登録をお願いします。\n下のリンクを開いて、記入コード ${e.code||""} を入れてください。\n「現在の名簿を読み込む」で今の選手が出ます。卒業した子を消し、新入生を足して提出してください。\n${link}`;
       return `<div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <b style="font-size:17px">${esc(c.name)}</b>
