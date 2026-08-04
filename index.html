@@ -1083,8 +1083,16 @@ async function logout(){
 }
 
 /* ---------- 大会をつくる ---------- */
+const OVERVIEW_DEFAULT = {
+  matchRule:"延長なし・PKなし",
+  matchTime:"前後半制　45分ハーフ（90分）",
+  rankRule:"(1)勝点\n(2)得失点差\n(3)総得点\n(4)当該チーム間の対戦成績\n(5)抽選",
+  cardRule:"警告の累積が4回で出場停止処分とする。",
+  contact:"",
+};
 const draft = { name:"", sport:"soccer", format:"league", host:"", dateStart:"", dateEnd:"",
                 gradeCat:"", scope:"", promote:0, relegate:0,
+                overview:{...OVERVIEW_DEFAULT},
                 blocks:["1部"], advance:2, koSize:8, thirdPlace:false, teams:"", picked:[], assign:{} };
 
 /* ブロック（部・組）の編集 */
@@ -1176,6 +1184,21 @@ function viewNew(){
         <input class="in" type="date" value="${esc(draft.dateEnd)}" oninput="draft.dateEnd=this.value">
       </div>
       <p class="hint">複数日・月をまたぐ大会もOK。各試合の日時・会場は、大会をつくった後に1試合ずつ入れられます。</p>
+    </div>
+
+    <div class="card">
+      <label class="f" style="margin-top:0">大会概要（テンプレートを直して使えます・あとで設定でも編集できます）</label>
+      <label class="f">試合方式</label>
+      <input class="in" value="${esc(draft.overview.matchRule)}" oninput="draft.overview.matchRule=this.value" placeholder="例）延長なし・PKなし">
+      <label class="f">試合時間</label>
+      <input class="in" value="${esc(draft.overview.matchTime)}" oninput="draft.overview.matchTime=this.value" placeholder="例）前後半制 45分ハーフ（90分）">
+      <label class="f">順位決定方法</label>
+      <textarea class="in" style="min-height:96px" oninput="draft.overview.rankRule=this.value" placeholder="(1)勝点 (2)得失点差 …">${esc(draft.overview.rankRule)}</textarea>
+      <label class="f">警告の累積</label>
+      <input class="in" value="${esc(draft.overview.cardRule)}" oninput="draft.overview.cardRule=this.value" placeholder="例）警告の累積が4回で出場停止処分とする。">
+      <label class="f">当大会に関するお問い合わせ先</label>
+      <textarea class="in" style="min-height:80px" oninput="draft.overview.contact=this.value" placeholder="実行本部／メール／電話 など">${esc(draft.overview.contact)}</textarea>
+      <p class="hint">ここは「大会概要」タブにそのまま表示されます（保護者・一般の方も見られます）。</p>
     </div>
 
     <div class="card">
@@ -1286,6 +1309,7 @@ async function createTournament(){
     settings:{ win:3, draw:1, lose:0, host:draft.host.trim(),
                gradeCat:draft.gradeCat||null, scope:draft.scope||null,
                promote:draft.promote||0, relegate:draft.relegate||0,
+               overview:{...draft.overview},
                date:draft.dateStart, dateStart:draft.dateStart, dateEnd:draft.dateEnd,
                blocks, advance:draft.advance, koSize, thirdPlace:draft.thirdPlace,
                venues:[], duration:20 },
@@ -1322,7 +1346,7 @@ async function createTournament(){
     await DB.upsert("gn_matches", matches);
   }catch(e){ console.error(e); return toast("保存できませんでした: "+(e.message||e)); }
 
-  Object.assign(draft, { name:"", host:"", dateStart:"", dateEnd:"", teams:"", picked:[], assign:{}, blocks:["1部"], gradeCat:"", scope:"", promote:0, relegate:0 });
+  Object.assign(draft, { name:"", host:"", dateStart:"", dateEnd:"", teams:"", picked:[], assign:{}, blocks:["1部"], gradeCat:"", scope:"", promote:0, relegate:0, overview:{...OVERVIEW_DEFAULT} });
   await reloadList();
   openTournament(tid);
 }
@@ -1334,6 +1358,7 @@ function viewTournament(){
   const f = FORMATS[t.format];
   const cfg = cfgOf(t);
   const tabs = [
+    ["overview","大会概要"],
     ["schedule","日程・結果"],
     ...(f.hasLeague ? [["table","順位表"],["matrix","戦績表"]] : []),
     ...(f.hasKO ? [["bracket","トーナメント表"]] : []),
@@ -1346,7 +1371,7 @@ function viewTournament(){
   const ADMIN_TABS = ["cards","appear","team"];
   if(!canEdit() && ADMIN_TABS.includes(state.tab)) state.tab = "schedule";
   const body = {
-    schedule:tabSchedule, table:tabTable, matrix:tabMatrix,
+    overview:tabOverview, schedule:tabSchedule, table:tabTable, matrix:tabMatrix,
     bracket:tabBracket, scorers:tabScorers, cards:tabCards, appear:tabAppearances, team:tabTeam,
   }[state.tab] || tabSchedule;
 
@@ -1514,6 +1539,37 @@ async function saveSchedule(){
 }
 
 /* --- 順位表 --- */
+/* --- 大会概要（GoalNote風の一覧・保護者/一般も閲覧） --- */
+const nl2br = s => String(s??"").replace(/\n/g,"<br>");
+function tabOverview(){
+  const t = state.t, cfg = cfgOf(t);
+  const ov = cfg.overview || {};
+  const period = [fmtDate(cfg.dateStart||cfg.date), cfg.dateEnd?("〜 "+fmtDate(cfg.dateEnd)):""].filter(Boolean).join(" ");
+  const nTeams = (state.teams||[]).length;
+  const cat = CATEGORIES[cfg.gradeCat]?.label, scope = SCOPES[cfg.scope]?.label;
+  const rows = [
+    ["名称", esc(t.name)],
+    ["区分・規模", [cat,scope].filter(Boolean).map(esc).join("・")],
+    ["主催", esc(cfg.host||"")],
+    ["大会期間", esc(period)],
+    ["参加チーム数", nTeams?`${nTeams}チーム`:""],
+    ["競技", esc(SPORTS[t.sport]?.label||"")],
+    ["大会方式", esc(FORMATS[t.format]?.label||"")],
+    ["試合方式", esc(ov.matchRule||"")],
+    ["試合時間", nl2br(esc(ov.matchTime||""))],
+    ["勝点", `勝利 ${cfg.win} 点　／　引分け ${cfg.draw} 点　／　敗戦 ${cfg.lose} 点`],
+    ["順位決定方法", nl2br(esc(ov.rankRule||""))],
+    ["警告の累積", nl2br(esc(ov.cardRule||""))],
+    ["当大会に関するお問い合わせ先", nl2br(esc(ov.contact||""))],
+  ].filter(([,v])=> v!=="" && v!=null);
+  return `<div class="tblwrap"><table>
+    <tbody>${rows.map(([k,v])=>`<tr>
+      <th style="text-align:left;white-space:nowrap;vertical-align:top;width:34%;background:#f6f8fc">${k}</th>
+      <td style="text-align:left;vertical-align:top;white-space:normal;line-height:1.6">${v||"—"}</td>
+    </tr>`).join("")}</tbody>
+  </table></div>`
+  + (canEdit()?`<div class="btnrow noprint"><button class="btn sec sm" onclick="go('settings')">⚙ 大会概要を編集</button></div>`:"");
+}
 /* ブロックごとの昇格・降格・入れ替え戦の設定（旧・大会全体の promote/relegate も拾う） */
 function promoConfig(b, cfg){
   const g = { up:num(cfg?.promote)||0, upPo:0, down:num(cfg?.relegate)||0, downPo:0 };
@@ -1549,7 +1605,7 @@ function tabTable(){
     const pc = promoConfig(b, cfg);
     return `${(b && !one)?`<div class="block-label">${esc(b.name)}</div>`:""}
     <div class="tblwrap"><table>
-      <thead><tr><th></th><th style="text-align:left">チーム</th><th>試</th><th>勝</th><th>分</th><th>負</th><th>得</th><th>失</th><th>差</th><th>点</th></tr></thead>
+      <thead><tr><th></th><th style="text-align:left">チーム</th><th>勝点</th><th>試合</th><th>勝</th><th>分</th><th>敗</th><th>得点</th><th>失点</th><th>得失差</th></tr></thead>
       <tbody>${rows.map((r,i)=>{
         const z = standZone(i, n, pc); if(z) usedZones.add(z);
         const zc = z ? STAND_ZONES[z] : null;
@@ -1557,15 +1613,16 @@ function tabTable(){
         const mark = zc ? `<span title="${zc.label}" style="color:${zc.col};font-weight:800"> ${zc.mark}</span>` : "";
         return `<tr class="${adv&&i<adv?"adv":""}" style="${bg}">
         <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}</td>
-        <td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
-        <td>${r.gf}</td><td>${r.ga}</td><td>${r.gd>0?"+":""}${r.gd}</td><td class="pt">${r.pts}</td>
+        <td class="pt">${r.pts}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
+        <td>${r.gf}</td><td>${r.ga}</td><td>${r.gd>0?"+":""}${r.gd}</td>
       </tr>`;}).join("")}</tbody>
     </table></div>`;
   }).join("");
   const legend = ["up","upPo","downPo","down"].filter(z=>usedZones.has(z))
     .map(z=>`<span style="color:${STAND_ZONES[z].col};font-weight:700">${STAND_ZONES[z].mark} ${STAND_ZONES[z].label}</span>`).join("　");
   return body
-  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${adv?`色つきが決勝トーナメント進出（各ブロック${adv}位まで）。`:""}${legend?`<br>${legend}`:""}</p>`;
+  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${adv?`色つきが決勝トーナメント進出（各ブロック${adv}位まで）。`:""}${legend?`<br>${legend}`:""}</p>`
+  + (canEdit()?`<div class="btnrow noprint"><button class="btn sec sm" onclick="go('settings')">⚙ リーグごとの昇格・降格・入れ替え戦を設定</button></div>`:"");
 }
 
 /* --- 戦績表（星取表） --- */
@@ -3334,6 +3391,19 @@ function viewSettings(){
         <div><div class="hint" style="margin:0 0 4px">負け</div><input class="in" type="number" value="${cfg.lose}" onchange="cfg_set('lose',+this.value)"></div>
       </div>
     </div>
+    <div class="card">
+      <label class="f" style="margin-top:0">大会概要（「大会概要」タブに表示されます）</label>
+      <label class="f">試合方式</label>
+      <input class="in" value="${esc(cfg.overview?.matchRule||"")}" onchange="ov_set('matchRule',this.value)" placeholder="例）延長なし・PKなし">
+      <label class="f">試合時間</label>
+      <input class="in" value="${esc(cfg.overview?.matchTime||"")}" onchange="ov_set('matchTime',this.value)" placeholder="例）前後半制 45分ハーフ（90分）">
+      <label class="f">順位決定方法</label>
+      <textarea class="in" style="min-height:96px" onchange="ov_set('rankRule',this.value)" placeholder="(1)勝点 (2)得失点差 …">${esc(cfg.overview?.rankRule||"")}</textarea>
+      <label class="f">警告の累積</label>
+      <input class="in" value="${esc(cfg.overview?.cardRule||"")}" onchange="ov_set('cardRule',this.value)" placeholder="例）警告の累積が4回で出場停止処分とする。">
+      <label class="f">当大会に関するお問い合わせ先</label>
+      <textarea class="in" style="min-height:80px" onchange="ov_set('contact',this.value)" placeholder="実行本部／メール／電話 など">${esc(cfg.overview?.contact||"")}</textarea>
+    </div>
     <button class="btn" onclick="saveSettings()">保存する</button>
     <div class="btnrow"><button class="btn sec" onclick="go('teams')">チーム・選手を編集</button></div>
     <div class="btnrow"><button class="btn danger" onclick="deleteTournament()">この大会を削除する</button></div>
@@ -3341,6 +3411,7 @@ function viewSettings(){
 }
 function t_set(k,v){ state.t[k] = v; }
 function cfg_set(k,v){ state.t.settings = Object.assign(cfgOf(state.t), {[k]:v}); }
+function ov_set(k,v){ const s = state.t.settings = cfgOf(state.t); s.overview = Object.assign({}, s.overview||{}, {[k]:v}); }
 function renameBlockInTournament(id, name){
   const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, name} : b);
   cfg_set("blocks", blocks);
