@@ -203,11 +203,11 @@ td.pt{font-weight:800;}
 .bm .lbl{position:absolute;top:-9px;left:6px;font-size:9.5px;background:#fff;padding:0 4px;color:var(--sub);font-weight:700;}
 .bm::after{content:"";position:absolute;right:-22px;top:50%;width:22px;height:1.5px;background:var(--line);}
 .bround:last-child .bm::after{display:none;}
-.bracket.vert .brounds{flex-direction:column;min-width:0;}
+.bracket.vert .brounds{flex-direction:column-reverse;gap:26px;min-width:0;}
 .bracket.vert .bround{flex-direction:row;justify-content:space-around;min-width:0;}
-.bracket.vert .bround+.bround{margin-left:0;margin-top:26px;}
+.bracket.vert .bround+.bround{margin-left:0;margin-top:0;}
 .bracket.vert .bm{margin:0 6px;min-width:0;display:flex;gap:4px;justify-content:center;}
-.bracket.vert .bm::after{right:auto;left:50%;top:auto;bottom:-26px;width:1.5px;height:26px;transform:translateX(-50%);}
+.bracket.vert .bm::after{right:auto;left:50%;top:-26px;bottom:auto;width:1.5px;height:26px;transform:translateX(-50%);}
 .bracket.vert .bm .slot{writing-mode:vertical-rl;min-height:96px;justify-content:space-between;align-items:center;gap:8px;}
 .bracket.vert .bm .slot+.slot{margin-top:0;}
 .bracket.vert .bm .slot .n{overflow:hidden;}
@@ -1131,47 +1131,90 @@ function draftTeamNames(){ return draft.teams.split("\n").map(s=>s.trim()).filte
 
 /* 台帳からまとめて参加チームを選ぶ */
 function openPickClubsForNew(){
-  const chosen = new Set(draft.picked.map(p=>p.id));
-  const pool = state.clubs.filter(c=>{
-    if(draft.gradeCat && c.category!==draft.gradeCat) return false;
-    if(draft.scope    && !(c.regions||[]).includes(draft.scope)) return false;
-    return true;
-  });
-  const condTxt = [CATEGORIES[draft.gradeCat]?.label, SCOPES[draft.scope]?.label].filter(Boolean).join("・");
+  // 選択状態：clubId -> チーム数（0/未定義=未選択、1〜4=そのチーム数）
+  const pick = {};
+  draft.picked.forEach(p=>{ pick[p.id] = (pick[p.id]||0) + 1; });
+  let fCat = draft.gradeCat || "";     // 学年区分でしぼる（初期は大会の区分）
+  let fScope = draft.scope || "";      // 規模でしぼる
+  const useScope = state.clubs.some(c=>(c.regions||[]).length);
+  const catBtns = [["","すべて"],["elem","小学生"],["jhs","中学生"],["hs","高校生"],["univ","大学生"]];
+  const scopeBtns = [["","規模すべて"],["national","全国"],["pref","都道府県"],["local","地域"]];
+  const visible = ()=> state.clubs.filter(c=>{
+      if(fCat && c.category!==fCat) return false;
+      if(fScope && !(c.regions||[]).includes(fScope)) return false;
+      return true;
+    }).sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja"));
+
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
     <h3>台帳から参加チームを選ぶ</h3>
-    <p class="hint" style="margin-bottom:8px">選んだチームは、登録してある選手（チーム内の背番号つき）ごと大会に入ります。<b>同じチームを A・B に分けて</b>別々のブロック（1部・2部）へ入れられます。${condTxt?`<br><b style="color:var(--accent)">${esc(condTxt)}</b> のチームだけを表示中`:""}</p>
-    ${pool.length ? pool.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja")).map(c=>{
-      const n = membersOf(c.id).length;
-      return `<label class="pick" style="cursor:pointer">
-        <span style="min-width:0"><span style="display:block">${esc(c.name)}</span>
-        <span class="meta">${esc(CATEGORIES[c.category]?.label||"")}・${n}名</span></span>
-        <select data-count style="margin-right:8px;padding:4px;flex:0 0 auto" onclick="event.stopPropagation()">
-          <option value="1">1チーム</option>
-          <option value="2">2チーム(A・B)</option>
-          <option value="3">3チーム(A〜C)</option>
-          <option value="4">4チーム(A〜D)</option>
-        </select>
-        <input type="checkbox" data-id="${c.id}" ${chosen.has(c.id)?"checked":""} style="width:22px;height:22px;flex-shrink:0">
-      </label>`;
-    }).join("") : `<div class="empty">${condTxt?`「${esc(condTxt)}」に当てはまるチームが台帳にありません。台帳で区分・規模を設定してください。`:"台帳にチームがありません。"}</div>`}
+    <p class="hint" style="margin-bottom:8px">区分でしぼって、<b>すべて選択</b>で一括登録できます。同じチームを A・B に分けて別ブロックへも入れられます。</p>
+    <label class="f" style="margin-top:0">区分でしぼる</label>
+    <div class="seg" id="pc-cat"></div>
+    ${useScope ? `<label class="f">規模でしぼる</label><div class="seg" id="pc-scope"></div>` : ""}
+    <div id="pc-body" style="margin-top:10px;max-height:50vh;overflow:auto"></div>
     <div class="btnrow">
       <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
       <button class="btn" id="pc-ok">選んだチームを入れる</button>
     </div>
   </div>`;
   document.body.appendChild(el);
-  $("#pc-ok").onclick = ()=>{
+
+  function renderFilters(){
+    el.querySelector("#pc-cat").innerHTML = catBtns.map(([k,l])=>
+      `<button class="${fCat===k?"on":""}" data-v="${k}">${esc(l)}</button>`).join("");
+    el.querySelectorAll("#pc-cat button").forEach(b=> b.onclick=()=>{ fCat=b.dataset.v; renderFilters(); renderBody(); });
+    const sc = el.querySelector("#pc-scope");
+    if(sc){
+      sc.innerHTML = scopeBtns.map(([k,l])=>`<button class="${fScope===k?"on":""}" data-v="${k}">${esc(l)}</button>`).join("");
+      sc.querySelectorAll("button").forEach(b=> b.onclick=()=>{ fScope=b.dataset.v; renderFilters(); renderBody(); });
+    }
+  }
+  function renderBody(){
+    const pool = visible();
+    const allOn = pool.length>0 && pool.every(c=>pick[c.id]);
+    const selN = pool.filter(c=>pick[c.id]).length;
+    el.querySelector("#pc-body").innerHTML =
+      `<div class="btnrow" style="margin:0 0 8px">
+        <button class="btn ${allOn?"sec":"ghost"} sm" style="flex:1" id="pc-all">${allOn?"☑ すべて解除":"☐ すべて選択"}（${pool.length}チーム）</button>
+      </div>` +
+      (pool.length ? pool.map(c=>{
+        const n = membersOf(c.id).length, cnt = pick[c.id]||0;
+        return `<label class="pick" style="cursor:pointer">
+          <span style="min-width:0;display:flex;align-items:center;gap:6px">
+            ${c.crest?`<img src="${c.crest}" style="width:26px;height:26px;object-fit:contain;border-radius:5px;background:#fff;flex:0 0 auto">`:""}
+            <span style="min-width:0"><span style="display:block">${esc(c.name)}</span>
+            <span class="meta">${esc(CATEGORIES[c.category]?.label||"")}・${n}名</span></span></span>
+          <select data-id="${c.id}" style="margin-right:8px;padding:4px;flex:0 0 auto" onclick="event.stopPropagation()">
+            <option value="1" ${cnt<=1?"selected":""}>1チーム</option>
+            <option value="2" ${cnt===2?"selected":""}>2チーム(A・B)</option>
+            <option value="3" ${cnt===3?"selected":""}>3チーム(A〜C)</option>
+            <option value="4" ${cnt===4?"selected":""}>4チーム(A〜D)</option>
+          </select>
+          <input type="checkbox" data-id="${c.id}" ${cnt?"checked":""} style="width:22px;height:22px;flex-shrink:0">
+        </label>`;
+      }).join("") : `<div class="empty">この区分に当てはまるチームが台帳にありません。</div>`);
+    el.querySelectorAll("#pc-body input[type=checkbox]").forEach(cb=> cb.onchange = ()=>{
+      pick[cb.dataset.id] = cb.checked ? (pick[cb.dataset.id]||1) : 0; renderBody();
+    });
+    el.querySelectorAll("#pc-body select[data-id]").forEach(s=> s.onchange = ()=>{
+      pick[s.dataset.id] = +s.value; renderBody();
+    });
+    const allBtn = el.querySelector("#pc-all");
+    if(allBtn) allBtn.onclick = ()=>{
+      const p2 = visible(), turnOn = !(p2.length && p2.every(c=>pick[c.id]));
+      p2.forEach(c=> pick[c.id] = turnOn ? (pick[c.id]||1) : 0); renderBody();
+    };
+  }
+  renderFilters(); renderBody();
+
+  el.querySelector("#pc-ok").onclick = ()=>{
     const picks = [];
-    el.querySelectorAll("label.pick").forEach(lb=>{
-      const cb = lb.querySelector("input[type=checkbox]");
-      if(!cb || !cb.checked) return;
-      const id = cb.dataset.id, base = clubById(id).name;
-      const cnt = Math.max(1, +(lb.querySelector("select[data-count]")?.value||1));
-      if(cnt<=1) picks.push({ id, name:base });
-      else for(let i=0;i<cnt;i++) picks.push({ id, name: base+" "+String.fromCharCode(65+i) }); // A,B,C,D
+    state.clubs.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja")).forEach(c=>{
+      const cnt = pick[c.id]; if(!cnt) return;
+      if(cnt<=1) picks.push({ id:c.id, name:c.name });
+      else for(let i=0;i<cnt;i++) picks.push({ id:c.id, name: c.name+" "+String.fromCharCode(65+i) }); // A,B,C,D
     });
     if(!picks.length){ draft.picked=[]; el.remove(); render(); return; }
     // J：台帳の背番号（チーム内番号）で入ることを確認
@@ -1699,9 +1742,13 @@ function tabBracket(){
   }
   html += `</div></div>`;
   if(canEdit()){
+    if(state.t.format==="ko"){
+      html += `<button class="btn noprint" style="margin-bottom:6px" onclick="autoDrawKO()">✨ 登録チームで自動作成</button>
+        <p class="hint noprint" style="margin:0 0 10px">登録チームで普通のトーナメント表を作ります（人数が半端でも不戦勝を自動で入れます）。作ったあとは下の「組み合わせを変える」で入れ替えできます。</p>`;
+    }
     html += `<div class="btnrow noprint" style="margin-bottom:12px">
-      <button class="btn sec sm" onclick="openBracketMaker()">櫓メーカーで編集</button>
-      <button class="btn sec sm" onclick="openSeedSheet()">1回戦の組み合わせを変える</button></div>`;
+      <button class="btn sec sm" onclick="openSeedSheet()">組み合わせを変える</button>
+      <button class="btn ghost sm" onclick="openBracketMaker()">細かく編集</button></div>`;
   }
   const third = state.matches.find(m=>m.slot===99);
   if(third){ html += `<div class="block-label">3位決定戦</div>` + matchCard(third); }
@@ -3444,6 +3491,30 @@ async function setBracketDir(vert){
     await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
   }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
   render();
+}
+/* ===== 登録チームで自動作成（いちばん簡単・ボタン1つ） ===== */
+async function autoDrawKO(){
+  const cfg = cfgOf(state.t);
+  const ids = state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).map(t=>t.id);
+  if(ids.length < 2) return toast("チームが2つ以上必要です");
+  const doneKO = state.matches.some(m=>m.stage==="ko" && isDone(m));
+  if(doneKO && !confirm("トーナメント表を作り直します。入力済みの結果は消えます。よろしいですか？")) return;
+  const pow2 = n => Math.pow(2, Math.max(1, Math.ceil(Math.log2(Math.max(2, n)))));
+  const size = pow2(ids.length);
+  const oldKO = state.matches.filter(m=>m.stage==="ko");
+  const newKO = buildKOMatches(state.t.id, size, distributePairs(ids, size), !!cfg.thirdPlace);
+  newKO.forEach(m=> m.org_id = state.user.id);
+  try{
+    if(oldKO.length) await DB.remove("gn_matches", oldKO.map(m=>m.id));
+    await DB.upsert("gn_matches", newKO.map(stripMatch));
+    if(size !== cfg.koSize){
+      cfg_set("koSize", size);
+      const { id,org_id,name,sport,format,settings,created_at } = state.t;
+      await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
+    }
+  }catch(e){ console.error(e); return toast("作成できませんでした: "+(e.message||e)); }
+  state.matches = state.matches.filter(m=>m.stage!=="ko").concat(newKO);
+  toast(`トーナメント表を作成しました（${ids.length}チーム）`); render();
 }
 /* ===== 櫓メーカー（トーナメント表を自由に組む）ステップ1：試合の追加・削除 ===== */
 function openBracketMaker(){
