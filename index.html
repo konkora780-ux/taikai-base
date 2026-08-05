@@ -820,7 +820,7 @@ function distributePairs(items, koSize){
 function assignSide(m, side, v){
   m[side+"_team"] = null; m[side+"_src"] = null;
   if(!v) return;
-  if(typeof v === "string" && v.startsWith("G:")) m[side+"_src"] = v;
+  if(typeof v === "string" && /^(G|W|L):/.test(v)) m[side+"_src"] = v;  // 組順位/勝者/敗者の枠
   else m[side+"_team"] = v;
 }
 function buildKOMatches(tid, size, pairs, thirdPlace){
@@ -3567,13 +3567,23 @@ async function bmDelMatch(id){
   try{ await DB.remove("gn_matches", id); }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
   bmRender();
 }
-function bmOpts(selfId){
+function bmOpts(selfId, curTeam){
   const cfg = cfgOf(state.t);
   const opts = [{v:"", l:"（なし・不戦勝）"}];
   if(state.t.format==="league_ko"){
     blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
   }
-  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=> opts.push({v:t.id, l:t.name}));
+  // すでに他の枠に入っているチームは出さない（この枠の現在チームだけは残す）
+  const used = new Set();
+  state.matches.filter(m=>m.stage==="ko").forEach(m=>{
+    if(m.home_team) used.add(m.home_team);
+    if(m.away_team) used.add(m.away_team);
+  });
+  if(curTeam) used.delete(curTeam);
+  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{
+    if(used.has(t.id)) return;                       // 使用済みチームは選択肢から消す
+    opts.push({v:t.id, l:t.name});
+  });
   const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId).sort((a,b)=> a.round-b.round || a.slot-b.slot);
   const idx = {};
   ko.forEach(m=>{ idx[m.round]=(idx[m.round]||0)+1; opts.push({v:`W:${m.id}`, l:`${m.round}回戦第${idx[m.round]}試合の勝者`}); });
@@ -3582,7 +3592,7 @@ function bmOpts(selfId){
 function bmSel(m, side){
   const cur = m[side+"_team"] || m[side+"_src"] || "";
   return `<select class="in bmslot" onchange="bmSetSlot('${m.id}','${side}',this.value)">${
-    bmOpts(m.id).map(o=>`<option value="${esc(o.v)}" ${o.v===cur?"selected":""}>${esc(o.l)}</option>`).join("")
+    bmOpts(m.id, m[side+"_team"]||"").map(o=>`<option value="${esc(o.v)}" ${o.v===cur?"selected":""}>${esc(o.l)}</option>`).join("")
   }</select>`;
 }
 async function bmSetSlot(mid, side, v){
