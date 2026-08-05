@@ -203,6 +203,21 @@ td.pt{font-weight:800;}
 .bm .lbl{position:absolute;top:-9px;left:6px;font-size:9.5px;background:#fff;padding:0 4px;color:var(--sub);font-weight:700;}
 .bm::after{content:"";position:absolute;right:-22px;top:50%;width:22px;height:1.5px;background:var(--line);}
 .bround:last-child .bm::after{display:none;}
+.bracket.vert .brounds{flex-direction:column;min-width:0;}
+.bracket.vert .bround{flex-direction:row;justify-content:space-around;min-width:0;}
+.bracket.vert .bround+.bround{margin-left:0;margin-top:26px;}
+.bracket.vert .bm{margin:0 6px;min-width:0;display:flex;gap:4px;justify-content:center;}
+.bracket.vert .bm::after{right:auto;left:50%;top:auto;bottom:-26px;width:1.5px;height:26px;transform:translateX(-50%);}
+.bracket.vert .bm .slot{writing-mode:vertical-rl;min-height:96px;justify-content:space-between;align-items:center;gap:8px;}
+.bracket.vert .bm .slot+.slot{margin-top:0;}
+.bracket.vert .bm .slot .n{overflow:hidden;}
+.bracket.vert .bm .slot .s{writing-mode:horizontal-tb;}
+.bmno{font-size:12px;color:var(--sub);}
+.bmmatch{padding:8px 0;border-bottom:1px solid var(--line);}
+.bmmatch:last-of-type{border-bottom:none;}
+.bmmhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.bmvs2{text-align:center;font-size:11px;color:var(--na);margin:4px 0;}
+.bmslot{width:100%;}
 
 /* ===== 得点ランキング ===== */
 .rank{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px solid var(--line);
@@ -1239,7 +1254,7 @@ function viewNew(){
 
       ${draft.format==="ko" ? `
         <label class="f">トーナメントの枠</label>
-        <div class="seg">${[2,4,8,16,32].map(n=>
+        <div class="seg">${[2,4,8,16,32,64].map(n=>
           `<button class="${draft.koSize===n?"on":""}" style="min-width:52px" onclick="draft.koSize=${n};render()">${n}チーム</button>`).join("")}</div>
         <p class="hint">チーム数が枠より少ないときは、あまった枠が自動で不戦勝になります。</p>` : ""}
 
@@ -1334,7 +1349,7 @@ async function createTournament(){
   if(f.hasLeague) matches = matches.concat(buildLeagueMatches(tid, teams, blockIds));
   if(f.hasKO){
     const items = draft.format==="ko"
-        ? teams.map(t2=>t2.id)                            // トーナメントのみ：並び順どおり
+        ? []                                              // トーナメントのみ：空櫓スタート（作成後に各枠へ配置）
         : qualifierSlots(blockIds, draft.advance);        // 予選つき：1部1位…の枠
     matches = matches.concat(buildKOMatches(tid, koSize, distributePairs(items, koSize), draft.thirdPlace));
   }
@@ -1557,8 +1572,8 @@ function tabOverview(){
     ["大会方式", esc(FORMATS[t.format]?.label||"")],
     ["試合方式", esc(ov.matchRule||"")],
     ["試合時間", nl2br(esc(ov.matchTime||""))],
-    ["勝点", `勝利 ${cfg.win} 点　／　引分け ${cfg.draw} 点　／　敗戦 ${cfg.lose} 点`],
-    ["順位決定方法", nl2br(esc(ov.rankRule||""))],
+    ["勝点", FORMATS[t.format]?.hasLeague===false ? "" : `勝利 ${cfg.win} 点　／　引分け ${cfg.draw} 点　／　敗戦 ${cfg.lose} 点`],
+    ["順位決定方法", FORMATS[t.format]?.hasLeague===false ? "" : nl2br(esc(ov.rankRule||""))],
     ["警告の累積", nl2br(esc(ov.cardRule||""))],
     ["当大会に関するお問い合わせ先", nl2br(esc(ov.contact||""))],
   ].filter(([,v])=> v!=="" && v!=null);
@@ -1658,7 +1673,14 @@ function tabBracket(){
   const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
   if(!ko.length) return `<div class="empty">トーナメントがありません。</div>`;
   const rounds = Math.max(...ko.map(m=>m.round));
-  let html = `<div class="bracket"><div class="brounds">`;
+  const vert = !!cfg.overview?.bracketVert;
+  let html = "";
+  if(canEdit()){
+    html += `<div class="seg noprint" style="margin-bottom:10px">
+      <button class="${!vert?"on":""}" onclick="setBracketDir(false)">横型</button>
+      <button class="${vert?"on":""}" onclick="setBracketDir(true)">縦型</button></div>`;
+  }
+  html += `<div class="bracket${vert?" vert":""}"><div class="brounds">`;
   for(let r=1; r<=rounds; r++){
     const ms = ko.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
     html += `<div class="bround">` + ms.map(m=>{
@@ -1677,7 +1699,9 @@ function tabBracket(){
   }
   html += `</div></div>`;
   if(canEdit()){
-    html += `<button class="btn sec sm noprint" style="margin-bottom:12px" onclick="openSeedSheet()">1回戦の組み合わせを変える</button>`;
+    html += `<div class="btnrow noprint" style="margin-bottom:12px">
+      <button class="btn sec sm" onclick="openBracketMaker()">櫓メーカーで編集</button>
+      <button class="btn sec sm" onclick="openSeedSheet()">1回戦の組み合わせを変える</button></div>`;
   }
   const third = state.matches.find(m=>m.slot===99);
   if(third){ html += `<div class="block-label">3位決定戦</div>` + matchCard(third); }
@@ -3412,6 +3436,90 @@ function viewSettings(){
 function t_set(k,v){ state.t[k] = v; }
 function cfg_set(k,v){ state.t.settings = Object.assign(cfgOf(state.t), {[k]:v}); }
 function ov_set(k,v){ const s = state.t.settings = cfgOf(state.t); s.overview = Object.assign({}, s.overview||{}, {[k]:v}); }
+async function setBracketDir(vert){
+  const s = state.t.settings = cfgOf(state.t);
+  s.overview = Object.assign({}, s.overview||{}, {bracketVert:!!vert});
+  try{
+    const { id,org_id,name,sport,format,settings,created_at } = state.t;
+    await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
+  }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
+  render();
+}
+/* ===== 櫓メーカー（トーナメント表を自由に組む）ステップ1：試合の追加・削除 ===== */
+function openBracketMaker(){
+  const el = document.createElement("div");
+  el.className = "modal"; el.id = "bmModal";
+  el.innerHTML = `<div class="sheet" style="max-width:640px">
+    <h3>櫓メーカー</h3>
+    <p class="hint" style="margin-bottom:8px">ラウンドごとに試合を足したり消したりできます。</p>
+    <div id="bmBody"></div>
+    <div class="btnrow"><button class="btn" onclick="this.closest('.modal').remove();render()">閉じる</button></div>
+  </div>`;
+  document.body.appendChild(el); bmRender();
+}
+function bmMaxRound(){
+  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
+  return ko.length ? Math.max(...ko.map(m=>m.round)) : 0;
+}
+function bmNextSlot(round){
+  const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===round);
+  return ms.length ? Math.max(...ms.map(m=>m.slot))+1 : 0;
+}
+function bmRender(){
+  const body = document.getElementById("bmBody"); if(!body) return;
+  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
+  const maxR = Math.max(bmMaxRound(), 1);
+  let h = "";
+  for(let r=1; r<=maxR; r++){
+    const ms = ko.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
+    h += `<div class="card" style="margin-bottom:8px">
+      <div class="hint" style="margin:0 0 6px">${r}回戦（${ms.length}試合）</div>
+      ${ms.map((m,i)=>`<div class="bmmatch">
+        <div class="bmmhead"><span class="bmno">第${i+1}試合</span>
+          <button class="btn ghost sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
+        ${bmSel(m,"home")}<div class="bmvs2">vs</div>${bmSel(m,"away")}
+      </div>`).join("")}
+      <button class="btn sec sm" onclick="bmAddMatch(${r})">＋試合を追加</button></div>`;
+  }
+  h += `<button class="btn sec sm" onclick="bmAddMatch(${Math.max(bmMaxRound(),0)+1})">＋ラウンドを追加</button>`;
+  body.innerHTML = h;
+}
+async function bmAddMatch(round){
+  const slot = bmNextSlot(round);
+  const m = newMatch(state.t.id, { stage:"ko", round, slot, sort_order:round*100+slot });
+  state.matches.push(m);
+  try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("追加できませんでした: "+(e.message||e)); }
+  bmRender();
+}
+async function bmDelMatch(id){
+  state.matches = state.matches.filter(m=>m.id!==id);
+  try{ await DB.remove("gn_matches", id); }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
+  bmRender();
+}
+function bmOpts(selfId){
+  const cfg = cfgOf(state.t);
+  const opts = [{v:"", l:"（なし・不戦勝）"}];
+  if(state.t.format==="league_ko"){
+    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+  }
+  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=> opts.push({v:t.id, l:t.name}));
+  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId).sort((a,b)=> a.round-b.round || a.slot-b.slot);
+  const idx = {};
+  ko.forEach(m=>{ idx[m.round]=(idx[m.round]||0)+1; opts.push({v:`W:${m.id}`, l:`${m.round}回戦第${idx[m.round]}試合の勝者`}); });
+  return opts;
+}
+function bmSel(m, side){
+  const cur = m[side+"_team"] || m[side+"_src"] || "";
+  return `<select class="in bmslot" onchange="bmSetSlot('${m.id}','${side}',this.value)">${
+    bmOpts(m.id).map(o=>`<option value="${esc(o.v)}" ${o.v===cur?"selected":""}>${esc(o.l)}</option>`).join("")
+  }</select>`;
+}
+async function bmSetSlot(mid, side, v){
+  const m = state.matches.find(x=>x.id===mid); if(!m) return;
+  assignSide(m, side, v||null);
+  try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
+  bmRender();
+}
 function renameBlockInTournament(id, name){
   const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, name} : b);
   cfg_set("blocks", blocks);
