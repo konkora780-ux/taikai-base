@@ -742,13 +742,29 @@ function periodScore(m, period, side){
 /* この試合が延長を使うか（明示フラグ or 延長の得点がある） */
 function matchUsesET(m){
   return !!(m.lineups && m.lineups._meta && m.lineups._meta.useET)
-    || (m.events||[]).some(e=> e.period==="1ET" || e.period==="2ET");
+    || (m.events||[]).some(e=> e.period==="1ET" || e.period==="2ET")
+    || etAppliesToMatch(m);   // 大会概要の「延長：どの試合から」でも自動でON
 }
 function setMatchET(m, on){
   m.lineups = m.lineups || {};
   m.lineups._meta = m.lineups._meta || {};
   m.lineups._meta.useET = !!on;
 }
+/* このトーナメントの総ラウンド数（実際の櫓の最大round。無ければ koSize から） */
+function koTotalRounds(){
+  const ko = (state.matches||[]).filter(m=>m.stage==="ko" && m.slot!==99);
+  if(ko.length) return Math.max(...ko.map(m=>m.round));
+  return Math.round(Math.log2(cfgOf(state.t).koSize||2)) || 1;
+}
+/* 延長が「この試合」に適用されるか（大会概要の 延長あり＋どの試合から） */
+function etAppliesToMatch(m){
+  const ov = cfgOf(state.t).overview || {};
+  if(!ov.hasET || !m || m.stage!=="ko") return false;   // 延長はトーナメント戦のみ
+  const left = koTotalRounds() - m.round;                 // 0=決勝, 1=準決勝, 2=準々決勝 …
+  const thr = ({ all:99, qf:2, sf:1, final:0 })[ov.etFrom||"all"];
+  return left <= thr;
+}
+const ET_FROM_LABEL = { all:"全試合", qf:"準々決勝から", sf:"準決勝から", final:"決勝のみ" };
 
 /* --- 総当たり表の組み合わせ（ローテーション法） --- */
 function roundRobin(ids){
@@ -1099,7 +1115,7 @@ async function logout(){
 
 /* ---------- 大会をつくる ---------- */
 const OVERVIEW_DEFAULT = {
-  halfMin:45, hasET:false, etHalfMin:10, hasPK:false,   // 前後半ハーフ分／延長あり／延長ハーフ分／PK
+  halfMin:45, hasET:false, etFrom:"all", etHalfMin:10, hasPK:false,   // 前後半ハーフ分／延長あり／どの試合から／延長ハーフ分／PK
   rankRule:"(1)勝点\n(2)得失点差\n(3)総得点\n(4)当該チーム間の対戦成績\n(5)抽選",
   cardRule:"警告の累積が4回で出場停止処分とする。",
   contact:"",
@@ -1256,11 +1272,15 @@ function viewNew(){
         <button class="${!draft.overview.hasET?"on":""}" onclick="draft.overview.hasET=false;render()">なし</button>
         <button class="${draft.overview.hasET?"on":""}" onclick="draft.overview.hasET=true;render()">あり</button>
       </div>
-      ${draft.overview.hasET?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
-        <span class="hint" style="margin:0">延長　前後半　各</span>
-        <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${draft.overview.etHalfMin??""}" onchange="draft.overview.etHalfMin=this.value===''?null:Math.max(0,+this.value);render()">
-        <span class="hint" style="margin:0">分（計 <b>${(draft.overview.etHalfMin||0)*2}</b> 分）</span>
-      </div>`:""}
+      ${draft.overview.hasET?`
+        ${FORMATS[draft.format].hasKO?`<label class="f" style="margin-top:8px">延長はどの試合から</label>
+        <div class="seg">${Object.entries(ET_FROM_LABEL).map(([k,l])=>
+          `<button class="${(draft.overview.etFrom||"all")===k?"on":""}" onclick="draft.overview.etFrom='${k}';render()">${esc(l)}</button>`).join("")}</div>`:""}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <span class="hint" style="margin:0">延長　前後半　各</span>
+          <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${draft.overview.etHalfMin??""}" onchange="draft.overview.etHalfMin=this.value===''?null:Math.max(0,+this.value);render()">
+          <span class="hint" style="margin:0">分（計 <b>${(draft.overview.etHalfMin||0)*2}</b> 分）</span>
+        </div>`:""}
       <label class="f">PK戦</label>
       <div class="seg">
         <button class="${!draft.overview.hasPK?"on":""}" onclick="draft.overview.hasPK=false;render()">なし</button>
@@ -1627,7 +1647,9 @@ function tabOverview(){
   if(struct){
     const hm = ov.halfMin||0, etm = ov.etHalfMin||0;
     timeLabel = hm ? `前後半　各${hm}分（計 ${hm*2}分）` : "";
-    const etTxt = ov.hasET ? `延長あり${etm?`（前後半 各${etm}分・計 ${etm*2}分）`:""}` : "延長なし";
+    const fromLabel = (ov.etFrom && ov.etFrom!=="all") ? ET_FROM_LABEL[ov.etFrom] : "";
+    const etInner = [fromLabel, etm?`前後半 各${etm}分・計 ${etm*2}分`:""].filter(Boolean).join("・");
+    const etTxt = ov.hasET ? `延長あり${etInner?`（${etInner}）`:""}` : "延長なし";
     ruleLabel = `${etTxt}　／　PK${ov.hasPK?"あり":"なし"}`;
   }else{
     timeLabel = nl2br(esc(ov.matchTime||""));
@@ -3505,11 +3527,15 @@ function viewSettings(){
         <button class="${!cfg.overview?.hasET?"on":""}" onclick="ov_set('hasET',false);render()">なし</button>
         <button class="${cfg.overview?.hasET?"on":""}" onclick="ov_set('hasET',true);render()">あり</button>
       </div>
-      ${cfg.overview?.hasET?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
-        <span class="hint" style="margin:0">延長　前後半　各</span>
-        <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${cfg.overview?.etHalfMin??""}" onchange="ov_set('etHalfMin',this.value===''?null:Math.max(0,+this.value));render()">
-        <span class="hint" style="margin:0">分（計 <b>${(cfg.overview?.etHalfMin||0)*2}</b> 分）</span>
-      </div>`:""}
+      ${cfg.overview?.hasET?`
+        ${FORMATS[t.format].hasKO?`<label class="f" style="margin-top:8px">延長はどの試合から</label>
+        <div class="seg">${Object.entries(ET_FROM_LABEL).map(([k,l])=>
+          `<button class="${(cfg.overview?.etFrom||"all")===k?"on":""}" onclick="ov_set('etFrom','${k}');render()">${esc(l)}</button>`).join("")}</div>`:""}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <span class="hint" style="margin:0">延長　前後半　各</span>
+          <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${cfg.overview?.etHalfMin??""}" onchange="ov_set('etHalfMin',this.value===''?null:Math.max(0,+this.value));render()">
+          <span class="hint" style="margin:0">分（計 <b>${(cfg.overview?.etHalfMin||0)*2}</b> 分）</span>
+        </div>`:""}
       <label class="f">PK戦</label>
       <div class="seg">
         <button class="${!cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',false);render()">なし</button>
