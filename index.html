@@ -1099,8 +1099,7 @@ async function logout(){
 
 /* ---------- 大会をつくる ---------- */
 const OVERVIEW_DEFAULT = {
-  matchRule:"延長なし・PKなし",
-  matchTime:"前後半制　45分ハーフ（90分）",
+  halfMin:45, hasET:false, etHalfMin:10, hasPK:false,   // 前後半ハーフ分／延長あり／延長ハーフ分／PK
   rankRule:"(1)勝点\n(2)得失点差\n(3)総得点\n(4)当該チーム間の対戦成績\n(5)抽選",
   cardRule:"警告の累積が4回で出場停止処分とする。",
   contact:"",
@@ -1246,10 +1245,27 @@ function viewNew(){
 
     <div class="card">
       <label class="f" style="margin-top:0">大会概要（テンプレートを直して使えます・あとで設定でも編集できます）</label>
-      <label class="f">試合方式</label>
-      <input class="in" value="${esc(draft.overview.matchRule)}" oninput="draft.overview.matchRule=this.value" placeholder="例）延長なし・PKなし">
-      <label class="f">試合時間</label>
-      <input class="in" value="${esc(draft.overview.matchTime)}" oninput="draft.overview.matchTime=this.value" placeholder="例）前後半制 45分ハーフ（90分）">
+      <label class="f">試合時間（前後半）</label>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="hint" style="margin:0">前後半　各</span>
+        <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${draft.overview.halfMin??""}" onchange="draft.overview.halfMin=this.value===''?null:Math.max(0,+this.value);render()">
+        <span class="hint" style="margin:0">分（計 <b>${(draft.overview.halfMin||0)*2}</b> 分）</span>
+      </div>
+      <label class="f">延長</label>
+      <div class="seg">
+        <button class="${!draft.overview.hasET?"on":""}" onclick="draft.overview.hasET=false;render()">なし</button>
+        <button class="${draft.overview.hasET?"on":""}" onclick="draft.overview.hasET=true;render()">あり</button>
+      </div>
+      ${draft.overview.hasET?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span class="hint" style="margin:0">延長　前後半　各</span>
+        <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${draft.overview.etHalfMin??""}" onchange="draft.overview.etHalfMin=this.value===''?null:Math.max(0,+this.value);render()">
+        <span class="hint" style="margin:0">分（計 <b>${(draft.overview.etHalfMin||0)*2}</b> 分）</span>
+      </div>`:""}
+      <label class="f">PK戦</label>
+      <div class="seg">
+        <button class="${!draft.overview.hasPK?"on":""}" onclick="draft.overview.hasPK=false;render()">なし</button>
+        <button class="${draft.overview.hasPK?"on":""}" onclick="draft.overview.hasPK=true;render()">あり</button>
+      </div>
       <label class="f">順位決定方法</label>
       <textarea class="in" style="min-height:96px" oninput="draft.overview.rankRule=this.value" placeholder="(1)勝点 (2)得失点差 …">${esc(draft.overview.rankRule)}</textarea>
       <label class="f">警告の累積</label>
@@ -1605,6 +1621,18 @@ function tabOverview(){
   const period = [fmtDate(cfg.dateStart||cfg.date), cfg.dateEnd?("〜 "+fmtDate(cfg.dateEnd)):""].filter(Boolean).join(" ");
   const nTeams = (state.teams||[]).length;
   const cat = CATEGORIES[cfg.gradeCat]?.label, scope = SCOPES[cfg.scope]?.label;
+  // 試合時間・方式：構造化データ（halfMin等）があればそれを文章化、無ければ旧テキスト
+  const struct = (ov.halfMin!=null || ov.hasET!=null || ov.hasPK!=null);
+  let timeLabel, ruleLabel;
+  if(struct){
+    const hm = ov.halfMin||0, etm = ov.etHalfMin||0;
+    timeLabel = hm ? `前後半　各${hm}分（計 ${hm*2}分）` : "";
+    const etTxt = ov.hasET ? `延長あり${etm?`（前後半 各${etm}分・計 ${etm*2}分）`:""}` : "延長なし";
+    ruleLabel = `${etTxt}　／　PK${ov.hasPK?"あり":"なし"}`;
+  }else{
+    timeLabel = nl2br(esc(ov.matchTime||""));
+    ruleLabel = esc(ov.matchRule||"");
+  }
   const rows = [
     ["名称", esc(t.name)],
     ["区分・規模", [cat,scope].filter(Boolean).map(esc).join("・")],
@@ -1613,8 +1641,8 @@ function tabOverview(){
     ["参加チーム数", nTeams?`${nTeams}チーム`:""],
     ["競技", esc(SPORTS[t.sport]?.label||"")],
     ["大会方式", esc(FORMATS[t.format]?.label||"")],
-    ["試合方式", esc(ov.matchRule||"")],
-    ["試合時間", nl2br(esc(ov.matchTime||""))],
+    ["試合時間", timeLabel],
+    ["試合方式", ruleLabel],
     ["勝点", FORMATS[t.format]?.hasLeague===false ? "" : `勝利 ${cfg.win} 点　／　引分け ${cfg.draw} 点　／　敗戦 ${cfg.lose} 点`],
     ["順位決定方法", FORMATS[t.format]?.hasLeague===false ? "" : nl2br(esc(ov.rankRule||""))],
     ["警告の累積", nl2br(esc(ov.cardRule||""))],
@@ -1746,9 +1774,11 @@ function tabBracket(){
       html += `<button class="btn noprint" style="margin-bottom:6px" onclick="autoDrawKO()">✨ 登録チームで自動作成</button>
         <p class="hint noprint" style="margin:0 0 10px">登録チームで普通のトーナメント表を作ります（人数が半端でも不戦勝を自動で入れます）。作ったあとは下の「組み合わせを変える」で入れ替えできます。</p>`;
     }
-    html += `<div class="btnrow noprint" style="margin-bottom:12px">
-      <button class="btn sec sm" onclick="openSeedSheet()">組み合わせを変える</button>
-      <button class="btn ghost sm" onclick="openBracketMaker()">細かく編集</button></div>`;
+    html += `<div class="btnrow noprint" style="margin-bottom:8px">
+      <button class="btn sec sm" onclick="openR1Maker()">① 1回戦を組む</button>
+      <button class="btn sec sm" onclick="openLaterMaker()">② 2回戦以降を組む</button></div>
+    <div class="btnrow noprint" style="margin-bottom:12px">
+      <button class="btn ghost sm" onclick="openSeedSheet()">組み合わせを変える</button></div>`;
   }
   const third = state.matches.find(m=>m.slot===99);
   if(third){ html += `<div class="block-label">3位決定戦</div>` + matchCard(third); }
@@ -3464,10 +3494,27 @@ function viewSettings(){
     </div>
     <div class="card">
       <label class="f" style="margin-top:0">大会概要（「大会概要」タブに表示されます）</label>
-      <label class="f">試合方式</label>
-      <input class="in" value="${esc(cfg.overview?.matchRule||"")}" onchange="ov_set('matchRule',this.value)" placeholder="例）延長なし・PKなし">
-      <label class="f">試合時間</label>
-      <input class="in" value="${esc(cfg.overview?.matchTime||"")}" onchange="ov_set('matchTime',this.value)" placeholder="例）前後半制 45分ハーフ（90分）">
+      <label class="f">試合時間（前後半）</label>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="hint" style="margin:0">前後半　各</span>
+        <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${cfg.overview?.halfMin??""}" onchange="ov_set('halfMin',this.value===''?null:Math.max(0,+this.value));render()">
+        <span class="hint" style="margin:0">分（計 <b>${(cfg.overview?.halfMin||0)*2}</b> 分）</span>
+      </div>
+      <label class="f">延長</label>
+      <div class="seg">
+        <button class="${!cfg.overview?.hasET?"on":""}" onclick="ov_set('hasET',false);render()">なし</button>
+        <button class="${cfg.overview?.hasET?"on":""}" onclick="ov_set('hasET',true);render()">あり</button>
+      </div>
+      ${cfg.overview?.hasET?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <span class="hint" style="margin:0">延長　前後半　各</span>
+        <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${cfg.overview?.etHalfMin??""}" onchange="ov_set('etHalfMin',this.value===''?null:Math.max(0,+this.value));render()">
+        <span class="hint" style="margin:0">分（計 <b>${(cfg.overview?.etHalfMin||0)*2}</b> 分）</span>
+      </div>`:""}
+      <label class="f">PK戦</label>
+      <div class="seg">
+        <button class="${!cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',false);render()">なし</button>
+        <button class="${cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',true);render()">あり</button>
+      </div>
       <label class="f">順位決定方法</label>
       <textarea class="in" style="min-height:96px" onchange="ov_set('rankRule',this.value)" placeholder="(1)勝点 (2)得失点差 …">${esc(cfg.overview?.rankRule||"")}</textarea>
       <label class="f">警告の累積</label>
@@ -3516,17 +3563,11 @@ async function autoDrawKO(){
   state.matches = state.matches.filter(m=>m.stage!=="ko").concat(newKO);
   toast(`トーナメント表を作成しました（${ids.length}チーム）`); render();
 }
-/* ===== 櫓メーカー（トーナメント表を自由に組む）ステップ1：試合の追加・削除 ===== */
-function openBracketMaker(){
-  const el = document.createElement("div");
-  el.className = "modal"; el.id = "bmModal";
-  el.innerHTML = `<div class="sheet" style="max-width:640px">
-    <h3>櫓メーカー</h3>
-    <p class="hint" style="margin-bottom:8px">ラウンドごとに試合を足したり消したりできます。</p>
-    <div id="bmBody"></div>
-    <div class="btnrow"><button class="btn" onclick="this.closest('.modal').remove();render()">閉じる</button></div>
-  </div>`;
-  document.body.appendChild(el); bmRender();
+/* ===== 櫓メーカー：①1回戦を組む窓 ／ ②2回戦以降を組む窓 ===== */
+let bmActive = null;   // いま開いている編集窓の再描画関数
+function bmMatchNo(m){  // 同じ回戦の中で上から何番目のマッチか（1始まり）
+  const same = state.matches.filter(x=>x.stage==="ko" && x.slot!==99 && x.round===m.round).sort((a,b)=>a.slot-b.slot);
+  return same.findIndex(x=>x.id===m.id) + 1;
 }
 function bmMaxRound(){
   const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
@@ -3536,70 +3577,118 @@ function bmNextSlot(round){
   const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===round);
   return ms.length ? Math.max(...ms.map(m=>m.slot))+1 : 0;
 }
-function bmRender(){
-  const body = document.getElementById("bmBody"); if(!body) return;
-  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
-  const maxR = Math.max(bmMaxRound(), 1);
-  let h = "";
-  for(let r=1; r<=maxR; r++){
-    const ms = ko.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
-    h += `<div class="card" style="margin-bottom:8px">
-      <div class="hint" style="margin:0 0 6px">${r}回戦（${ms.length}試合）</div>
-      ${ms.map((m,i)=>`<div class="bmmatch">
-        <div class="bmmhead"><span class="bmno">第${i+1}試合</span>
-          <button class="btn ghost sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
-        ${bmSel(m,"home")}<div class="bmvs2">vs</div>${bmSel(m,"away")}
-      </div>`).join("")}
-      <button class="btn sec sm" onclick="bmAddMatch(${r})">＋試合を追加</button></div>`;
+function bmUsedTeams(cur){   // 他の枠に入っているチーム（curは除く）
+  const used = new Set();
+  state.matches.filter(m=>m.stage==="ko").forEach(m=>{ if(m.home_team) used.add(m.home_team); if(m.away_team) used.add(m.away_team); });
+  if(cur) used.delete(cur);
+  return used;
+}
+/* --- ① 1回戦を組む --- */
+function r1Opts(cur){
+  const cfg = cfgOf(state.t);
+  const opts = [{v:"", l:"（なし・不戦勝）"}];
+  if(state.t.format==="league_ko"){
+    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
   }
-  h += `<button class="btn sec sm" onclick="bmAddMatch(${Math.max(bmMaxRound(),0)+1})">＋ラウンドを追加</button>`;
+  const used = bmUsedTeams(cur);
+  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{ if(!used.has(t.id)) opts.push({v:t.id, l:t.name}); });
+  return opts;
+}
+function r1Sel(m, side){
+  const cur = m[side+"_team"] || m[side+"_src"] || "";
+  return `<select class="in bmslot" onchange="bmSetSlot('${m.id}','${side}',this.value)">${
+    r1Opts(m[side+"_team"]||"").map(o=>`<option value="${esc(o.v)}" ${o.v===cur?"selected":""}>${esc(o.l)}</option>`).join("")
+  }</select>`;
+}
+function r1Render(){
+  const body = document.getElementById("r1Body"); if(!body) return;
+  const ms = state.matches.filter(m=>m.stage==="ko" && m.round===1 && m.slot!==99).sort((a,b)=>a.slot-b.slot);
+  body.innerHTML = (ms.length ? ms.map((m,i)=>`<div class="bmmatch">
+      <div class="bmmhead"><span class="bmno">マッチ${i+1}</span>
+        <button class="btn ghost sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
+      ${r1Sel(m,"home")}<div class="bmvs2">vs</div>${r1Sel(m,"away")}
+    </div>`).join("") : `<div class="hint" style="padding:6px 2px">まだ1回戦のマッチがありません。「＋ マッチを追加」で作ってください。</div>`)
+    + `<button class="btn sec sm" onclick="bmAddMatch(1)" style="margin-top:8px">＋ マッチを追加</button>`;
+}
+function openR1Maker(){
+  bmActive = r1Render;
+  const el = document.createElement("div");
+  el.className = "modal"; el.id = "r1Modal";
+  el.innerHTML = `<div class="sheet" style="max-width:640px">
+    <h3>① 1回戦を組む</h3>
+    <p class="hint" style="margin-bottom:8px">上から順に <b>マッチ1・マッチ2 …</b> です。各マッチに戦う2チームを選びます（片方だけなら不戦勝）。<br><b>シード</b>（1回戦を戦わないチーム）はここには入れず、「② 2回戦以降を組む」で入れます。</p>
+    <div id="r1Body"></div>
+    <div class="btnrow"><button class="btn" onclick="this.closest('.modal').remove();bmActive=null;render()">閉じる</button></div>
+  </div>`;
+  document.body.appendChild(el); r1Render();
+}
+/* --- ② 2回戦以降を組む --- */
+function laterOpts(selfId, cur){
+  const cfg = cfgOf(state.t);
+  const opts = [{v:"", l:"（なし・不戦勝）"}];
+  if(state.t.format==="league_ko"){
+    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+  }
+  const used = bmUsedTeams(cur);
+  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{ if(!used.has(t.id)) opts.push({v:t.id, l:`${t.name}（シード）`}); });
+  state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId)
+    .sort((a,b)=> a.round-b.round || a.slot-b.slot)
+    .forEach(m=> opts.push({v:`W:${m.id}`, l:`${m.round}回戦マッチ${bmMatchNo(m)}の勝者`}));
+  return opts;
+}
+function laterSel(m, side){
+  const cur = m[side+"_team"] || m[side+"_src"] || "";
+  return `<select class="in bmslot" onchange="bmSetSlot('${m.id}','${side}',this.value)">${
+    laterOpts(m.id, m[side+"_team"]||"").map(o=>`<option value="${esc(o.v)}" ${o.v===cur?"selected":""}>${esc(o.l)}</option>`).join("")
+  }</select>`;
+}
+function laterRender(){
+  const body = document.getElementById("ltBody"); if(!body) return;
+  const maxR = Math.max(bmMaxRound(), 2);
+  let h = "";
+  for(let r=2; r<=maxR; r++){
+    const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===r).sort((a,b)=>a.slot-b.slot);
+    h += `<div class="card" style="margin-bottom:8px">
+      <div class="hint" style="margin:0 0 6px">${r}回戦（${ms.length}マッチ）</div>
+      ${ms.map((m,i)=>`<div class="bmmatch">
+        <div class="bmmhead"><span class="bmno">マッチ${i+1}</span>
+          <button class="btn ghost sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
+        ${laterSel(m,"home")}<div class="bmvs2">vs</div>${laterSel(m,"away")}
+      </div>`).join("") || `<div class="hint" style="padding:4px 2px">マッチなし</div>`}
+      <button class="btn sec sm" onclick="bmAddMatch(${r})">＋ この回戦にマッチを追加</button></div>`;
+  }
+  h += `<button class="btn sec sm" onclick="bmAddMatch(${Math.max(bmMaxRound(),1)+1})">＋ 回戦を追加</button>`;
   body.innerHTML = h;
+}
+function openLaterMaker(){
+  bmActive = laterRender;
+  const el = document.createElement("div");
+  el.className = "modal"; el.id = "ltModal";
+  el.innerHTML = `<div class="sheet" style="max-width:640px">
+    <h3>② 2回戦以降を組む</h3>
+    <p class="hint" style="margin-bottom:8px">各マッチの枠に、<b>シード</b>（1回戦を戦わず直接出るチーム）か <b>◯回戦マッチ△の勝者</b> を選べます。<br>例）第1シード 対 <b>1回戦マッチ1の勝者</b></p>
+    <div id="ltBody"></div>
+    <div class="btnrow"><button class="btn" onclick="this.closest('.modal').remove();bmActive=null;render()">閉じる</button></div>
+  </div>`;
+  document.body.appendChild(el); laterRender();
 }
 async function bmAddMatch(round){
   const slot = bmNextSlot(round);
   const m = newMatch(state.t.id, { stage:"ko", round, slot, sort_order:round*100+slot });
   state.matches.push(m);
   try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("追加できませんでした: "+(e.message||e)); }
-  bmRender();
+  if(bmActive) bmActive();
 }
 async function bmDelMatch(id){
   state.matches = state.matches.filter(m=>m.id!==id);
   try{ await DB.remove("gn_matches", id); }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
-  bmRender();
-}
-function bmOpts(selfId, curTeam){
-  const cfg = cfgOf(state.t);
-  const opts = [{v:"", l:"（なし・不戦勝）"}];
-  if(state.t.format==="league_ko"){
-    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
-  }
-  // すでに他の枠に入っているチームは出さない（この枠の現在チームだけは残す）
-  const used = new Set();
-  state.matches.filter(m=>m.stage==="ko").forEach(m=>{
-    if(m.home_team) used.add(m.home_team);
-    if(m.away_team) used.add(m.away_team);
-  });
-  if(curTeam) used.delete(curTeam);
-  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{
-    if(used.has(t.id)) return;                       // 使用済みチームは選択肢から消す
-    opts.push({v:t.id, l:t.name});
-  });
-  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId).sort((a,b)=> a.round-b.round || a.slot-b.slot);
-  const idx = {};
-  ko.forEach(m=>{ idx[m.round]=(idx[m.round]||0)+1; opts.push({v:`W:${m.id}`, l:`${m.round}回戦第${idx[m.round]}試合の勝者`}); });
-  return opts;
-}
-function bmSel(m, side){
-  const cur = m[side+"_team"] || m[side+"_src"] || "";
-  return `<select class="in bmslot" onchange="bmSetSlot('${m.id}','${side}',this.value)">${
-    bmOpts(m.id, m[side+"_team"]||"").map(o=>`<option value="${esc(o.v)}" ${o.v===cur?"selected":""}>${esc(o.l)}</option>`).join("")
-  }</select>`;
+  if(bmActive) bmActive();
 }
 async function bmSetSlot(mid, side, v){
   const m = state.matches.find(x=>x.id===mid); if(!m) return;
   assignSide(m, side, v||null);
   try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
-  bmRender();
+  if(bmActive) bmActive();
 }
 function renameBlockInTournament(id, name){
   const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, name} : b);
@@ -4076,6 +4165,15 @@ window.addEventListener("hashchange", ()=>{
   const m = location.hash.match(/t=([0-9a-f-]{36})/i);
   if(m && (!state.t || state.t.id!==m[1])) openTournament(m[1]);
   else if(!m && state.view==="t") go("home");
+});
+
+/* 日付・時刻の入力欄は、枠のどこを押してもカレンダー/時計が開くようにする */
+document.addEventListener("click", (e)=>{
+  const el = e.target;
+  if(el && el.tagName==="INPUT" && ["date","datetime-local","time","month","week"].includes(el.type)
+     && typeof el.showPicker==="function"){
+    try{ el.showPicker(); }catch(_){}
+  }
 });
 </script>
 </body>
