@@ -350,6 +350,55 @@ td.pt{font-weight:800;}
   .sheet-a4{transform:none !important;box-shadow:none;}
   .sheet-a4 .fx{background:transparent !important;}
 }
+
+/* ===== トーナメント表（櫓メーカー描画・WYSIWYG） ===== */
+.kobk{overflow:auto;position:relative;margin-bottom:14px;padding:12px;
+  background:radial-gradient(circle at 1px 1px,#e3e7ef 1px,transparent 0) 0 0/22px 22px,#fff;
+  border:1.5px solid var(--line);border-radius:14px;box-shadow:var(--shadow);}
+.kobk-canvas{position:relative;min-height:140px;}
+.kobk-svg{position:absolute;inset:0;pointer-events:none;z-index:1;}
+.kobk-rounds{position:relative;z-index:2;display:flex;gap:42px;align-items:flex-start;padding:4px;}
+.kobk-round{display:flex;flex-direction:column;min-width:148px;width:148px;}
+.kobk-rbody{position:relative;}
+.kobk-rbody .kobk-m{position:absolute;left:0;right:0;}
+.kobk-rhead{text-align:center;margin-bottom:8px;}
+.kobk-rname{font-weight:800;font-size:12px;color:var(--ink);background:#eef2fb;
+  border-radius:999px;padding:3px 11px;display:inline-block;}
+.kobk-empty{color:var(--na);font-size:12px;text-align:center;padding:16px 4px;}
+.kobk-m{background:#fff;border:1.5px solid var(--line);border-radius:11px;box-shadow:var(--shadow);overflow:hidden;position:relative;}
+.kobk-m.clk{cursor:pointer;transition:.12s;}
+.kobk-m.clk:hover{border-color:var(--accent);box-shadow:var(--shadow-lg);}
+.kobk-mt{font-size:10.5px;font-weight:800;color:var(--sub);padding:3px 6px 1px 9px;display:flex;align-items:center;justify-content:space-between;gap:4px;}
+.kobk-mt .no{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.kobk-edit{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--accent);border-radius:6px;width:20px;height:18px;line-height:1;font-size:12px;cursor:pointer;padding:0;}
+.kobk-edit:hover{background:var(--accentbg);border-color:var(--accent);}
+.kobk-radd{margin-left:6px;border:1px solid var(--line);background:#fff;color:var(--accent);border-radius:7px;font-size:10.5px;font-weight:700;padding:2px 7px;cursor:pointer;}
+.kobk-radd:hover{background:var(--accentbg);border-color:var(--accent);}
+.kobk-s{display:flex;align-items:center;gap:7px;padding:6px 9px;border-top:1px solid #eef1f7;font-size:13px;}
+.kobk-s:first-of-type{border-top:0;}
+.kobk-s .dot{width:7px;height:7px;border-radius:50%;background:var(--line);flex:0 0 auto;}
+.kobk-s .nm{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kobk-s .sc{font-variant-numeric:tabular-nums;color:var(--sub);flex-shrink:0;font-weight:700;}
+.kobk-s.tbd .nm{color:var(--na);font-weight:500;}
+.kobk-s.from .dot{background:var(--accent2);}
+.kobk-s.seed .nm{color:var(--ink);}
+.kobk-s.seed .dot{background:var(--gold);}
+.kobk-s.win{background:var(--accentbg);}
+.kobk-s.win .nm{color:var(--accent);font-weight:800;}
+.kobk-s.win .dot{background:var(--accent);}
+.kobk-seedtag{margin-left:auto;font-size:9.5px;font-weight:800;color:#8a6d1a;background:#fbf3d8;
+  border:1px solid #ecd9a0;border-radius:999px;padding:1px 7px;flex:0 0 auto;}
+.kobk-m.seed{border-color:#ecd9a0;background:#fffdf6;}
+
+@media print{
+  @page kobracket{ size:A4 landscape; margin:8mm; }
+  body.pbk .screen > *{ display:none !important; }
+  body.pbk .screen > .kobk{ display:block !important; page:kobracket; overflow:visible;
+    border:0;box-shadow:none;padding:0;margin:0;background:#fff;
+    width:calc(var(--kw) * var(--ks));height:calc(var(--kh) * var(--ks)); }
+  body.pbk .kobk .kobk-canvas{ transform:scale(var(--ks));transform-origin:top left; }
+  body.pbk .kobk .kobk-svg svg{ overflow:visible; }
+}
 </style>
 </head>
 <body>
@@ -836,7 +885,7 @@ function distributePairs(items, koSize){
 function assignSide(m, side, v){
   m[side+"_team"] = null; m[side+"_src"] = null;
   if(!v) return;
-  if(typeof v === "string" && /^(G|W|L):/.test(v)) m[side+"_src"] = v;  // 組順位/勝者/敗者の枠
+  if(typeof v === "string" && /^(G|W|L|T):/.test(v)) m[side+"_src"] = v;  // 組順位/勝者/敗者/自由文字の枠
   else m[side+"_team"] = v;
 }
 function buildKOMatches(tid, size, pairs, thirdPlace){
@@ -862,12 +911,22 @@ function buildKOMatches(tid, size, pairs, thirdPlace){
       m.away_src = "W:"+grid[r-1][s*2+1].id;
     });
   }
-  const out = [];
+  let out = [];
   for(let r=1;r<=rounds;r++) out.push(...grid[r]);
+  // 1回戦の不戦勝（片側だけ実体）は、そのままシードとして残す（相手が空→byeWinnerで2回戦へ自動）。
+  //   両方空のマッチだけ削除。これで「シードのチームは2回戦から」という普通の大会表になる。
+  grid[1].forEach(m=>{
+    if(!m.home_team && !m.away_team && !m.home_src && !m.away_src){
+      out.forEach(x=>["home","away"].forEach(sd=>{ if(x[sd+"_src"]==="W:"+m.id) x[sd+"_src"]=null; }));
+      out = out.filter(x=>x.id!==m.id);
+    }
+  });
   if(thirdPlace && rounds>=2){
-    const f = grid[rounds-1];
-    out.push(newMatch(tid,{ stage:"ko", round:rounds, slot:99, sort_order:rounds*100+99,
-      home_src:"L:"+f[0].id, away_src:"L:"+f[1].id }));
+    const f = out.filter(m=>m.round===rounds-1 && m.slot!==99).sort((a,b)=>a.slot-b.slot);
+    if(f.length>=2){
+      out.push(newMatch(tid,{ stage:"ko", round:rounds, slot:99, sort_order:rounds*100+99,
+        home_src:"L:"+f[0].id, away_src:"L:"+f[1].id }));
+    }
   }
   return out;
 }
@@ -883,47 +942,73 @@ function newMatch(tid, o){
   }, o);
 }
 
-/* --- 決勝トーナメントの枠に入るチームを解決する --- */
-function resolveSlot(m, side){
+/* --- 決勝トーナメントの枠に入るチームを解決する（循環参照ガード付き） --- */
+function resolveSlot(m, side, seen){
+  seen = seen || new Set();
   const direct = side==="H" ? m.home_team : m.away_team;
-  if(direct) return { id:direct, label:teamName(direct) };
+  if(direct) return { id:direct, label:teamName(direct), kind:"team" };
   const src = side==="H" ? m.home_src : m.away_src;
-  if(!src) return { id:null, label:"—" };
-  const [kind, key] = [src.slice(0,1), src.slice(2)];
+  if(!src) return { id:null, label:"—", kind:"tbd" };
+  const kind = src.slice(0,1), key = src.slice(2);
+  if(kind==="T") return { id:null, label:key||"（未定）", kind:"free" };  // 自由ラベル
   if(kind==="W" || kind==="L"){                     // W:試合id＝その試合の勝者、L:＝敗者
+    if(seen.has(src)) return { id:null, label:"⚠", kind:"tbd" };         // 無限ループ防止
+    seen.add(src);
     const pm = state.matches.find(x=>x.id===key);
-    if(!pm) return { id:null, label:"—" };
-    const w = winnerOf(pm);
-    if(!w) return { id:null, label:kind==="W" ? "勝者" : "敗者" };
-    const H = resolveSlot(pm,"H"), A = resolveSlot(pm,"A");
+    if(!pm) return { id:null, label:"—", kind:"tbd" };
+    const w = winnerOf(pm, new Set(seen));
+    if(!w) return { id:null, label:kind==="W" ? "勝者" : "敗者", kind:"from" };
+    const H = resolveSlot(pm,"H",new Set(seen)), A = resolveSlot(pm,"A",new Set(seen));
     const hit = ((kind==="W") === (w===H.id)) ? H : A;
-    return { id:hit.id, label:hit.label };
+    return { id:hit.id, label:hit.label||"—", kind:"team" };
   }
   if(kind==="G"){                                   // G:<ブロックid>#<順位>（旧: G:A1）
     let g, rank;
     if(key.includes("#")){ const p=key.split("#"); g=p[0]; rank=num(p[1]); }
     else { g=key.slice(0,1); rank=num(key.slice(1)); }   // 旧形式（1文字ブロック）
     const label = `${blockName(state.t,g)||g}${rank}位`;
-    const gm = state.matches.filter(m=>m.stage==="league" && m.grp===g);
-    if(!gm.length || !gm.every(isDone)) return { id:null, label };   // 予選が終わるまでは枠のまま
+    const gm = state.matches.filter(x=>x.stage==="league" && x.grp===g);
+    if(!gm.length || !gm.every(isDone)) return { id:null, label, kind:"from" };   // 予選が終わるまでは枠のまま
     const row = standings(g)[rank-1];
-    return row ? { id:row.id, label:row.name } : { id:null, label };
+    return row ? { id:row.id, label:row.name, kind:"team" } : { id:null, label, kind:"from" };
   }
-  return { id:null, label:"—" };
+  return { id:null, label:"—", kind:"tbd" };
 }
 
 function isDone(m){ return m.status==="done" && m.home_score!=null && m.away_score!=null; }
-function winnerOf(m){
-  if(!isDone(m)) return null;
-  const h = sideId(m,"H"), a = sideId(m,"A");
-  if(m.home_score > m.away_score) return h;
-  if(m.home_score < m.away_score) return a;
-  if(m.home_pk!=null && m.away_pk!=null && m.home_pk!==m.away_pk) return m.home_pk>m.away_pk ? h : a;
-  return null;
+
+/* 完全に空の枠（＝不戦勝の相手側／シードの空きスロット） */
+function isEmptySide(m, side){
+  const pre = side==="H" ? "home" : "away";
+  return !m[pre+"_team"] && !m[pre+"_src"];
 }
-function sideId(m, side){
+/* 片側だけが実体＝シード（1回戦なしで直接上へ） */
+function isSeedMatch(m){
+  const eH = isEmptySide(m,"H"), eA = isEmptySide(m,"A");
+  return eH !== eA;
+}
+/* 片側だけ実体があり、もう片側が空なら、その実体が自動で勝ち上がり（不戦勝） */
+function byeWinner(m, seen){
+  const eH = isEmptySide(m,"H"), eA = isEmptySide(m,"A");
+  if(eH === eA) return null;                         // 両方空 or 両方あり → bye判定しない
+  const live = eH ? "A" : "H";
+  const r = resolveSlot(m, live, seen);
+  return r.id || null;                               // 実体側が確定チームなら自動勝者
+}
+function winnerOf(m, seen){
+  if(!m) return null;
+  if(isDone(m)){
+    const h = sideId(m,"H",seen), a = sideId(m,"A",seen);
+    if(m.home_score > m.away_score) return h;
+    if(m.home_score < m.away_score) return a;
+    if(m.home_pk!=null && m.away_pk!=null && m.home_pk!==m.away_pk) return m.home_pk>m.away_pk ? h : a;
+    return null;
+  }
+  return byeWinner(m, seen);                         // 未実施でも不戦勝は自動で上へ
+}
+function sideId(m, side, seen){
   const direct = side==="H" ? m.home_team : m.away_team;
-  return direct || resolveSlot(m, side).id;
+  return direct || resolveSlot(m, side, seen).id || (side==="H"?"__H:":"__A:")+m.id;
 }
 function sideLabel(m, side){
   const r = resolveSlot(m, side);
@@ -1015,10 +1100,15 @@ function render(){
   const y = window.scrollY;
   const changed = state.view!==_lastView || (state.view==="t" && state.tab!==_lastTab);
   $("#app").innerHTML = v();
+  // トーナメント表があれば櫓レイアウト＋接続線を描く（DOM確定後）
+  if(document.getElementById("koCanvas")){
+    requestAnimationFrame(()=>{ layoutBracket(); drawLinks(); });
+  }
   // 画面（やタブ）が変わったときだけ先頭へ。同じ画面の描き直しは位置を保つ
   if(changed) window.scrollTo(0,0); else window.scrollTo(0,y);
   _lastView = state.view; _lastTab = state.tab;
 }
+window.addEventListener("resize", ()=>{ if(document.getElementById("koCanvas")){ layoutBracket(); drawLinks(); } });
 
 /* ゴールドのトロフィー（ブランドマーク） */
 const TROPHY = `<svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1512,13 +1602,23 @@ function tabSchedule(){
   return out;
 }
 
-function koRoundLabel(m){
-  const cfg = cfgOf(state.t);
-  const rounds = Math.round(Math.log2(cfg.koSize));
-  if(m.slot===99) return "3位決定戦";
-  const left = rounds - m.round;
-  return ["決勝","準決勝","準々決勝"][left] || `${Math.pow(2,left+1)}分の1（${m.round}回戦）`;
+function koRoundNames(){ return (cfgOf(state.t).overview||{}).roundNames || {}; }
+function koMaxRound(){
+  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
+  return ko.length ? Math.max(...ko.map(m=>m.round)) : Math.round(Math.log2(cfgOf(state.t).koSize||2));
 }
+function koMatchNo(m){   // 同回戦内の通し番号（1始まり）
+  const ms = state.matches.filter(x=>x.stage==="ko" && x.round===m.round && x.slot!==99).sort((a,b)=>a.slot-b.slot);
+  return ms.findIndex(x=>x.id===m.id)+1;
+}
+function koRoundLabel(m){
+  if(m.slot===99) return "3位決定戦";
+  const names = koRoundNames();                 // 本部が自由に付けた回戦名を優先
+  if(names[m.round]) return names[m.round];
+  const left = koMaxRound() - m.round;           // 実際の最大回戦から算出
+  return ["決勝","準決勝","準々決勝"][left] || `${m.round}回戦`;   // 不戦勝はシードとして1回戦の枠に出る
+}
+function shortName(m){ return koRoundLabel(m) + koMatchNo(m); }
 
 function matchCard(m){
   const sp = sportOf(state.t);
@@ -1764,50 +1864,164 @@ function tabMatrix(){
 function tabBracket(){
   const cfg = cfgOf(state.t);
   const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
-  if(!ko.length) return `<div class="empty">トーナメントがありません。</div>`;
-  const rounds = Math.max(...ko.map(m=>m.round));
-  const vert = !!cfg.overview?.bracketVert;
-  let html = "";
-  if(canEdit()){
-    html += `<div class="seg noprint" style="margin-bottom:10px">
-      <button class="${!vert?"on":""}" onclick="setBracketDir(false)">横型</button>
-      <button class="${vert?"on":""}" onclick="setBracketDir(true)">縦型</button></div>`;
+  const edit = canEdit();
+  if(!ko.length){
+    let e = `<div class="empty">トーナメントがありません。</div>`;
+    if(edit) e += koEditBar(cfg);
+    return e;
   }
-  html += `<div class="bracket${vert?" vert":""}"><div class="brounds">`;
+  const rounds = Math.max(...ko.map(m=>m.round));
+  // 櫓メーカーと同じ描画（フィーダー中間配置＋SVG曲線）。作ったとおりに一般の方も見える。
+  let html = `<div class="kobk" id="koBracket"><div class="kobk-canvas" id="koCanvas">
+    <div class="kobk-svg"><svg id="koLinks" width="100%" height="100%"></svg></div>
+    <div class="kobk-rounds">`;
   for(let r=1; r<=rounds; r++){
     const ms = ko.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
-    html += `<div class="bround">` + ms.map(m=>{
-      const H = resolveSlot(m,"H"), A = resolveSlot(m,"A"), w = winnerOf(m);
-      const hasPk = m.home_pk!=null && m.away_pk!=null;
-      const slot = (side, r2)=>{
-        const won = w && w===r2.id;
-        const sc = isDone(m) ? (side==="H"?m.home_score:m.away_score) : "";
-        const pk = isDone(m) && hasPk ? `<small>(PK${side==="H"?m.home_pk:m.away_pk})</small>` : "";
-        return `<div class="slot ${won?"won":""} ${r2.id?"":"tbd"}">
-          <span class="n">${esc(r2.label)}</span><span class="s">${pk}${sc}</span></div>`;
-      };
-      const open = canEdit() ? ` onclick="openMatch('${m.id}')" style="cursor:pointer"` : "";
-      return `<div class="bm"${open}><span class="lbl">${esc(koRoundLabel(m))}</span>${slot("H",H)}${slot("A",A)}</div>`;
-    }).join("") + `</div>`;
+    const rn = koRoundLabel({round:r, slot:0});
+    html += `<div class="kobk-round" data-r="${r}">
+      <div class="kobk-rhead"><span class="kobk-rname"${edit?` onclick="renameKoRound(${r})" title="タップで回戦名を変える" style="cursor:pointer"`:""}>${esc(rn)}</span>${edit?`<button class="kobk-radd" title="この回戦にマッチを足す" onclick="bmAddMatch(${r})">＋マッチ</button>`:""}</div>
+      <div class="kobk-rbody">`
+      + (ms.length ? ms.map(m=>koMatchHTML(m,edit)).join("")
+                   : `<div class="kobk-empty">—</div>`)
+      + `</div></div>`;
   }
-  html += `</div></div>`;
-  if(canEdit()){
-    if(state.t.format==="ko"){
-      html += `<button class="btn noprint" style="margin-bottom:6px" onclick="autoDrawKO()">✨ 登録チームで自動作成</button>
-        <p class="hint noprint" style="margin:0 0 10px">登録チームで普通のトーナメント表を作ります（人数が半端でも不戦勝を自動で入れます）。作ったあとは下の「組み合わせを変える」で入れ替えできます。</p>`;
-    }
-    html += `<div class="btnrow noprint" style="margin-bottom:8px">
-      <button class="btn sec sm" onclick="openR1Maker()">① 1回戦を組む</button>
-      <button class="btn sec sm" onclick="openLaterMaker()">② 2回戦以降を組む</button></div>
-    <div class="btnrow noprint" style="margin-bottom:12px">
-      <button class="btn ghost sm" onclick="openSeedSheet()">組み合わせを変える</button></div>`;
-  }
-  const third = state.matches.find(m=>m.slot===99);
-  if(third){ html += `<div class="block-label">3位決定戦</div>` + matchCard(third); }
+  html += `</div></div></div>`;
+  html += `<div class="btnrow noprint" style="margin-bottom:10px">
+    <button class="btn ghost sm" style="flex:1" onclick="printBracket()">🖨 トーナメント表をA4印刷</button></div>`;
+  if(edit) html += koEditBar(cfg);
+  const consolations = state.matches.filter(m=>m.slot===99).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  consolations.forEach(c=>{
+    html += `<div class="block-label">${esc(koRoundLabel(c))}${edit?` <button class="kobk-radd" onclick="openKoEditor('${c.id}')">✎編集</button>`:""}</div>` + matchCard(c);
+  });
   if(state.t.format==="league_ko"){
     html += `<p class="hint">予選リーグの順位が確定すると、枠のチーム名が自動で入ります（各組${cfg.advance}位まで）。</p>`;
   }
   return html;
+}
+
+/* 1マッチの櫓カード（シードは1チームのみ表示） */
+function koMatchHTML(m, edit){
+  const seed = isSeedMatch(m);
+  const no = koMatchNo(m);
+  const title = seed ? "シード" : `${esc(koRoundLabel(m))} ${no}`;
+  const editBtn = edit ? `<button class="kobk-edit" title="枠の中身を編集" onclick="event.stopPropagation();openKoEditor('${m.id}')">✎</button>` : "";
+  const body = seed ? koSeedSlot(m, isEmptySide(m,"H")?"A":"H")
+                    : koSlot(m,"H") + koSlot(m,"A");
+  const clk = edit ? ` onclick="openMatch('${m.id}')"` : "";
+  return `<div class="kobk-m ${seed?"seed":""} ${edit?"clk":""}" id="komt-${m.id}" data-mid="${m.id}"${clk}>
+    <div class="kobk-mt"><span class="no">${title}</span>${editBtn}</div>${body}</div>`;
+}
+function koSlot(m, side){
+  const r = resolveSlot(m, side);
+  const w = winnerOf(m);
+  const isWin = w && w===sideId(m,side);
+  const cls = isWin ? "win" : r.kind==="team" ? "seed" : r.kind==="from" ? "from" : r.kind==="free" ? "seed" : "tbd";
+  const sc = isDone(m) ? (side==="H"?m.home_score:m.away_score) : "";
+  const hasPk = m.home_pk!=null && m.away_pk!=null;
+  const pk = isDone(m) && hasPk ? `<small>(PK${side==="H"?m.home_pk:m.away_pk})</small>` : "";
+  return `<div class="kobk-s ${cls}"><span class="dot"></span><span class="nm">${esc(r.label)}</span><span class="sc">${pk}${sc!==""?sc:""}</span></div>`;
+}
+function koSeedSlot(m, side){
+  const r = resolveSlot(m, side);
+  return `<div class="kobk-s seed"><span class="dot"></span><span class="nm">${esc(r.label)}</span><span class="kobk-seedtag">シード</span></div>`;
+}
+function koEditBar(cfg){
+  let html = "";
+  if(state.t.format==="ko"){
+    html += `<button class="btn noprint" style="margin-bottom:6px" onclick="autoDrawKO()">✨ 登録チームで自動作成</button>
+      <p class="hint noprint" style="margin:0 0 10px">登録チームで普通のトーナメント表を作ります（半端な人数はシードを自動で入れます）。あとは<b>枠の右上「✎」</b>で中身（チーム／勝者・敗者／自由文字）を1つずつ直せます。</p>`;
+  }
+  html += `<div class="btnrow noprint" style="margin-bottom:8px">
+    <button class="btn sec sm" onclick="openR1Maker()">① 1回戦を組む</button>
+    <button class="btn sec sm" onclick="openLaterMaker()">② 2回戦以降を組む</button></div>
+  <div class="btnrow noprint" style="margin-bottom:12px">
+    <button class="btn ghost sm" onclick="openSeedSheet()">組み合わせを変える</button>
+    <button class="btn ghost sm" onclick="koAddRound()">＋ 回戦を足す</button>
+    <button class="btn ghost sm" onclick="koAddConsolation()">＋ 順位決定戦</button></div>`;
+  return html;
+}
+
+/* --- 櫓レイアウト：フィーダー（W:/L:参照元）の中心の平均に配置。重なりは下へ押し出す --- */
+const KO_GAPY = 14;
+function layoutBracket(){
+  const canvas = document.getElementById("koCanvas"); if(!canvas) return;
+  const rounds = [...canvas.querySelectorAll(".kobk-round")];
+  const center = {};                              // matchId -> 縦中心(px)
+  let globalBottom = 0;
+  rounds.forEach(rd=>{
+    const r = +rd.dataset.r;
+    const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===r).sort((a,b)=>a.slot-b.slot);
+    let prevBottom = -Infinity;
+    ms.forEach(m=>{
+      const el = document.getElementById("komt-"+m.id); if(!el) return;
+      const H = el.offsetHeight || 90;
+      const feeders = [];
+      ["home","away"].forEach(sd=>{ const s=m[sd+"_src"]; if(s&&/^(W|L):/.test(s)){ const c=center[s.slice(2)]; if(c!=null) feeders.push(c); } });
+      let c = feeders.length ? feeders.reduce((a,b)=>a+b,0)/feeders.length
+                             : (prevBottom>-Infinity ? prevBottom+KO_GAPY+H/2 : H/2);
+      let top = c - H/2;
+      if(top < prevBottom+KO_GAPY) top = prevBottom+KO_GAPY;   // 重なり回避（単調増加）
+      el.style.top = top+"px";
+      center[m.id] = top+H/2; prevBottom = top+H;
+      if(prevBottom>globalBottom) globalBottom = prevBottom;
+    });
+  });
+  canvas.querySelectorAll(".kobk-rbody").forEach(b=> b.style.height=(globalBottom+6)+"px");
+}
+/* --- SVG曲線：前の回戦の勝者/敗者を参照する枠へ線を引く（勝者=青 / 敗者=橙） --- */
+function drawLinks(){
+  const svg = document.getElementById("koLinks"); if(!svg) return;
+  const canvas = document.getElementById("koCanvas"); if(!canvas) return;
+  const cb = canvas.getBoundingClientRect();
+  svg.setAttribute("width", cb.width); svg.setAttribute("height", cb.height);
+  let paths = "";
+  state.matches.filter(m=>m.stage==="ko" && m.slot!==99).forEach(m=>{
+    ["home","away"].forEach(sd=>{
+      const src = m[sd+"_src"]; if(!src || !/^(W|L):/.test(src)) return;
+      const from = document.getElementById("komt-"+src.slice(2)), to = document.getElementById("komt-"+m.id);
+      if(!from || !to) return;
+      const fb = from.getBoundingClientRect(), tb = to.getBoundingClientRect();
+      const x1 = fb.right-cb.left, y1 = fb.top+fb.height/2-cb.top;
+      const x2 = tb.left-cb.left, y2 = tb.top+(sd==="home"?tb.height*0.34:tb.height*0.72)-cb.top;
+      const mxx = (x1+x2)/2;
+      const col = src[0]==="L" ? "#c98a2e" : "#9fb0d6";
+      paths += `<path d="M${x1},${y1} C${mxx},${y1} ${mxx},${y2} ${x2},${y2}" fill="none" stroke="${col}" stroke-width="2" opacity=".8"/>`;
+    });
+  });
+  svg.innerHTML = paths;
+}
+/* 回戦名を自由に変える（本部のみ・overview.roundNamesに保存） */
+async function renameKoRound(r){
+  const cur = koRoundLabel({round:r, slot:0});
+  const v = prompt(`${r}回戦の表示名（空欄で自動に戻す）`, cur);
+  if(v==null) return;
+  const s = state.t.settings = cfgOf(state.t);
+  const rn = Object.assign({}, s.overview?.roundNames||{});
+  if(v.trim()==="") delete rn[r]; else rn[r] = v.trim();
+  s.overview = Object.assign({}, s.overview||{}, {roundNames:rn});
+  try{
+    const { id,org_id,name,sport,format,settings,created_at } = state.t;
+    await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
+  }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
+  render();
+}
+/* A4横1枚に収まるよう倍率を計算して印刷 */
+function printBracket(){
+  const bk = document.getElementById("koBracket"), cv = document.getElementById("koCanvas");
+  if(!bk || !cv){ window.print(); return; }
+  layoutBracket();
+  const rounds = cv.querySelector(".kobk-rounds");
+  const w = rounds.scrollWidth, h = rounds.scrollHeight;
+  const PW = 1000, PH = 680;                        // A4横 印刷可能領域の目安(px)
+  const scale = Math.min(PW/w, PH/h, 1);
+  bk.style.setProperty("--kw", w+"px");
+  bk.style.setProperty("--kh", h+"px");
+  bk.style.setProperty("--ks", scale);
+  const done = ()=>{ document.body.classList.remove("pbk"); bk.style.removeProperty("--kw"); bk.style.removeProperty("--kh"); bk.style.removeProperty("--ks"); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  document.body.classList.add("pbk");
+  setTimeout(()=>window.print(), 60);
+  setTimeout(done, 4000);                           // 保険（afterprintが来ない環境用）
 }
 
 /* --- 1回戦の組み合わせを手で決める --- */
@@ -3703,12 +3917,12 @@ async function bmAddMatch(round){
   const m = newMatch(state.t.id, { stage:"ko", round, slot, sort_order:round*100+slot });
   state.matches.push(m);
   try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("追加できませんでした: "+(e.message||e)); }
-  if(bmActive) bmActive();
+  if(bmActive) bmActive(); else render();
 }
 async function bmDelMatch(id){
   state.matches = state.matches.filter(m=>m.id!==id);
   try{ await DB.remove("gn_matches", id); }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
-  if(bmActive) bmActive();
+  if(bmActive) bmActive(); else render();
 }
 async function bmSetSlot(mid, side, v){
   const m = state.matches.find(x=>x.id===mid); if(!m) return;
@@ -3716,6 +3930,91 @@ async function bmSetSlot(mid, side, v){
   try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
   if(bmActive) bmActive();
 }
+/* ===== 櫓メーカー：枠を直接タップして中身を決める（team/予選順位/勝者/敗者/自由文字/なし） ===== */
+function koSlotOptions(selfId, cur){
+  const cfg = cfgOf(state.t);
+  const opts = [{v:"", l:"（なし・不戦勝／シード）"}];
+  const used = bmUsedTeams(cur);
+  state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{ if(!used.has(t.id)||t.id===cur) opts.push({v:t.id, l:t.name}); });
+  if(state.t.format==="league_ko"){
+    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+  }
+  state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId)
+    .sort((a,b)=> a.round-b.round || a.slot-b.slot)
+    .forEach(m=>{
+      opts.push({v:`W:${m.id}`, l:`${koRoundLabel(m)}マッチ${koMatchNo(m)}の勝者`});
+      opts.push({v:`L:${m.id}`, l:`${koRoundLabel(m)}マッチ${koMatchNo(m)}の敗者`});
+    });
+  return opts;
+}
+function openKoEditor(id){
+  const m = state.matches.find(x=>x.id===id); if(!m) return;
+  const sideBlock = (side, label)=>{
+    const cur  = m[side+"_team"] || (m[side+"_src"]&&m[side+"_src"].slice(0,2)!=="T:" ? m[side+"_src"] : "") || "";
+    const curT = (m[side+"_src"]&&m[side+"_src"].slice(0,2)==="T:") ? m[side+"_src"].slice(2) : "";
+    return `<label class="fld">${label}</label>
+      <select class="in" id="ke-${side}">${koSlotOptions(m.id, m[side+"_team"]||"").map(o=>
+        `<option value="${esc(o.v)}" ${o.v===cur&&!curT?"selected":""}>${esc(o.l)}</option>`).join("")}</select>
+      <input class="in" id="keT-${side}" style="margin-top:5px" placeholder="または自由な文字（例：抽選・未定）" value="${esc(curT)}">`;
+  };
+  const el = document.createElement("div"); el.className="modal"; el.id="keModal";
+  el.innerHTML = `<div class="sheet">
+    <h3>枠の中身を決める</h3>
+    <p class="hint" style="margin:0 0 6px">${esc(koRoundLabel(m))}・マッチ${koMatchNo(m)}<br>各枠にチーム／予選順位／◯回戦マッチ△の勝者・敗者／自由文字を入れられます。相手を「なし」にするとシード（2回戦から）になります。</p>
+    <div class="grid2" style="margin-top:2px">
+      <div><label class="fld">回戦（列）</label><input class="in" id="ke-round" type="number" min="1" value="${m.round}"></div>
+      <div><label class="fld">並び順</label><input class="in" id="ke-slot" type="number" min="0" value="${m.slot}"></div>
+    </div>
+    ${sideBlock("home","上の枠")}
+    ${sideBlock("away","下の枠")}
+    <div class="btnrow">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">閉じる</button>
+      <button class="btn danger" style="flex:.6" onclick="koEditorDelete('${m.id}')">削除</button>
+      <button class="btn" onclick="koEditorSave('${m.id}')">保存</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+}
+async function koEditorSave(id){
+  const m = state.matches.find(x=>x.id===id); if(!m){ document.getElementById("keModal")?.remove(); return; }
+  const nr = Math.max(1, num($("#ke-round").value)||m.round);
+  const ns = Math.max(0, num($("#ke-slot").value));
+  m.round = nr; m.slot = ns; m.sort_order = nr*100+ns;
+  ["home","away"].forEach(side=>{
+    const t = ($("#keT-"+side).value||"").trim();
+    if(t) assignSide(m, side, "T:"+t);
+    else  assignSide(m, side, $("#ke-"+side).value||null);
+  });
+  try{ await DB.upsert("gn_matches",[stripMatch(m)]); toast("保存しました"); }
+  catch(e){ toast("保存できませんでした: "+(e.message||e)); }
+  document.getElementById("keModal")?.remove(); render();
+}
+async function koEditorDelete(id){
+  if(!confirm("このマッチを削除します。参照していた枠は空になります。よろしいですか？")) return;
+  const affected=[];
+  state.matches.forEach(x=>["home","away"].forEach(sd=>{ const s=x[sd+"_src"];
+    if(s===`W:${id}`||s===`L:${id}`){ x[sd+"_src"]=null; if(!affected.includes(x)) affected.push(x); } }));
+  state.matches = state.matches.filter(x=>x.id!==id);
+  try{
+    await DB.remove("gn_matches", id);
+    if(affected.length) await DB.upsert("gn_matches", affected.map(stripMatch));
+  }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
+  document.getElementById("keModal")?.remove(); render();
+}
+/* 順位決定戦（3位決定戦など・敗者参照のコンソレーション）を1つ足す */
+async function koAddConsolation(){
+  const rounds = koMaxRound();
+  const m = newMatch(state.t.id, { stage:"ko", round:rounds, slot:99, sort_order:rounds*100+99 });
+  // 準決勝が2つあれば自動で敗者同士を入れておく
+  const sf = state.matches.filter(x=>x.stage==="ko" && x.slot!==99 && x.round===rounds-1).sort((a,b)=>a.slot-b.slot);
+  if(sf.length>=2){ m.home_src="L:"+sf[0].id; m.away_src="L:"+sf[1].id; }
+  state.matches.push(m);
+  try{ await DB.upsert("gn_matches",[stripMatch(m)]); }catch(e){ toast("追加できませんでした: "+(e.message||e)); }
+  render(); openKoEditor(m.id);
+}
+/* 回戦（列）を末尾に1つ足す＝そこにマッチを1つ作る */
+async function koAddRound(){ await bmAddMatch(Math.max(bmMaxRound(),1)+1); }
+
 function renameBlockInTournament(id, name){
   const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, name} : b);
   cfg_set("blocks", blocks);
