@@ -133,6 +133,18 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .seg button.on{background:var(--accentbg);border-color:var(--accent2);color:var(--accent);}
 .row2{display:flex;gap:8px;}
 .row2>*{flex:1;min-width:0;}
+.pkrow{display:flex;align-items:center;gap:8px;margin:6px 0;}
+.pkrow .pkname{flex:0 0 auto;max-width:96px;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pkrow .pkcells{display:flex;flex-wrap:wrap;gap:4px;flex:1;}
+.pkrow .pkcount{flex:0 0 auto;font-size:13px;font-weight:800;color:var(--accent);}
+.pkcell{width:28px;height:28px;border:1.5px solid var(--line);border-radius:7px;background:#fff;
+  font-size:14px;font-weight:800;color:var(--na);cursor:pointer;padding:0;line-height:1;}
+.pkcell.o{background:var(--accentbg);border-color:var(--accent);color:var(--accent);}
+.pkcell.x{background:var(--badbg);border-color:var(--bad);color:var(--bad);}
+.ovlock{border:0;margin:0;padding:0;min-width:0;}
+.ovlock[disabled]{opacity:.72;}
+.lockmsg{background:var(--warnbg);border:1.5px solid #f0d9a0;border-radius:12px;padding:10px 12px;
+  font-size:13px;font-weight:600;color:#7a5a10;margin-bottom:12px;}
 
 /* ===== タブ ===== */
 .tabs{position:sticky;top:0;z-index:40;background:var(--paper);
@@ -285,6 +297,7 @@ td.pt{font-weight:800;}
 .sheet-a4 .ln{position:absolute;background:#000;display:block;}
 .sheet-a4 .lb{position:absolute;white-space:nowrap;line-height:1;}
 .sheet-a4 .tot{position:absolute;text-align:center;font-size:16pt;font-weight:700;line-height:1;}
+.sheet-a4 .pkmaru{position:absolute;text-align:center;font-weight:700;color:#000;line-height:1;}
 .sheet-a4 .fx{position:absolute;border:none;background:transparent;padding:0 1pt;
   text-align:center;line-height:1;color:#000;font-family:inherit;box-sizing:border-box;
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis;letter-spacing:-0.2pt;}
@@ -801,6 +814,47 @@ function setMatchET(m, on){
   m.lineups = m.lineups || {};
   m.lineups._meta = m.lineups._meta || {};
   m.lineups._meta.useET = !!on;
+}
+/* この試合で「実際に延長を行ったか」（明示ONか、延長の得点がある場合だけ。大会設定の対象条件は含めない） */
+function matchETPlayed(m){
+  return !!(m.lineups && m.lineups._meta && m.lineups._meta.useET)
+    || (m.events||[]).some(e=> e.period==="1ET" || e.period==="2ET");
+}
+/* --- PK戦：1人ずつ 〇×（成功/失敗）を記録する。系列は lineups._meta.pk に持つ --- */
+function pkArr(m, side){ return (m.lineups && m.lineups._meta && m.lineups._meta.pk && m.lineups._meta.pk[side]) || []; }
+function pkCount(m, side){ return pkArr(m, side).filter(v=>v==="o").length; }
+function ensurePK(m){
+  m.lineups = m.lineups || {};
+  m.lineups._meta = m.lineups._meta || {};
+  m.lineups._meta.pk = m.lineups._meta.pk || { H:[], A:[] };
+  m.lineups._meta.pk.H = m.lineups._meta.pk.H || [];
+  m.lineups._meta.pk.A = m.lineups._meta.pk.A || [];
+  return m.lineups._meta.pk;
+}
+function pkKick(side, idx){
+  const m = curMatch(); if(!m) return;
+  const pk = ensurePK(m), arr = pk[side];
+  while(arr.length <= idx) arr.push("");
+  arr[idx] = arr[idx]==="" ? "o" : arr[idx]==="o" ? "x" : "";   // 空→〇→×→空
+  while(arr.length && arr[arr.length-1]==="") arr.pop();        // 末尾の空を落とす
+  const any = pk.H.length || pk.A.length;
+  m.home_pk = any ? pkCount(m,"H") : null;                      // 〇の数を勝敗判定用に反映
+  m.away_pk = any ? pkCount(m,"A") : null;
+  render();
+}
+function pkRowHTML(m, side, label){
+  const arr = pkArr(m, side);
+  const n = Math.min(14, Math.max(5, arr.length + 1));           // 入った数＋1（5〜14）
+  let cells = "";
+  for(let i=0;i<n;i++){
+    const v = arr[i] || "";
+    const mark = v==="o" ? "〇" : v==="x" ? "×" : String(i+1);
+    cells += `<button class="pkcell ${v}" onclick="pkKick('${side}',${i})">${mark}</button>`;
+  }
+  return `<div class="pkrow">
+    <span class="pkname">${esc(label)}</span>
+    <span class="pkcells">${cells}</span>
+    <span class="pkcount">〇${pkCount(m,side)}</span></div>`;
 }
 /* このトーナメントの総ラウンド数（実際の櫓の最大round。無ければ koSize から） */
 function koTotalRounds(){
@@ -2191,11 +2245,12 @@ function viewMatch(){
   if(!m) return topbar({title:"試合", back:"go('t')"}) + `<div class="empty">見つかりません。</div>`;
   const sp = sportOf(state.t);
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
+  const locked = isDone(m) && state.unlockMatch !== m.id;   // 終了した試合は変更ロック（修正ボタンで解除）
   const label = (m.matchNo?`No.${m.matchNo}・`:"") + (m.stage==="league" ? ((blockName(state.t,m.grp)||"リーグ戦")+" リーグ") : koRoundLabel(m));
   const kickoffLocal = m.kickoff ? new Date(new Date(m.kickoff).getTime()
       - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16) : "";
 
-  const periods = PERIOD_REG.concat(matchUsesET(m)?PERIOD_ET:[]);
+  const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
   const evList = (m.events||[]).map((ev,i)=>{
     const tid = ev.team==="H" ? H.id : A.id;
     const tn  = ev.team==="H" ? H.label : A.label;
@@ -2222,6 +2277,8 @@ function viewMatch(){
 
   return topbar({ title:"結果を入れる", sub:label, back:"go('t')" })
   + `<div class="screen">
+    ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
+    <fieldset class="ovlock"${locked?" disabled":""}>
     <div class="scorebox">
       <div class="scoreline">
         <div class="team">
@@ -2253,18 +2310,17 @@ function viewMatch(){
               <span style="text-align:center;font-weight:700">${periodScore(m,p,"A")}</span>`).join("")}
           </div>
           <div style="text-align:center;margin-top:8px">
-            ${matchUsesET(m)
+            ${matchETPlayed(m)
               ? `<button class="btn ghost sm" style="width:auto" onclick="toggleET(false)">延長をやめる</button>`
-              : `<button class="btn ghost sm" style="width:auto" onclick="toggleET(true)">＋ 延長を使う</button>`}
+              : `<button class="btn ghost sm" style="width:auto" onclick="toggleET(true)">＋ 延長を追加</button>`}
           </div>
           <p class="hint" style="text-align:center;margin-top:4px">前後半の点は「得点を追加」で時間帯を選ぶと自動でここに入ります。</p>
         </div>` : ""}
       ${sp.pk && m.stage==="ko" ? `
-        <label class="f" style="margin-top:16px">PK戦（引き分けのときだけ）</label>
-        <div class="row2">
-          <input class="in" type="number" inputmode="numeric" placeholder="${esc(H.label)}" value="${m.home_pk??""}" oninput="setField('home_pk',this.value===''?null:+this.value)">
-          <input class="in" type="number" inputmode="numeric" placeholder="${esc(A.label)}" value="${m.away_pk??""}" oninput="setField('away_pk',this.value===''?null:+this.value)">
-        </div>` : ""}
+        <label class="f" style="margin-top:16px">PK戦（引き分けのときだけ・1人ずつ 〇×）</label>
+        ${pkRowHTML(m,"H",H.label)}
+        ${pkRowHTML(m,"A",A.label)}
+        <p class="hint">枠をタップで <b>〇（成功）→ ×（失敗）→ 空</b> に変わります。〇の数が公式記録のPK欄に入ります。</p>` : ""}
     </div>
 
     <div class="card">
@@ -2297,12 +2353,15 @@ function viewMatch(){
       <p class="hint">試合の連絡に。保存すると、結果を見ている人の画面にも 📣 で出ます。</p>
     </div>
 
-    <button class="btn" onclick="saveMatch()">保存する</button>
+    </fieldset>
+    ${locked
+      ? `<button class="btn" onclick="unlockMatch('${m.id}')">✏ 修正する</button>`
+      : `<button class="btn" onclick="saveMatch()">保存する</button>`}
     <div class="btnrow">
       <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openLineup('${m.id}'))">👥 メンバー表</button>
       <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openOfficial('${m.id}'))">📄 公式記録</button>
     </div>
-    <div class="btnrow"><button class="btn ghost" onclick="go('t')">保存せずに戻る</button></div>
+    <div class="btnrow"><button class="btn ghost" onclick="go('t')">${locked?"戻る":"保存せずに戻る"}</button></div>
   </div>`;
 }
 
@@ -2350,7 +2409,7 @@ function openEventSheet(kind){
   const types = kind==="goal"
     ? [["goal","得点"],["pk","PK"],["og","オウンゴール"]]
     : [["yellow","🟨 警告"],["red","🟥 退場"],["green","🟩 グリーン"]];
-  const periods = PERIOD_REG.concat(matchUsesET(m)?PERIOD_ET:[]);
+  const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
@@ -2425,7 +2484,7 @@ function sortEvents(m){
 function openSubSheet(){
   const m = curMatch(); if(!m) return;
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
-  const periods = PERIOD_REG.concat(matchUsesET(m)?PERIOD_ET:[]);
+  const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
@@ -3105,6 +3164,20 @@ const ROW_CARD   = [[343.7,331.1],[331.1,318.5],[318.5,305.9],[305.9,293.2],[293
 const ROW_TOTAL  = [[318.5,305.9],[305.9,293.2],[293.2,280.6],[280.6,268],[268,255.4],[255.4,242.8],[242.8,230.2]];
 const TOTAL_KEYS = ["shot","gk","ck","fk","ifk","off","pk"];
 const ROW_GOAL   = [[217.6,204.9],[204.9,192.3],[192.3,179.7],[179.7,167.1],[167.1,154.5],[154.5,141.9],[141.9,129.3]];
+/* 得点経過の行は入った得点の数だけ動的に増やす（最低7・最大14）。同じ枠内を等分する。 */
+const GOAL_TOP = 217.6, GOAL_BOT = 129.3;
+function emptyGoalRow(){ return { time:"", team:"", no:"", scorer:"", assist:"", seq:Array(10).fill("") }; }
+function goalRowCount(o){
+  const filled = ((o&&o.goals)||[]).filter(g=> g.time||g.team||g.no||g.scorer||g.assist||(g.seq&&g.seq.some(x=>x)) ).length;
+  let n = Math.max(7, filled);
+  if(filled>=7) n = filled + 1;      // 満杯なら1行余分に空けておく
+  return Math.min(14, Math.max(7, n));
+}
+function goalRows(o){
+  const n = goalRowCount(o), h = (GOAL_TOP-GOAL_BOT)/n, rows = [];
+  for(let i=0;i<n;i++) rows.push([GOAL_TOP-h*i, GOAL_TOP-h*(i+1)]);
+  return rows;
+}
 const ROW_SCORE  = [[709.5,696.9],[696.9,684.3],[684.3,671.7],[671.7,659.1]];        // 前半/後半/延長前/延長後
 const PK_CELLS   = [95.8,129.5,163.3,197,230.7,264.5,298.2,331.9,365.7,399.4,433.1,466.9,500.6,534.3,568.1];
 const SEQ_CELLS  = [230.7,264.5,298.2,331.9,365.7,399.4,433.1,466.9,500.6,534.3,568.1];
@@ -3359,21 +3432,31 @@ function draftOfficial(m){
     });
     if(s.scores.every(v=>v==null||v==="")){
       const keys = ["1H","2H","1ET","2ET"];             // 前半/後半/延長前/延長後 → scores[0..3]
-      const useET = matchUsesET(m);
+      const etPlayed = matchETPlayed(m);                 // 実際に延長をやった時だけ延長欄に数字（0含む）
       const parts = keys.map(k=> periodScore(m, k, side));
       const total = side==="H" ? m.home_score : m.away_score;
       if(parts.reduce((a,b)=>a+b,0) > 0){                // 時間帯別に得点が記録されている
-        keys.forEach((k,i)=>{ s.scores[i] = (i>=2 && !useET) ? "" : String(parts[i]); });
+        keys.forEach((k,i)=>{ s.scores[i] = (i>=2 && !etPlayed) ? "" : String(parts[i]); });
       } else if(total!=null){                            // 合計だけ入力 → 前半に仮置き
         s.scores[0] = String(total);
       }
     }
-    if(s.pk==null){ const pk = side==="H"?m.home_pk:m.away_pk; if(pk!=null) s.pk = String(pk); }
+    // PK戦：1人ずつの〇×を14セルへ、〇の数をPK欄（チーム名の次）へ
+    const pser = pkArr(m, side);
+    if(pser.length && s.pks.every(v=>!v)){
+      pser.slice(0,14).forEach((v,i)=>{ s.pks[i] = v==="o" ? "○" : v==="x" ? "×" : ""; });
+    }
+    if(s.pk==null){
+      const cnt = pser.length ? pkCount(m, side) : (side==="H" ? m.home_pk : m.away_pk);
+      if(cnt!=null) s.pk = String(cnt);
+    }
+    if(!s.name2) s.name2 = s.name;   // PK経過欄のチーム名
   });
-  // 得点経過
+  // 得点経過（入った得点の数だけ・最大14）
   const goals = (m.events||[]).filter(e=>e.type==="goal"||e.type==="pk"||e.type==="og");
   if(o.goals.every(g=>!g.scorer && !g.time)){
-    goals.slice(0,7).forEach((e,i)=>{
+    goals.slice(0,14).forEach((e,i)=>{
+      while(o.goals.length<=i) o.goals.push(emptyGoalRow());
       const R = e.team==="H"?H:A;
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
       o.goals[i].time = e.minute?e.minute+"分":"";
@@ -3393,6 +3476,14 @@ function sheetLines(){
   SHEET.v.forEach(([x,y1,y2])=> out += `<i class="ln" style="left:${pt(x)};top:${pt(SHEET.H-y2)};width:.5pt;height:${pt(y2-y1)}"></i>`);
   SHEET.labels.forEach(([x,y,t,s,b])=>
     out += `<span class="lb" style="left:${pt(x)};top:${pt(SHEET.H-y-s*0.82)};font-size:${pt(s)}${b?";font-weight:700":""}">${esc(t)}</span>`);
+  // 得点経過の内部横線（得点数に応じて動的に）
+  const grows = goalRows(state.official || {goals:[]});
+  for(let i=1;i<grows.length;i++){ const y = grows[i][0];
+    out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-y)};width:${pt(568.1-28.4)};height:.5pt"></i>`; }
+  // スタメン(11人)とサブ(12人目以降)の境目を太線に（メンバー表の両チーム）
+  out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-482.5)};width:${pt(568.1-28.4)};height:1.5pt"></i>`;
+  // PK経過欄：チーム名と〇の数の仕切り線
+  out += `<i class="ln" style="left:${pt(80)};top:${pt(SHEET.H-116.6)};width:.5pt;height:${pt(116.6-91.4)}"></i>`;
   return out;
 }
 /* 1つの入力枠 */
@@ -3404,7 +3495,7 @@ function box(path, x1, x2, yTop, yBot, o){
     return `<textarea class="fx fxw${o.align==="l"?" l":""}" data-p="${path}"
       style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</textarea>`;
   }
-  const tap = o.tap ? ` data-tapk="${o.tap.k}"${o.tap.side?` data-side="${o.tap.side}"`:""}${o.tap.idx!=null?` data-idx="${o.tap.idx}"`:""}${o.tap.ci!=null?` data-ci="${o.tap.ci}"`:""} readonly` : "";
+  const tap = o.tap ? ` data-tapk="${o.tap.k}"${o.tap.side?` data-side="${o.tap.side}"`:""}${o.tap.idx!=null?` data-idx="${o.tap.idx}"`:""}${o.tap.ci!=null?` data-ci="${o.tap.ci}"`:""}${o.tap.half?` data-half="${o.tap.half}"`:""} readonly` : "";
   const cls = "fx" + (o.align==="l"?" l":"") + (o.tap?" pickable":"");
   return `<input class="${cls}" data-p="${path}"${tap}
     style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}"
@@ -3447,8 +3538,8 @@ function sheetFields(){
     F.push(box(`H.lineup.${i}.subTime`, 45.2,78.9,  t,b,{size:7}));
     F.push(box(`H.lineup.${i}.e1`,      78.9,95.8,  t,b,{size:7}));
     F.push(box(`H.lineup.${i}.e2`,      95.8,112.7, t,b,{size:7}));
-    F.push(box(`H.lineup.${i}.s2`,     112.7,129.5, t,b,{size:7}));
-    F.push(box(`H.lineup.${i}.s1`,     129.5,146.4, t,b,{size:7}));
+    F.push(box(`H.lineup.${i}.s2`,     112.7,129.5, t,b,{size:7, tap:{k:"shot",side:"H",idx:i,half:"s2"}}));
+    F.push(box(`H.lineup.${i}.s1`,     129.5,146.4, t,b,{size:7, tap:{k:"shot",side:"H",idx:i,half:"s1"}}));
     F.push(box(`H.lineup.${i}.st`,     146.4,163.3, t,b,{size:7}));
     F.push(box(`H.lineup.${i}.g`,      163.3,180.1, t,b,{size:7}));
     F.push(box(`H.lineup.${i}.name`,   180.1,264.5, t,b,{align:"l", tap:{k:"lineup",side:"H",idx:i}}));
@@ -3459,8 +3550,8 @@ function sheetFields(){
     F.push(box(`A.lineup.${i}.name`,   331.9,416.3, t,b,{align:"l", tap:{k:"lineup",side:"A",idx:i}}));
     F.push(box(`A.lineup.${i}.g`,      416.3,433.1, t,b,{size:7}));
     F.push(box(`A.lineup.${i}.st`,     433.1,450,   t,b,{size:7}));
-    F.push(box(`A.lineup.${i}.s1`,     450,466.9,   t,b,{size:7}));
-    F.push(box(`A.lineup.${i}.s2`,     466.9,483.7, t,b,{size:7}));
+    F.push(box(`A.lineup.${i}.s1`,     450,466.9,   t,b,{size:7, tap:{k:"shot",side:"A",idx:i,half:"s1"}}));
+    F.push(box(`A.lineup.${i}.s2`,     466.9,483.7, t,b,{size:7, tap:{k:"shot",side:"A",idx:i,half:"s2"}}));
     F.push(box(`A.lineup.${i}.e1`,     483.7,500.6, t,b,{size:7}));
     F.push(box(`A.lineup.${i}.e2`,     500.6,517.5, t,b,{size:7}));
     F.push(box(`A.lineup.${i}.subTime`,517.5,551.2, t,b,{size:7}));
@@ -3497,18 +3588,24 @@ function sheetFields(){
   });
 
   // 得点経過（時間=手書き / チーム=選択 / 番号=出場者から選択→得点者自動 / アシスト=手書き / 経過=記号選択）
-  ROW_GOAL.forEach(([t,b],i)=>{
-    F.push(box(`goals.${i}.time`,   28.4,62.1,  t,b,{size:7}));
-    F.push(box(`goals.${i}.team`,   62.1,112.7, t,b,{align:"l",size:6.5, tap:{k:"goalteam",idx:i}}));
-    F.push(box(`goals.${i}.no`,    112.7,129.5, t,b,{size:7, tap:{k:"goalno",idx:i}}));
-    F.push(box(`goals.${i}.scorer`,129.5,197,   t,b,{align:"l",size:7}));
-    F.push(box(`goals.${i}.assist`,197,230.7,   t,b,{size:7}));
-    for(let c=0;c<10;c++) F.push(box(`goals.${i}.seq.${c}`, SEQ_CELLS[c],SEQ_CELLS[c+1], t,b,{size:7, tap:{k:"seq",idx:i,ci:c}}));
+  // 入った得点の数だけ行を増やす。行が増えたら文字を少し小さくする。
+  const grows = goalRows(o);
+  while(o.goals.length < grows.length) o.goals.push(emptyGoalRow());
+  const gs = Math.max(5, Math.min(7, (GOAL_TOP-GOAL_BOT)/grows.length * 0.6));
+  grows.forEach(([t,b],i)=>{
+    F.push(box(`goals.${i}.time`,   28.4,62.1,  t,b,{size:gs}));
+    F.push(box(`goals.${i}.team`,   62.1,112.7, t,b,{align:"l",size:Math.min(gs,6.5), tap:{k:"goalteam",idx:i}}));
+    F.push(box(`goals.${i}.no`,    112.7,129.5, t,b,{size:gs, tap:{k:"goalno",idx:i}}));
+    F.push(box(`goals.${i}.scorer`,129.5,197,   t,b,{align:"l",size:gs}));
+    F.push(box(`goals.${i}.assist`,197,230.7,   t,b,{size:gs}));
+    for(let c=0;c<10;c++) F.push(box(`goals.${i}.seq.${c}`, SEQ_CELLS[c],SEQ_CELLS[c+1], t,b,{size:gs, tap:{k:"seq",idx:i,ci:c}}));
   });
 
-  // PKの経過
-  F.push(box("H.name2", 28.4,95.8, 116.6,104, {align:"l",size:7}));
-  F.push(box("A.name2", 28.4,95.8, 104,91.4,  {align:"l",size:7}));
+  // PKの経過（チーム名の脇に〇の数を自動で表示）
+  F.push(box("H.name2", 28.4,80, 116.6,104, {align:"l",size:7}));
+  F.push(box("A.name2", 28.4,80, 104,91.4,  {align:"l",size:7}));
+  F.push(`<span class="pkmaru" id="pkmaru-H" style="left:${pt(80)};top:${pt(SHEET.H-114.6)};width:${pt(15.8)};font-size:9pt">${esc(pkMaruCount("H"))}</span>`);
+  F.push(`<span class="pkmaru" id="pkmaru-A" style="left:${pt(80)};top:${pt(SHEET.H-102)};width:${pt(15.8)};font-size:9pt">${esc(pkMaruCount("A"))}</span>`);
   for(let c=0;c<14;c++){
     F.push(box(`H.pks.${c}`, PK_CELLS[c],PK_CELLS[c+1], 116.6,104, {size:7}));
     F.push(box(`A.pks.${c}`, PK_CELLS[c],PK_CELLS[c+1], 104,91.4,  {size:7}));
@@ -3523,6 +3620,12 @@ function sideTotal(side){
   const s = state.official?.[side]; if(!s) return "";
   const n = s.scores.reduce((a,v)=> a + (String(v??"").trim()==="" ? 0 : num(v)), 0);
   return s.scores.every(v=>String(v??"").trim()==="") ? "" : String(n);
+}
+/* PK経過欄の〇の数を数える（○ を成功としてカウント） */
+function pkMaruCount(side){
+  const s = state.official?.[side]; if(!s) return "";
+  const n = (s.pks||[]).filter(v=> String(v).trim()==="○" || String(v).trim().toLowerCase()==="o" || String(v).trim()==="〇").length;
+  return n ? String(n) : "";
 }
 
 function viewOfficial(){
@@ -4075,7 +4178,13 @@ async function openTournament(id){
   }catch(e){ console.error(e); toast("読み込めませんでした"); }
   state.loading = false; render();
 }
-function openMatch(id){ state.matchId = id; state.view = "match"; render(); }
+function openMatch(id){
+  state.matchId = id;
+  const m = state.matches.find(x=>x.id===id);
+  state.unlockMatch = (m && !isDone(m)) ? id : null;   // 開いた時点で未終了なら編集可・終了済みはロック
+  state.view = "match"; render();
+}
+function unlockMatch(id){ state.unlockMatch = id; render(); }   // 終了した試合の編集ロックを解除
 function openClub(id){ state.clubId = id; state.showGrads = false; state.view = "club"; render(); }
 
 /* 台帳（チーム・選手・年度）を読み込む */
@@ -4451,6 +4560,12 @@ $("#app").addEventListener("input", e=>{
   if(/^(H|A)\.scores\./.test(el.dataset.p)) refreshTotals();
   const tm = el.dataset.p.match(/^(H|A)\.tot\.(\w+)\.(0|1)$/);   // 前半/後半→計を自動計算（I10/I11）
   if(tm){ recomputeTotal(tm[1], tm[2]); }
+  // 選手のシュート前半/後半を手入力→本人の計＋チーム合計を自動計算
+  const sm = el.dataset.p.match(/^(H|A)\.lineup\.\d+\.(s1|s2)$/);
+  if(sm){ computeShots(sm[1]); syncShotDOM(sm[1]); }
+  // PK経過欄を手で直したら、チーム脇の〇の数を数え直す
+  const pm = el.dataset.p.match(/^(H|A)\.pks\.\d+$/);
+  if(pm){ const sp=document.getElementById("pkmaru-"+pm[1]); if(sp) sp.textContent = pkMaruCount(pm[1]); }
 });
 $("#app").addEventListener("click", e=>{
   const el = e.target.closest(".pickable"); if(!el) return;
@@ -4460,7 +4575,31 @@ $("#app").addEventListener("click", e=>{
   else if(k==="goalno")   openGoalNoPicker(+el.dataset.idx);
   else if(k==="cardno")   openCardNoPicker(el.dataset.side, +el.dataset.idx);
   else if(k==="seq")      openSeqPicker(+el.dataset.idx, +el.dataset.ci);
+  else if(k==="shot")     openShotPicker(el.dataset.side, +el.dataset.idx, el.dataset.half);
 });
+/* シュート：前半/後半を選ぶ（1〜のリスト・手入力も可）。本人の計とチーム合計を自動計算 */
+function openShotPicker(side, idx, half){
+  const opts = Array.from({length:16},(_,n)=>({k:String(n), label:n+"本"}));
+  chooseModal(`シュート（${half==="s1"?"前半":"後半"}）`, opts, (pick,act)=>{
+    const r = state.official[side].lineup[idx];
+    if(act==="manual"){ focusCell(`${side}.lineup.${idx}.${half}`); return; }
+    if(act==="clear"){ r[half]=""; computeShots(side); render(); return; }
+    r[half]=pick.k; computeShots(side); render();
+  }, {manual:true, clear:true});
+}
+/* 選手のシュート→本人の計＋チーム合計シュート（前半/後半/計）を計算（状態を更新） */
+function computeShots(side){
+  const o = state.official; if(!o) return;
+  const S = o[side]; let f=0, h=0;
+  S.lineup.forEach(r=>{ const a=num(r.s1), b=num(r.s2); r.st = (r.s1||r.s2) ? String(a+b) : ""; f+=a; h+=b; });
+  S.tot.shot[0] = f?String(f):""; S.tot.shot[1] = h?String(h):""; S.tot.shot[2] = (f||h)?String(f+h):"";
+}
+/* 計算結果をDOMに反映（再描画せずに・手入力中のフォーカスを保つため） */
+function syncShotDOM(side){
+  const S = state.official[side];
+  S.lineup.forEach((r,i)=>{ const el=document.querySelector(`.fx[data-p="${side}.lineup.${i}.st"]`); if(el) el.value=r.st; });
+  ["0","1","2"].forEach(j=>{ const el=document.querySelector(`.fx[data-p="${side}.tot.shot.${j}"]`); if(el) el.value=S.tot.shot[j]; });
+}
 /* チーム合計：計 = 前半 + 後半 */
 function recomputeTotal(side, key){
   const arr = state.official[side].tot[key];
