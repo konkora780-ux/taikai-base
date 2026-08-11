@@ -3414,6 +3414,7 @@ function draftOfficial(m){
     applyLineupToOfficial(o, m, side, false);
     // 得点とカードを写す
     const evs = (m.events||[]).filter(e=>e.team===side);
+    s.lineup.forEach(r=> r.g = "");   // 毎回リセットしてから数え直す（開くたび増える不具合を防止）
     evs.filter(e=>e.type==="goal"||e.type==="pk").forEach(e=>{
       const nm = e.playerId ? playerName(R.id, e.playerId).replace(/^\d+\s/,"") : "";
       const row = s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===nm);
@@ -3430,39 +3431,46 @@ function draftOfficial(m){
       }
       ci++;
     });
-    if(s.scores.every(v=>v==null||v==="")){
-      const keys = ["1H","2H","1ET","2ET"];             // 前半/後半/延長前/延長後 → scores[0..3]
-      const etPlayed = matchETPlayed(m);                 // 実際に延長をやった時だけ延長欄に数字（0含む）
-      const parts = keys.map(k=> periodScore(m, k, side));
-      const total = side==="H" ? m.home_score : m.away_score;
-      if(parts.reduce((a,b)=>a+b,0) > 0){                // 時間帯別に得点が記録されている
-        keys.forEach((k,i)=>{ s.scores[i] = (i>=2 && !etPlayed) ? "" : String(parts[i]); });
-      } else if(total!=null){                            // 合計だけ入力 → 前半に仮置き
-        s.scores[0] = String(total);
-      }
+    const keys = ["1H","2H","1ET","2ET"];               // 前半/後半/延長前/延長後 → scores[0..3]
+    const etPlayed = matchETPlayed(m);                   // 「延長を追加」した試合か（0-0でも0を入れる）
+    const parts = keys.map(k=> periodScore(m, k, side));
+    const total = side==="H" ? m.home_score : m.away_score;
+    if(etPlayed){                                        // 延長をやった → 前後半・延長を全部数字で（0でも0）
+      keys.forEach((k,i)=>{ s.scores[i] = String(parts[i]); });
+    } else if(parts.reduce((a,b)=>a+b,0) > 0){           // 時間帯別に得点あり → 常にその内訳を反映（修正も追従・延長欄は空）
+      keys.forEach((k,i)=>{ s.scores[i] = (i>=2) ? "" : String(parts[i]); });
+    } else {                                             // 時間帯内訳なし（合計だけ）→ 手動の内訳が合計と合っていれば残す
+      const curSum = s.scores.reduce((a,v)=>a+num(v),0);
+      const allEmpty = s.scores.every(v=>v==null||v==="");
+      if((allEmpty || curSum!==(total||0)) && total!=null){ s.scores = [String(total),"","",""]; }
     }
-    // PK戦：1人ずつの〇×を14セルへ、〇の数をPK欄（チーム名の次）へ
+    // PK戦：系列があれば毎回14セルへ反映（修正も追従）＋〇の数をPK欄（チーム名の次）へ
     const pser = pkArr(m, side);
-    if(pser.length && s.pks.every(v=>!v)){
-      pser.slice(0,14).forEach((v,i)=>{ s.pks[i] = v==="o" ? "○" : v==="x" ? "×" : ""; });
-    }
-    if(s.pk==null){
-      const cnt = pser.length ? pkCount(m, side) : (side==="H" ? m.home_pk : m.away_pk);
+    if(pser.length){
+      for(let i=0;i<14;i++) s.pks[i] = pser[i]==="o" ? "○" : pser[i]==="x" ? "×" : "";
+      s.pk = String(pkCount(m, side));
+    } else if(s.pk==null){
+      const cnt = side==="H" ? m.home_pk : m.away_pk;
       if(cnt!=null) s.pk = String(cnt);
     }
     if(!s.name2) s.name2 = s.name;   // PK経過欄のチーム名
   });
-  // 得点経過（入った得点の数だけ・最大14）
-  const goals = (m.events||[]).filter(e=>e.type==="goal"||e.type==="pk"||e.type==="og");
-  if(o.goals.every(g=>!g.scorer && !g.time)){
-    goals.slice(0,14).forEach((e,i)=>{
-      while(o.goals.length<=i) o.goals.push(emptyGoalRow());
+  // 得点経過：試合結果から毎回取り込み直す（入った得点の数だけ・最大14）。
+  //   経過記号(seq)と、選手を選ばず手書きした得点者名は残す。
+  const goalsE = (m.events||[]).filter(e=>e.type==="goal"||e.type==="pk"||e.type==="og");
+  if(goalsE.length){
+    o.goals = goalsE.slice(0,14).map((e,i)=>{
       const R = e.team==="H"?H:A;
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
-      o.goals[i].time = e.minute?e.minute+"分":"";
-      o.goals[i].team = (e.type==="og" ? (e.team==="H"?A.label:H.label) : R.label) || "";
-      o.goals[i].no   = (nm.match(/^(\d+)\s/)||[])[1]||"";
-      o.goals[i].scorer = nm.replace(/^\d+\s/,"") + (e.type==="og"?"(OG)":e.type==="pk"?"(PK)":"");
+      const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
+      const prev = o.goals[i] || emptyGoalRow();
+      return {
+        time:   e.minute ? e.minute+"分" : (prev.time||""),
+        team:   (e.type==="og" ? (e.team==="H"?A.label:H.label) : R.label) || "",
+        no:     (nm.match(/^(\d+)\s/)||[])[1] || (nm?"":prev.no||""),
+        scorer: nm ? (nm.replace(/^\d+\s/,"")+suffix) : (prev.scorer||suffix),
+        seq:    (prev.seq && prev.seq.length) ? prev.seq : Array(10).fill(""),
+      };
     });
   }
   return o;
@@ -3648,6 +3656,10 @@ function viewOfficial(){
         <button class="btn sec sm" style="flex:1" onclick="saveOfficial(true).then(()=>go('lineup'))">👥 メンバー表を編集</button>
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
       </div>
+      <div class="btnrow">
+        <button class="btn sec sm" style="flex:1" onclick="resyncOfficial()">🔄 試合結果を取り込み直す</button>
+      </div>
+      <p class="hint" style="margin-top:2px">得点・スコア・PKは、公式記録を開くたび試合結果から自動で入れ直します（審判名・メンバー・シュート・経過記号などの手入力は残ります）。</p>
       <button class="btn" onclick="saveOfficial()">保存する</button>
     </div>`;
 }
@@ -3664,6 +3676,15 @@ function importLineupToOfficial(){
   applyLineupToOfficial(state.official, m, "H", true);
   applyLineupToOfficial(state.official, m, "A", true);
   render(); toast("メンバー表から取り込みました");
+}
+/* 試合結果（得点・スコア・PK）を公式記録に入れ直す。今の編集内容を土台にするので手入力は残る */
+function resyncOfficial(){
+  const m = curMatchAny(); if(!m || !state.official) return;
+  const saved = m.official;
+  m.official = state.official;          // いまの編集内容を土台に
+  state.official = draftOfficial(m);    // 得点・スコア・PKだけ試合結果から入れ直す
+  m.official = saved;                   // DB保存はユーザーが「保存」を押すまで反映しない
+  render(); toast("試合結果を取り込みました");
 }
 /* 公式記録の選手名セルをタップ → 登録選手から選ぶ */
 function openLineupCellPicker(side, idx){
