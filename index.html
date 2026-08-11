@@ -296,6 +296,7 @@ td.pt{font-weight:800;}
   font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;color:#000;}
 .sheet-a4 .ln{position:absolute;background:#000;display:block;}
 .sheet-a4 .lb{position:absolute;white-space:nowrap;line-height:1;}
+.sheet-a4 .lbc{position:absolute;white-space:nowrap;line-height:1;transform:translateX(-50%);text-align:center;}
 .sheet-a4 .tot{position:absolute;text-align:center;font-size:16pt;font-weight:700;line-height:1;}
 .sheet-a4 .pkmaru{position:absolute;text-align:center;font-weight:700;color:#000;line-height:1;}
 .sheet-a4 .fx{position:absolute;border:none;background:transparent;padding:0 1pt;
@@ -365,6 +366,7 @@ td.pt{font-weight:800;}
   .sheetscale{width:595.28pt !important;height:842pt !important;}
   .sheet-a4{transform:none !important;box-shadow:none;}
   .sheet-a4 .fx{background:transparent !important;}
+  .sheetwrap.page2{break-before:page;page-break-before:always;margin-top:0 !important;}
 }
 
 /* ===== トーナメント表（櫓メーカー描画・WYSIWYG） ===== */
@@ -3136,11 +3138,8 @@ const SHEET = { W:595.28, H:842,
     [32,726,"運営責任者",7],[141,726,"記録担当",8],[256,726,"天候",8],[364,726,"気温",8],[472,726,"湿度",8],
     [45,713,"風",8],[145,713,"観客数",8],[248,713,"ピッチ(芝)",7],
     [290,700,"前半",8],[290,688,"後半",8],[283,676,"延長前半",7],[283,663,"延長後半",7],[143,662,"KICK OFF",8],[293,650,"PK",8],
-    [46,637,"交代",8],[105,637,"シュート",8],[163.3+2,632,"得点",8],[210,632,"選手名",8],
-    [267,632,"番号",8],[284,632,"位置",8],[301,632,"位置",8],[318,632,"番号",8],[362,632,"選手名",8],
-    [419,632,"得点",8],[459,637,"シュート",8],[535,637,"交代",8],
-    [32,625,"No.",7],[54,625,"時間",8],[116,625,"後半",7],[132,625,"前半",7],[151,625,"計",7],
-    [438,625,"計",7],[453,625,"前半",7],[470,625,"後半",7],[526,625,"時間",8],[555,625,"No.",7],
+    /* メンバー表のヘッダー（No./時間/シュート/得点/選手名/番号/位置・延前延後）は
+       セル中央そろえで memberHeaderHTML() が動的に描画（延長時のみ延前/延後） */
     [93,360,"警告・退場",8],[240,360,"監督",8],[341,360,"監督",8],[464,360,"警告・退場",8],
     [37,348,"時間",8],[65,348,"種別",6],[82,348,"番号",6],[118,348,"選手名",8],[172,348,"理由",8],
     [408,348,"時間",8],[436,348,"種別",6],[453,348,"番号",6],[489,348,"選手名",8],[543,348,"理由",8],
@@ -3459,7 +3458,7 @@ function draftOfficial(m){
   //   経過記号(seq)と、選手を選ばず手書きした得点者名は残す。
   const goalsE = (m.events||[]).filter(e=>e.type==="goal"||e.type==="pk"||e.type==="og");
   if(goalsE.length){
-    o.goals = goalsE.slice(0,14).map((e,i)=>{
+    o.goals = goalsE.slice(0,28).map((e,i)=>{   // 1〜14点=1枚目 / 15〜28点=2枚目に続ける
       const R = e.team==="H"?H:A;
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
       const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
@@ -3476,6 +3475,26 @@ function draftOfficial(m){
   return o;
 }
 
+/* --- メンバー表のヘッダー：各列のセル中央に文字をそろえる。延長時のみ延前/延後を表示 --- */
+function memberHeaderHTML(et){
+  const S = SHEET.H;
+  const cl = (x1,x2,y,t,s)=> `<span class="lbc" style="left:${pt((x1+x2)/2)};top:${pt(S-y-s*0.82)};font-size:${pt(s)}">${esc(t)}</span>`;
+  const SUB=625, MID=632, GRP=637;   // サブ見出し行 / 中央フル行 / グループ見出し行
+  let o = "";
+  // H側
+  o += cl(28.4,45.2, SUB,"No.",7) + cl(45.2,78.9, SUB,"時間",7);
+  if(et){ o += cl(78.9,95.8, SUB,"延前",6.5) + cl(95.8,112.7, SUB,"延後",6.5); }
+  o += cl(112.7,129.5, SUB,"後半",7) + cl(129.5,146.4, SUB,"前半",7) + cl(146.4,163.3, SUB,"計",7);
+  o += cl(28.4,78.9, GRP,"交代",8) + cl(et?78.9:112.7,163.3, GRP,"シュート",8);
+  o += cl(163.3,180.1, MID,"得点",7.5) + cl(180.1,264.5, MID,"選手名",8) + cl(264.5,281.3, MID,"番号",7) + cl(281.3,298.2, MID,"位置",7);
+  // A側（左右対称）
+  o += cl(298.2,315.1, MID,"位置",7) + cl(315.1,331.9, MID,"番号",7) + cl(331.9,416.3, MID,"選手名",8) + cl(416.3,433.1, MID,"得点",7.5);
+  o += cl(433.1,450, SUB,"計",7) + cl(450,466.9, SUB,"前半",7) + cl(466.9,483.7, SUB,"後半",7);
+  if(et){ o += cl(483.7,500.6, SUB,"延前",6.5) + cl(500.6,517.5, SUB,"延後",6.5); }
+  o += cl(517.5,551.2, SUB,"時間",7) + cl(551.2,568.1, SUB,"No.",7);
+  o += cl(433.1,et?517.5:483.7, GRP,"シュート",8) + cl(517.5,568.1, GRP,"交代",8);
+  return o;
+}
 /* --- 用紙を描く --- */
 const pt = v => v.toFixed(2)+"pt";
 function sheetLines(){
@@ -3488,6 +3507,8 @@ function sheetLines(){
   const grows = goalRows(state.official || {goals:[]});
   for(let i=1;i<grows.length;i++){ const y = grows[i][0];
     out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-y)};width:${pt(568.1-28.4)};height:.5pt"></i>`; }
+  // メンバー表のヘッダー（セル中央そろえ・延長時のみ延前/延後）
+  out += memberHeaderHTML(matchETPlayed(curMatchAny()||{}));
   // スタメン(11人)とサブ(12人目以降)の境目を太線に（メンバー表の両チーム）
   out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-482.5)};width:${pt(568.1-28.4)};height:1.5pt"></i>`;
   // PK経過欄：チーム名と〇の数の仕切り線
@@ -3513,6 +3534,8 @@ function box(path, x1, x2, yTop, yBot, o){
 function sheetFields(){
   const F = [];
   const o = state.official;
+  const et = matchETPlayed(curMatchAny()||{});   // 延長をやった試合か（e1=延前/e2=延後 のシュート列を使う）
+  const shotTap = (side,i,half)=> et ? {size:7, tap:{k:"shot",side,idx:i,half}} : {size:7};
   // 見出し・基本情報
   F.push(box("title", 28.4, 568.1, 770, 757, {align:"l", size:8}));
   F.push(box("datetime", 95.8, 197, 760, 747.4, {align:"l"}));
@@ -3544,8 +3567,8 @@ function sheetFields(){
   ROW_PLAYER.forEach(([t,b],i)=>{
     F.push(box(`H.lineup.${i}.subNo`,   28.4,45.2,  t,b,{size:7}));
     F.push(box(`H.lineup.${i}.subTime`, 45.2,78.9,  t,b,{size:7}));
-    F.push(box(`H.lineup.${i}.e1`,      78.9,95.8,  t,b,{size:7}));
-    F.push(box(`H.lineup.${i}.e2`,      95.8,112.7, t,b,{size:7}));
+    F.push(box(`H.lineup.${i}.e1`,      78.9,95.8,  t,b, shotTap("H",i,"e1")));   // 延長前半シュート（延長時のみ）
+    F.push(box(`H.lineup.${i}.e2`,      95.8,112.7, t,b, shotTap("H",i,"e2")));   // 延長後半シュート
     F.push(box(`H.lineup.${i}.s2`,     112.7,129.5, t,b,{size:7, tap:{k:"shot",side:"H",idx:i,half:"s2"}}));
     F.push(box(`H.lineup.${i}.s1`,     129.5,146.4, t,b,{size:7, tap:{k:"shot",side:"H",idx:i,half:"s1"}}));
     F.push(box(`H.lineup.${i}.st`,     146.4,163.3, t,b,{size:7}));
@@ -3560,8 +3583,8 @@ function sheetFields(){
     F.push(box(`A.lineup.${i}.st`,     433.1,450,   t,b,{size:7}));
     F.push(box(`A.lineup.${i}.s1`,     450,466.9,   t,b,{size:7, tap:{k:"shot",side:"A",idx:i,half:"s1"}}));
     F.push(box(`A.lineup.${i}.s2`,     466.9,483.7, t,b,{size:7, tap:{k:"shot",side:"A",idx:i,half:"s2"}}));
-    F.push(box(`A.lineup.${i}.e1`,     483.7,500.6, t,b,{size:7}));
-    F.push(box(`A.lineup.${i}.e2`,     500.6,517.5, t,b,{size:7}));
+    F.push(box(`A.lineup.${i}.e1`,     483.7,500.6, t,b, shotTap("A",i,"e1")));
+    F.push(box(`A.lineup.${i}.e2`,     500.6,517.5, t,b, shotTap("A",i,"e2")));
     F.push(box(`A.lineup.${i}.subTime`,517.5,551.2, t,b,{size:7}));
     F.push(box(`A.lineup.${i}.subNo`,  551.2,568.1, t,b,{size:7}));
   });
@@ -3624,6 +3647,39 @@ function sheetFields(){
   F.push(box("note",     78,568.1, 69,57, {align:"l"}));
   return F.join("");
 }
+/* --- 2枚目：15点目以降の「得点経過」だけを様式を保って続ける --- */
+const P2_MAX = 28;                 // 1枚目14＋2枚目14
+function sheetPage2(o){
+  if(!o) return null;
+  const START = 14;
+  const overflow = Math.min((o.goals||[]).length, P2_MAX) - START;   // 15点目以降の数
+  if(overflow <= 0) return null;
+  const n = Math.min(14, Math.max(overflow + 1, 3));   // 表示行数（あふれ＋1・最低3）
+  const TOP = 780, ROWH = 16, HEADT = TOP + 18, BOT = TOP - ROWH*n;
+  const cols = [28.4,62.1,112.7,129.5,197,230.7,264.5,298.2,331.9,365.7,399.4,433.1,466.9,500.6,534.3,568.1];
+  let out = "";
+  // 横線（ヘッダー上・データ上・各行・下端）
+  const ys = [HEADT, TOP]; for(let i=1;i<=n;i++) ys.push(TOP - ROWH*i);
+  ys.forEach(y=> out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-y)};width:${pt(568.1-28.4)};height:.5pt"></i>`);
+  // 縦線
+  cols.forEach(x=> out += `<i class="ln" style="left:${pt(x)};top:${pt(SHEET.H-HEADT)};width:.5pt;height:${pt(HEADT-BOT)}"></i>`);
+  // タイトル・ヘッダーラベル
+  out += `<span class="lb" style="left:${pt(200)};top:${pt(SHEET.H-810)};font-size:12pt;font-weight:700">公式記録　得点経過（15点目〜）</span>`;
+  [[32,"得点時間",7],[67,"得点チーム",7],[116,"No.",7],[151,"得点者",7],[201,"アシスト",7],
+   [234,"得点経過　記録例： 〜:ドリブル →:ゴロパス ↑:浮き球パス ×:混戦 S:シュート H:ヘディング",6]]
+    .forEach(([x,t,s])=> out += `<span class="lb" style="left:${pt(x)};top:${pt(SHEET.H-(TOP+13)-s*0.82)};font-size:${pt(s)}">${esc(t)}</span>`);
+  // データ行（15点目〜）
+  for(let r=0;r<n;r++){
+    const idx = START + r, t = TOP - ROWH*r, b = TOP - ROWH*(r+1);
+    out += box(`goals.${idx}.time`,   28.4,62.1,  t,b,{size:8});
+    out += box(`goals.${idx}.team`,   62.1,112.7, t,b,{align:"l",size:7, tap:{k:"goalteam",idx}});
+    out += box(`goals.${idx}.no`,    112.7,129.5, t,b,{size:8, tap:{k:"goalno",idx}});
+    out += box(`goals.${idx}.scorer`,129.5,197,   t,b,{align:"l",size:8});
+    out += box(`goals.${idx}.assist`,197,230.7,   t,b,{size:8});
+    for(let c=0;c<10;c++) out += box(`goals.${idx}.seq.${c}`, SEQ_CELLS[c],SEQ_CELLS[c+1], t,b,{size:8, tap:{k:"seq",idx,ci:c}});
+  }
+  return out;
+}
 function sideTotal(side){
   const s = state.official?.[side]; if(!s) return "";
   const n = s.scores.reduce((a,v)=> a + (String(v??"").trim()==="" ? 0 : num(v)), 0);
@@ -3650,6 +3706,9 @@ function viewOfficial(){
     <div class="sheetwrap"><div class="sheetscale" style="width:${pt(SHEET.W*z)};height:${pt(SHEET.H*z)}">
       <div class="sheet-a4" style="transform:scale(${z})">${sheetLines()}${sheetFields()}</div>
     </div></div>
+    ${(()=>{ const p2 = sheetPage2(state.official); return p2 ? `<div class="sheetwrap page2" style="margin-top:14px"><div class="sheetscale" style="width:${pt(SHEET.W*z)};height:${pt(SHEET.H*z)}">
+      <div class="sheet-a4" style="transform:scale(${z})">${p2}</div>
+    </div></div>` : ""; })()}
     <div class="screen noprint">
       <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
       <div class="btnrow">
@@ -4582,7 +4641,7 @@ $("#app").addEventListener("input", e=>{
   const tm = el.dataset.p.match(/^(H|A)\.tot\.(\w+)\.(0|1)$/);   // 前半/後半→計を自動計算（I10/I11）
   if(tm){ recomputeTotal(tm[1], tm[2]); }
   // 選手のシュート前半/後半を手入力→本人の計＋チーム合計を自動計算
-  const sm = el.dataset.p.match(/^(H|A)\.lineup\.\d+\.(s1|s2)$/);
+  const sm = el.dataset.p.match(/^(H|A)\.lineup\.\d+\.(s1|s2|e1|e2)$/);
   if(sm){ computeShots(sm[1]); syncShotDOM(sm[1]); }
   // PK経過欄を手で直したら、チーム脇の〇の数を数え直す
   const pm = el.dataset.p.match(/^(H|A)\.pks\.\d+$/);
@@ -4599,21 +4658,30 @@ $("#app").addEventListener("click", e=>{
   else if(k==="shot")     openShotPicker(el.dataset.side, +el.dataset.idx, el.dataset.half);
 });
 /* シュート：前半/後半を選ぶ（1〜のリスト・手入力も可）。本人の計とチーム合計を自動計算 */
+const SHOT_HALF_LABEL = { s1:"前半", s2:"後半", e1:"延長前半", e2:"延長後半" };
 function openShotPicker(side, idx, half){
   const opts = Array.from({length:16},(_,n)=>({k:String(n), label:n+"本"}));
-  chooseModal(`シュート（${half==="s1"?"前半":"後半"}）`, opts, (pick,act)=>{
+  chooseModal(`シュート（${SHOT_HALF_LABEL[half]||""}）`, opts, (pick,act)=>{
     const r = state.official[side].lineup[idx];
     if(act==="manual"){ focusCell(`${side}.lineup.${idx}.${half}`); return; }
     if(act==="clear"){ r[half]=""; computeShots(side); render(); return; }
     r[half]=pick.k; computeShots(side); render();
   }, {manual:true, clear:true});
 }
-/* 選手のシュート→本人の計＋チーム合計シュート（前半/後半/計）を計算（状態を更新） */
+/* 選手のシュート→本人の計＋チーム合計シュートを計算（延長時は延前e1/延後e2も計に含める） */
 function computeShots(side){
   const o = state.official; if(!o) return;
-  const S = o[side]; let f=0, h=0;
-  S.lineup.forEach(r=>{ const a=num(r.s1), b=num(r.s2); r.st = (r.s1||r.s2) ? String(a+b) : ""; f+=a; h+=b; });
-  S.tot.shot[0] = f?String(f):""; S.tot.shot[1] = h?String(h):""; S.tot.shot[2] = (f||h)?String(f+h):"";
+  const et = matchETPlayed(curMatchAny()||{});
+  const S = o[side]; let f=0, h=0, ef=0, eh=0;
+  S.lineup.forEach(r=>{
+    const a=num(r.s1), b=num(r.s2), c=et?num(r.e1):0, d=et?num(r.e2):0;
+    const any = r.s1||r.s2||(et&&(r.e1||r.e2));
+    r.st = any ? String(a+b+c+d) : "";
+    f+=a; h+=b; ef+=c; eh+=d;
+  });
+  S.tot.shot[0] = f?String(f):"";
+  S.tot.shot[1] = h?String(h):"";
+  S.tot.shot[2] = (f||h||ef||eh) ? String(f+h+ef+eh) : "";   // 計＝前後半＋延長ぶん
 }
 /* 計算結果をDOMに反映（再描画せずに・手入力中のフォーカスを保つため） */
 function syncShotDOM(side){
