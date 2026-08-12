@@ -842,6 +842,58 @@ function setMatchHalfMin(key, v){
   m.lineups = m.lineups || {}; m.lineups._meta = m.lineups._meta || {};
   m.lineups._meta[key] = v==="" ? null : Math.max(1, num(v));
 }
+/* この試合の合計時間（アディショナルタイムは含めない・ノミナルな長さ） */
+function matchNominalTotal(m){
+  const reg = matchHalfMin(m,"1H")*2;
+  const et  = matchETPlayed(m) ? matchHalfMin(m,"1ET")*2 : 0;
+  return reg + et;
+}
+/* 前半0分始まりの通し時間に変換。アディショナルタイム（ハーフ長を超えた分）は加算しない。HTは前半終了時点として扱う */
+function nominalMinuteOf(minute, period, m){
+  const h1 = matchHalfMin(m,"1H");
+  const offsets = { "1H":0, "HT":h1, "2H":h1, "1ET":h1*2, "2ET":h1*2+matchHalfMin(m,"1ET") };
+  const per = period || "1H";
+  const off = offsets[per] ?? 0;
+  if(minute==null) return off;                    // HT交代など「分」未入力
+  const len = matchHalfMin(m, per);
+  const capped = len ? Math.min(num(minute), len) : num(minute);   // アディショナルタイムは加算しない
+  return off + capped;
+}
+/* この試合でその選手が実際にピッチにいた分数（出場時間）。選手交代の記録から自動計算する */
+function computePlayMinutes(m, side, pid){
+  if(!pid || !isDone(m)) return 0;
+  const lu = m.lineups && m.lineups[side];
+  const row = lu && Array.isArray(lu.players) && lu.players.find(p=>p.pid===pid);
+  if(!row || row.role==="out") return 0;
+  const marks = [];
+  if(row.role==="start") marks.push({ t:0, on:true });
+  (m.events||[]).filter(e=>e.type==="sub" && e.team===side).forEach(e=>{
+    if(e.playerId===pid) marks.push({ t:nominalMinuteOf(e.minute,e.period,m), on:true });
+    if(e.outId===pid)    marks.push({ t:nominalMinuteOf(e.minute,e.period,m), on:false });
+  });
+  if(!marks.length) return 0;                      // 控えのまま一度も出ていない
+  marks.sort((a,b)=>a.t-b.t);
+  const total = matchNominalTotal(m);
+  let onField=false, since=0, sum=0;
+  marks.forEach(mk=>{
+    if(mk.on && !onField){ onField=true; since=mk.t; }
+    else if(!mk.on && onField){ onField=false; sum += Math.max(0, mk.t-since); }
+  });
+  if(onField) sum += Math.max(0, total-since);
+  return sum;
+}
+/* この選手（チーム内pid）の、大会を通じた合計出場時間（自動計算・分） */
+function autoPlayMinutes(teamId, pid){
+  if(!pid) return 0;
+  let sum = 0;
+  state.matches.forEach(m=>{
+    ["H","A"].forEach(side=>{
+      if(resolveSlot(m, side).id !== teamId) return;
+      sum += computePlayMinutes(m, side, pid);
+    });
+  });
+  return sum;
+}
 /* 時間帯ごとの得点数（side は "H" / "A"） */
 function periodScore(m, period, side){
   return (m.events||[]).filter(e=>
@@ -1181,6 +1233,24 @@ function scorerRanking(){
       const teamId = ev.team==="H" ? sideId(m,"H") : sideId(m,"A");
       const key = teamId + "/" + ev.playerId;
       const cur = map.get(key) || { teamId, pid:ev.playerId, n:0 };
+      cur.n++; map.set(key, cur);
+    });
+  });
+  return [...map.values()].sort((a,b)=> b.n-a.n).map(r=>({
+    ...r, name:playerName(r.teamId, r.pid), team:teamName(r.teamId),
+  }));
+}
+
+/* --- アシストランキング（大会設定でON/OFFできる） --- */
+function assistRanking(){
+  const map = new Map();
+  state.matches.forEach(m=>{
+    if(!isDone(m)) return;
+    (m.events||[]).forEach(ev=>{
+      if(ev.type!=="goal" || !ev.assistId) return;   // アシストはふつうの得点だけ（PK・オウンゴールは対象外）
+      const teamId = ev.team==="H" ? sideId(m,"H") : sideId(m,"A");
+      const key = teamId + "/" + ev.assistId;
+      const cur = map.get(key) || { teamId, pid:ev.assistId, n:0 };
       cur.n++; map.set(key, cur);
     });
   });
@@ -1668,16 +1738,18 @@ function viewTournament(){
     ...(f.hasLeague ? [["table","順位表"],["matrix","戦績表"]] : []),
     ...(f.hasKO ? [["bracket","トーナメント表"]] : []),
     ...(sportOf(t).scorers ? [["scorers","得点ランキング"]] : []),
-    // 警告・退場／出場記録／チーム・選手 は管理者だけ（保護者・一般には出さない）
+    ...(sportOf(t).scorers && cfg.overview?.hasAssist ? [["assists","アシストランキング"]] : []),
+    ["appear","出場記録"],
+    // 警告・退場／チーム・選手 は管理者だけ（保護者・一般には出さない）
     ...(canEdit() && sportOf(t).cards ? [["cards","警告・退場"]] : []),
-    ...(canEdit() ? [["appear","出場記録"],["team","チーム・選手"]] : []),
+    ...(canEdit() ? [["team","チーム・選手"]] : []),
   ];
   // 保護者・一般が管理タブのURL状態で来ても、日程にフォールバックする
-  const ADMIN_TABS = ["cards","appear","team"];
+  const ADMIN_TABS = ["cards","team"];
   if(!canEdit() && ADMIN_TABS.includes(state.tab)) state.tab = "schedule";
   const body = {
     overview:tabOverview, schedule:tabSchedule, table:tabTable, matrix:tabMatrix,
-    bracket:tabBracket, scorers:tabScorers, cards:tabCards, appear:tabAppearances, team:tabTeam,
+    bracket:tabBracket, scorers:tabScorers, assists:tabAssists, cards:tabCards, appear:tabAppearances, team:tabTeam,
   }[state.tab] || tabSchedule;
 
   return topbar({ title:t.name, sub:`${SPORTS[t.sport]?.label||""}・${f.label}${cfg.host?"・"+cfg.host:""}`,
@@ -2207,6 +2279,21 @@ function tabScorers(){
   }).join("");
 }
 
+/* --- アシストランキング --- */
+function tabAssists(){
+  const rows = assistRanking();
+  if(!rows.length) return `<div class="empty">まだアシストの記録がありません。<br>「得点を追加」でアシストを選ぶと集計されます。</div>`;
+  let rank = 0, prev = null;
+  return rows.map((r,i)=>{
+    if(r.n!==prev){ rank = i+1; prev = r.n; }
+    return `<div class="rank ${rank===1?"top":""}">
+      <span class="no">${rank}</span>
+      <span class="who"><b>${esc(r.name)}</b><small>${esc(r.team)}</small></span>
+      <span class="ct">${r.n}<small>アシスト</small></span>
+    </div>`;
+  }).join("");
+}
+
 /* --- 警告・退場 --- */
 function tabCards(){
   const rows = cardRanking();
@@ -2220,15 +2307,16 @@ function tabCards(){
   <p class="hint">累積警告の確認にお使いください。</p>`;
 }
 
-/* --- 出場記録（選手ごとの 先発・控え・得点）C4 --- */
+/* --- 出場記録（選手ごとの 試合数・出場時間・得点。保護者・一般も閲覧可） --- */
 function tabAppearances(){
   const teamsOut = [];
   state.teams.forEach(t=>{
-    const stat = new Map();  // 選手名 -> {no, start, sub, goals}
-    const ensure = (name, no)=>{
+    const stat = new Map();  // 選手名 -> {no, pid, games, goals}
+    const ensure = (name, no, pid)=>{
       let s = stat.get(name);
-      if(!s){ s = { no:no??null, start:0, sub:0, goals:0 }; stat.set(name, s); }
+      if(!s){ s = { no:no??null, pid:pid??null, games:0, goals:0 }; stat.set(name, s); }
       if(no!=null && s.no==null) s.no = no;
+      if(pid!=null && s.pid==null) s.pid = pid;
       return s;
     };
     state.matches.forEach(m=>{
@@ -2237,37 +2325,43 @@ function tabAppearances(){
         const lu = m.lineups && m.lineups[side];
         if(lu) lu.players.forEach(p=>{
           if(p.role==="out" || !p.name) return;
-          const s = ensure(p.name, p.no);
-          if(p.role==="start") s.start++; else s.sub++;
+          const s = ensure(p.name, p.no, p.pid);
+          // 試合数＝実際にピッチに立った試合だけ数える。先発は必ず・途中出場は交代の記録があるときだけ（控えのままは数えない）
+          const cameOn = p.role==="start" || (m.events||[]).some(e=> e.type==="sub" && e.team===side && e.playerId===p.pid);
+          if(cameOn) s.games++;
         });
         (m.events||[]).filter(e=>e.team===side && (e.type==="goal"||e.type==="pk")).forEach(e=>{
           if(!e.playerId) return;
           const full = playerName(t.id, e.playerId);
           const no = (full.match(/^(\d+)\s/)||[])[1];
           const name = full.replace(/^\d+\s/,"");
-          ensure(name, no?num(no):null).goals++;
+          ensure(name, no?num(no):null, e.playerId).goals++;
         });
       });
     });
     if(stat.size) teamsOut.push({ team:t.name, teamId:t.id,
       players:[...stat.entries()].map(([name,s])=>({name,...s})).sort((a,b)=>(a.no??999)-(b.no??999)) });
   });
-  if(!teamsOut.length) return `<div class="empty">まだ出場の記録がありません。<br>試合ごとにメンバー表を作ると、ここに先発・控えの回数がまとまります。</div>`;
+  if(!teamsOut.length) return `<div class="empty">まだ出場の記録がありません。<br>試合ごとにメンバー表を作ると、ここに出場した試合数がまとまります。</div>`;
   return teamsOut.map(r=>`<div class="block-label">${esc(r.team)}</div>
     <div class="tblwrap"><table>
-      <thead><tr><th>番号</th><th style="text-align:left">選手</th><th>先発</th><th>控え</th><th>出場計</th><th>時間</th><th>得点</th></tr></thead>
-      <tbody>${r.players.map(p=>`<tr>
+      <thead><tr><th>番号</th><th style="text-align:left">選手</th><th>試合</th><th>時間</th><th>得点</th></tr></thead>
+      <tbody>${r.players.map(p=>{
+        const manual = playTimeOf(r.teamId,p.name);
+        const auto = p.pid!=null ? autoPlayMinutes(r.teamId, p.pid) : 0;
+        const shown = manual || (auto ? String(auto) : "");
+        return `<tr>
         <td>${p.no??""}</td><td class="nm">${esc(p.name)}</td>
-        <td>${p.start||""}</td><td>${p.sub||""}</td><td class="pt">${(p.start+p.sub)||""}</td>
+        <td class="pt">${p.games||""}</td>
         <td>${canEdit()
-          ? `<input class="in" style="padding:5px;width:58px;text-align:center" value="${esc(playTimeOf(r.teamId,p.name))}" placeholder="分" onchange="setPlayTime('${r.teamId}','${esc(p.name).replace(/'/g,"\\'")}',this.value)">`
-          : esc(playTimeOf(r.teamId,p.name))}</td>
+          ? `<input class="in" style="padding:5px;width:58px;text-align:center" value="${esc(shown)}" placeholder="分" onchange="setPlayTime('${r.teamId}','${esc(p.name).replace(/'/g,"\\'")}',this.value)">`
+          : esc(shown)}</td>
         <td>${p.goals||""}</td>
-      </tr>`).join("")}</tbody>
+      </tr>`;}).join("")}</tbody>
     </table></div>`).join("")
-    + `<p class="hint">各試合のメンバー表（スタメン／控え）と得点から集計しています。<b>時間</b>は手書きでかまいません（自動では入りません）。</p>`;
+    + `<p class="hint">各試合のメンバー表（スタメン／控え）と得点から集計しています。<b>時間</b>は選手交代の記録から自動計算します（アディショナルタイムは含めません）。手で書き換えるとその数字が優先されます。</p>`;
 }
-/* 出場時間（手書き）。大会ごとに settings.playtime に「チームid/選手名」で保存 */
+/* 出場時間。書き換えていれば settings.playtime（チームid/選手名）の手入力を優先、無ければ自動計算値を使う */
 function playTimeOf(teamId, name){
   const pt = (state.t && state.t.settings && state.t.settings.playtime) || {};
   return pt[teamId+"/"+name] || "";
@@ -2519,6 +2613,7 @@ function openEventSheet(kind){
     ? [["goal","得点"],["pk","PK"],["og","オウンゴール"]]
     : [["yellow","🟨 警告"],["red","🟥 退場"],["green","🟩 グリーン"]];
   const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
+  const hasAssist = kind==="goal" && !!(cfgOf(state.t).overview||{}).hasAssist;
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
@@ -2530,6 +2625,10 @@ function openEventSheet(kind){
     </div>
     <label class="f">選手（この試合の出場選手から選べます）</label>
     <select class="in" id="ev-player"></select>
+    ${hasAssist ? `<div id="ev-assist-wrap">
+      <label class="f">アシスト（あれば選ぶ・任意）</label>
+      <select class="in" id="ev-assist"></select>
+    </div>` : ""}
     <label class="f">種類</label>
     <div class="seg" id="ev-type">
       ${types.map((t,i)=>`<button class="${i===0?"on":""}" data-v="${t[0]}">${esc(t[1])}</button>`).join("")}
@@ -2554,8 +2653,21 @@ function openEventSheet(kind){
       ? `<option value="">（選手を選ぶ・空欄でもOK）</option>` + ps.map(p=>
           `<option value="${p.id}">${p.no?esc(String(p.no))+" ":""}${esc(p.name)}</option>`).join("")
       : `<option value="">出場選手が未登録です</option>`;
+    if(hasAssist) fillAssist();
+  };
+  const fillAssist = ()=>{
+    const box = $("#ev-assist"); if(!box) return;
+    const scorer = $("#ev-player").value;
+    const ps = participantsOf(m, team).filter(p=> p.id!==scorer);   // 得点者本人は除く
+    box.innerHTML = `<option value="">（なし）</option>` + ps.map(p=>
+      `<option value="${p.id}">${p.no?esc(String(p.no))+" ":""}${esc(p.name)}</option>`).join("");
+  };
+  const syncAssistVisibility = ()=>{
+    const wrap = $("#ev-assist-wrap"); if(!wrap) return;
+    wrap.style.display = type==="goal" ? "" : "none";   // PK・オウンゴールにはアシストなし
   };
   fillPlayers();
+  if(hasAssist){ syncAssistVisibility(); $("#ev-player").onchange = fillAssist; }
   el.querySelectorAll("#ev-team button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-team button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); team = b.dataset.v; fillPlayers();
@@ -2563,6 +2675,7 @@ function openEventSheet(kind){
   el.querySelectorAll("#ev-type button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-type button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); type = b.dataset.v;
+    if(hasAssist) syncAssistVisibility();
   });
   el.querySelectorAll("#ev-period button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-period button").forEach(x=>x.classList.remove("on"));
@@ -2570,9 +2683,10 @@ function openEventSheet(kind){
   });
   $("#ev-ok").onclick = ()=>{
     const pid = $("#ev-player").value || null;
+    const assistId = (hasAssist && type==="goal") ? ($("#ev-assist").value || null) : null;
     const minute = $("#ev-min").value ? num($("#ev-min").value) : null;
     m.events = m.events || [];
-    m.events.push({ type, team, playerId:pid, minute, period });
+    m.events.push({ type, team, playerId:pid, assistId, minute, period });
     sortEvents(m);
     // 得点なら点数も自動で足す（オウンゴールは相手の得点）
     if(type==="goal"||type==="pk"||type==="og"){
@@ -3588,6 +3702,7 @@ function draftOfficial(m){
     o.goals = goalsE.slice(0,28).map((e,i)=>{   // 1〜14点=1枚目 / 15〜28点=2枚目に続ける
       const R = e.team==="H"?H:A;
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
+      const anm = e.assistId ? playerName(R.id, e.assistId).replace(/^\d+\s/,"") : "";
       const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
       const prev = o.goals[i] || emptyGoalRow();
       return {
@@ -3595,6 +3710,7 @@ function draftOfficial(m){
         team:   (e.type==="og" ? (e.team==="H"?A.label:H.label) : R.label) || "",
         no:     (nm.match(/^(\d+)\s/)||[])[1] || (nm?"":prev.no||""),
         scorer: nm ? (nm.replace(/^\d+\s/,"")+suffix) : (prev.scorer||suffix),
+        assist: e.assistId!=null ? anm : (prev.assist||""),
         seq:    (prev.seq && prev.seq.length) ? prev.seq : Array(10).fill(""),
       };
     });
@@ -4078,6 +4194,12 @@ function viewSettings(){
         <button class="${!cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',false);render()">なし</button>
         <button class="${cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',true);render()">あり</button>
       </div>
+      ${sportOf(t).scorers?`<label class="f">アシストランキング</label>
+      <div class="seg">
+        <button class="${!cfg.overview?.hasAssist?"on":""}" onclick="ov_set('hasAssist',false);render()">なし</button>
+        <button class="${cfg.overview?.hasAssist?"on":""}" onclick="ov_set('hasAssist',true);render()">あり</button>
+      </div>
+      <p class="hint" style="margin:-4px 0 0">「あり」にすると「得点を追加」でアシスト選手を選べるようになり、タブに「アシストランキング」が出ます。</p>`:""}
       <label class="f">順位決定方法</label>
       <textarea class="in" style="min-height:96px" onchange="ov_set('rankRule',this.value)" placeholder="(1)勝点 (2)得失点差 …">${esc(cfg.overview?.rankRule||"")}</textarea>
       <label class="f">警告の累積</label>
