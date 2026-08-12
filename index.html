@@ -116,9 +116,59 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .btn.sec{background:#fff;color:var(--accent);border:1.5px solid var(--accent);}
 .btn.ghost{background:#fff;color:var(--sub);border:1.5px solid var(--line);}
 .btn.danger{background:#fff;color:var(--bad);border:1.5px solid #f0bdb9;}
+.btn.gold{background:var(--grad-gold);color:#4a3300;box-shadow:0 4px 14px rgba(202,162,51,.35);}
 .btn.sm{padding:9px 14px;font-size:13.5px;width:auto;border-radius:10px;}
 .btnrow{display:flex;gap:8px;margin-top:12px;}
 .btnrow .btn{flex:1;}
+
+/* ===== ホーム：統計・開催中カード・クイックアクセス・特徴帯 ===== */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 6px;}
+.stat-card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 13px;
+  display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);}
+.stat-ic{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  font-size:17px;flex-shrink:0;}
+.stat-ic.c-blue{background:var(--accentbg);}
+.stat-ic.c-green{background:var(--okbg);}
+.stat-ic.c-gold{background:var(--goldbg);}
+.stat-ic.c-purple{background:#efe9fb;}
+.stat-txt{min-width:0;display:flex;flex-direction:column;gap:2px;}
+.stat-label{font-size:11px;color:var(--sub);font-weight:600;}
+.stat-value{font-size:19px;font-weight:800;color:var(--ink);line-height:1.2;}
+.stat-value small{font-size:11px;font-weight:600;color:var(--sub);margin-left:2px;}
+.badge.open{background:var(--accentbg);color:var(--accent);}
+.block-label-row{display:flex;align-items:center;justify-content:space-between;margin:20px 4px 8px;}
+.block-label-row .block-label{margin:0;}
+.link-more{font-size:12.5px;font-weight:700;color:var(--accent);background:none;border:0;padding:0;}
+.tcard{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;
+  margin-bottom:10px;box-shadow:var(--shadow);}
+.tcard-badges{display:flex;gap:6px;margin-bottom:6px;}
+.tcard-name{display:block;width:100%;text-align:left;background:none;border:0;padding:0;
+  font-size:17px;font-weight:800;color:var(--ink);margin-bottom:3px;}
+.tcard-meta{font-size:12px;color:var(--sub);margin-bottom:2px;}
+.tcard-period{font-size:12px;color:var(--sub);margin-bottom:8px;}
+.tcard-stats{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink);font-weight:600;margin-bottom:8px;}
+.tcard-stats .live-txt{color:var(--bad);}
+.progress-bar{height:7px;border-radius:99px;background:var(--paper);overflow:hidden;}
+.progress-fill{height:100%;background:var(--grad);border-radius:99px;}
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
+.qa-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow);
+  text-align:left;transition:transform .08s;}
+.qa-tile:active{transform:scale(.97);}
+.qa-tile .ic{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:15px;margin-bottom:6px;background:var(--paper);}
+.qa-tile.c-blue .ic{background:var(--accentbg);}
+.qa-tile.c-green .ic{background:var(--okbg);}
+.qa-tile.c-gold .ic{background:var(--goldbg);}
+.qa-tile.c-purple .ic{background:#efe9fb;}
+.qa-tile b{font-size:13.5px;font-weight:800;color:var(--ink);}
+.qa-tile small{font-size:11px;color:var(--sub);font-weight:500;}
+.feat-band{background:var(--brand);border-radius:16px;padding:16px;margin-top:22px;
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.feat-item{color:#fff;display:flex;flex-direction:column;gap:2px;}
+.feat-item .ic{font-size:17px;}
+.feat-item b{font-size:12.5px;font-weight:800;}
+.feat-item small{font-size:10.5px;opacity:.78;font-weight:500;line-height:1.4;}
 
 /* ===== フォーム ===== */
 label.f{display:block;font-size:12.5px;font-weight:700;color:var(--sub);margin:14px 2px 6px;}
@@ -310,9 +360,7 @@ td.pt{font-weight:800;}
 .sheet-a4 .fx.l{text-align:left;}
 .sheet-a4 .fx.pickable{cursor:pointer;}
 .sheet-a4 .fx.pickable:hover{background:#fffbe9;}
-.sheet-a4 .kicklab{overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:1px 2px;border-radius:3px;}
-.sheet-a4 .kicklab:hover{background:#fffbe9;}
-.sheet-a4 .kicklab.tbd{color:#000;opacity:.4;}
+.sheet-a4 .kicklab{overflow:hidden;text-overflow:ellipsis;}
 .sheet-a4 .fx:focus{outline:none;background:var(--accentbg);overflow:visible;text-overflow:clip;}
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
@@ -1326,6 +1374,13 @@ function topbar({title, sub, back, act}){
 function viewHome(){
   const mine = state.user ? state.list.filter(t=>t.org_id===state.user.id) : [];
   const others = state.list.filter(t=> !state.user || t.org_id!==state.user.id);
+  const hs = state.homeStats;   // {byT,liveAll,todayAll,doneAll}（読み込み中はundefined）
+  // 開催中＝試合がまだ全部終わっていない大会（集計前・試合0件はいったん開催中扱い）
+  const isOpenT = t=>{ const b = hs && hs.byT[t.id]; if(!b) return true; return b.total===0 || b.done<b.total; };
+  const mineOpen = mine.filter(isOpenT);
+  const qaTarget = mineOpen[0] || mine[0];
+  const qaGo = qaTarget ? `openTournament('${qaTarget.id}')` : "go('new')";
+
   const cardOf = t=>{
     const s = SPORTS[t.sport]?.label || "";
     const f = FORMATS[t.format]?.label || "";
@@ -1335,6 +1390,35 @@ function viewHome(){
       <span class="meta">${tags?esc(tags)+"・":""}${esc(s)}・${esc(f)}${t.settings?.host?"・"+esc(t.settings.host):""}</span></span>
       <span class="chev">›</span></button>`;
   };
+  const statCard = (ic,cls,label,value,unit)=> `<div class="stat-card">
+    <span class="stat-ic ${cls}">${ic}</span>
+    <span class="stat-txt"><span class="stat-label">${esc(label)}</span>
+    <span class="stat-value">${value}<small>${esc(unit)}</small></span></span></div>`;
+  const tCardOf = t=>{
+    const cfg = cfgOf(t);
+    const b = hs && hs.byT[t.id];
+    const s = SPORTS[t.sport]?.label || "";
+    const f = FORMATS[t.format]?.label || "";
+    const tags = [CATEGORIES[cfg.gradeCat]?.label, SCOPES[cfg.scope]?.label].filter(Boolean).join("・");
+    const period = [fmtDate(cfg.dateStart||cfg.date), cfg.dateEnd?("〜"+fmtDate(cfg.dateEnd)):""].filter(Boolean).join(" ");
+    const total = b?b.total:0, done = b?b.done:0, live = b?b.live:0;
+    const pct = total ? Math.round(done/total*100) : 0;
+    return `<div class="tcard">
+      <div class="tcard-badges">${live?`<span class="badge live">● LIVE</span>`:""}<span class="badge open">開催中</span></div>
+      <button class="tcard-name" onclick="openTournament('${t.id}')">${esc(t.name)}</button>
+      <div class="tcard-meta">${tags?esc(tags)+"・":""}${esc(s)}・${esc(f)}${cfg.host?"・"+esc(cfg.host):""}</div>
+      ${period?`<div class="tcard-period">📅 ${esc(period)}</div>`:""}
+      <div class="tcard-stats">
+        <span>👥 ${b?b.teams:0}チーム</span><span>⚽ 試合進行 ${done}/${total}</span>
+        ${live?`<span class="live-txt">▶ 進行中の試合 ${live}試合</span>`:""}
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <button class="btn sec sm" style="width:100%;margin-top:10px" onclick="openTournament('${t.id}')">大会を見る →</button>
+    </div>`;
+  };
+  const showAll = !!state.homeShowAll;
+  const listOpen = showAll ? mineOpen : mineOpen.slice(0,4);
+
   return topbar({ title:"大会ベース", sub:"大会運営を、もっとスマートに。",
     act: state.user
       ? `<button class="act" onclick="logout()">${esc(state.user.code)} ⏻</button>`
@@ -1344,14 +1428,42 @@ function viewHome(){
       <h2>${state.user ? `${esc(state.user.code)} の大会運営` : "大会運営を、スマートに。"}</h2>
       <p>結果を入れるだけで、順位表・トーナメント・得点ランキングが自動で完成。</p>
       <span class="goldline"></span>
+      <div class="btnrow" style="margin-top:14px;position:relative;z-index:1">
+        ${state.user
+          ? `<button class="btn gold sm" style="width:auto;flex:1" onclick="go('new')">＋ 大会を作成する</button>`
+          : `<button class="btn gold sm" style="width:auto;flex:1" onclick="go('login')">＋ 大会を作成する</button>`}
+        <button class="btn ghost sm" style="width:auto;flex:1;background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.5)"
+          onclick="document.getElementById('tlist')?.scrollIntoView({behavior:'smooth'})">🔍 大会を見る</button>
+      </div>
     </div>
     ${!sb ? `<div class="setup-warn"><b>お試しモードです。</b>保存先（Supabase）が未設定なので、データはこの端末の中だけに残ります。複数の担当者で分担入力するには設定が必要です。</div>` : ""}
-    ${state.user ? `<button class="btn" onclick="go('new')">＋ 大会をつくる</button>
-      <div class="btnrow"><button class="btn sec" onclick="go('roster')">📋 チーム・選手の台帳（${orgYear()}年度）</button></div>` : ""}
-    ${mine.length ? `<div class="block-label">自分がつくった大会</div>${mine.map(cardOf).join("")}` : ""}
-    <div class="block-label">${mine.length?"ほかの大会":"開催中の大会"}</div>
+    ${state.user ? `<div class="stat-grid">
+        ${statCard("🏆","c-blue","開催中の大会数", hs?mineOpen.length:"…", "大会")}
+        ${statCard("▶","c-green","進行中の試合", hs?hs.liveAll:"…", "試合")}
+        ${statCard("📅","c-gold","本日の試合", hs?hs.todayAll:"…", "試合")}
+        ${statCard("✅","c-purple","終了した試合", hs?hs.doneAll:"…", "試合")}
+      </div>
+      <div class="block-label-row"><span class="block-label">🏆 開催中の大会</span>
+        ${mineOpen.length>4?`<button class="link-more" onclick="state.homeShowAll=!state.homeShowAll;render()">${showAll?"閉じる":"すべて見る"} ›</button>`:""}
+      </div>
+      ${listOpen.length ? listOpen.map(tCardOf).join("") : `<div class="empty">開催中の大会はまだありません。</div>`}
+      <div class="block-label">⚡ クイックアクセス</div>
+      <div class="qa-grid">
+        <button class="qa-tile c-blue" onclick="go('new')"><span class="ic">🏆</span><b>大会を作成</b><small>新しい大会を作成します</small></button>
+        <button class="qa-tile c-green" onclick="${qaGo}"><span class="ic">🗂</span><b>試合を管理</b><small>対戦表やスケジュール管理</small></button>
+        <button class="qa-tile c-gold" onclick="${qaGo}"><span class="ic">📝</span><b>結果を入力</b><small>試合結果を入力・編集</small></button>
+        <button class="qa-tile c-purple" onclick="${qaGo}"><span class="ic">📄</span><b>公式記録</b><small>結果表や記録を出力</small></button>
+      </div>
+      <button class="btn ghost sm" style="width:100%;margin-top:6px" onclick="go('roster')">📋 チーム・選手の台帳（${orgYear()}年度）</button>` : ""}
+    <div class="block-label" id="tlist">${state.user?"ほかの大会":"開催中の大会"}</div>
     ${others.length ? others.map(cardOf).join("")
       : `<div class="empty">${state.loading?"読み込み中…":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
+    <div class="feat-band">
+      <div class="feat-item"><span class="ic">🛡️</span><b>安心のデータ管理</b><small>大切な大会データを安全に管理します</small></div>
+      <div class="feat-item"><span class="ic">🕐</span><b>リアルタイム更新</b><small>試合結果や順位表をリアルタイムで反映</small></div>
+      <div class="feat-item"><span class="ic">📈</span><b>多彩な集計機能</b><small>順位表・得点ランキングなど多彩な集計が可能</small></div>
+      <div class="feat-item"><span class="ic">☁️</span><b>公式記録を出力</b><small>公式戦に必要な記録を簡単に出力</small></div>
+    </div>
   </div>`;
 }
 
@@ -2506,7 +2618,15 @@ function viewMatch(){
               <span style="text-align:center;font-weight:700">${periodScore(m,p,"H")}</span>
               <span style="text-align:center;font-weight:700">${periodScore(m,p,"A")}</span>`).join("")}
           </div>
-          <div style="text-align:center;margin-top:8px">
+          ${(()=>{ const kt=(m.official&&m.official.kickoffTeam)||null; return `
+          <div style="text-align:center;margin-top:12px">
+            <span class="hint" style="display:block;margin-bottom:6px">キックオフ（コイントスで決めたチーム）</span>
+            <div class="seg" style="max-width:280px;margin:0 auto">
+              <button class="${kt==="H"?"on":""}" onclick="setKickoffTeam('H')">${esc(H.label)}</button>
+              <button class="${kt==="A"?"on":""}" onclick="setKickoffTeam('A')">${esc(A.label)}</button>
+            </div>
+          </div>`; })()}
+          <div style="text-align:center;margin-top:12px">
             ${matchETPlayed(m)
               ? `<button class="btn ghost sm" style="width:auto" onclick="toggleET(false)">延長をやめる</button>`
               : `<button class="btn ghost sm" style="width:auto" onclick="toggleET(true)">＋ 延長を追加</button>`}
@@ -2584,6 +2704,13 @@ function setField(k,v){
 /* 結果入力画面から公式記録のヘッダー項目（審判・天候など）を直接入れる */
 function ensureMatchOfficial(m){ if(!m.official) m.official = draftOfficial(m); return m.official; }
 function setOfficialField(path, v){ const m = curMatch(); if(!m) return; pset(ensureMatchOfficial(m), path, v); }
+/* キックオフ＝コイントスで決めたチーム。もう一度押すと解除（結果を入れる画面から決める。公式記録は表示だけ） */
+function setKickoffTeam(v){
+  const m = curMatch(); if(!m) return;
+  const of = ensureMatchOfficial(m);
+  of.kickoffTeam = of.kickoffTeam===v ? null : v;
+  render();
+}
 function setKickoff(v){
   const m = curMatch(); if(!m) return;
   m.kickoff = v ? new Date(v).toISOString() : null;
@@ -3808,13 +3935,12 @@ function sheetFields(){
   });
   F.push(box("H.pk", 230.7,264.5, 659.1,646.4));
   F.push(box("A.pk", 331.9,365.7, 659.1,646.4));
-  // キックオフ（コイントスで決めたチーム側に表示位置ごと出す＝左はHチーム側・右はAチーム側。タップでどちらにも変えられる）
-  {
-    const kt = o.kickoffTeam;
-    const onRight = kt==="A";
+  // キックオフ（コイントスで決めたチーム側に表示位置ごと出す＝左はHチーム側・右はAチーム側）。
+  //   決めるのは「結果を入れる」画面から。ここは表示だけ（タップでは変更しない）
+  if(o.kickoffTeam){
+    const onRight = o.kickoffTeam==="A";
     const x = onRight ? 420 : 115, w = onRight ? 140 : 112;
-    F.push(`<span class="lb pickable kicklab${kt?"":" tbd"}" data-tapk="kickoff"
-      style="left:${pt(x)};top:${pt(SHEET.H-662-7.5*0.82)};width:${pt(w)};font-size:${pt(7.5)}">KICK OFF</span>`);
+    F.push(`<span class="lb kicklab" style="left:${pt(x)};top:${pt(SHEET.H-662-7.5*0.82)};width:${pt(w)};font-size:${pt(7.5)}">KICK OFF</span>`);
   }
 
   // メンバー表
@@ -4956,18 +5082,7 @@ $("#app").addEventListener("click", e=>{
   else if(k==="cardno")   openCardNoPicker(el.dataset.side, +el.dataset.idx);
   else if(k==="seq")      openSeqPicker(+el.dataset.idx, +el.dataset.ci);
   else if(k==="shot")     openShotPicker(el.dataset.side, +el.dataset.idx, el.dataset.half);
-  else if(k==="kickoff")  openKickoffPicker();
 });
-/* キックオフ＝コイントスで決めたチーム。どちらのチームにも入れられる */
-function openKickoffPicker(){
-  const o = state.official; if(!o) return;
-  const m = curMatchAny(); const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
-  const opts = [{v:"H",label:o.H.name||H.label||"ホーム"},{v:"A",label:o.A.name||A.label||"アウェイ"}];
-  chooseModal("キックオフ（コイントスで決めたチーム）", opts, (pick,act)=>{
-    if(act==="clear"){ o.kickoffTeam = null; render(); return; }
-    o.kickoffTeam = pick.v; render();
-  }, {clear:true});
-}
 /* シュート：前半/後半を選ぶ（1〜のリスト・手入力も可）。本人の計とチーム合計を自動計算 */
 const SHOT_HALF_LABEL = { s1:"前半", s2:"後半", e1:"延長前半", e2:"延長後半" };
 function openShotPicker(side, idx, half){
