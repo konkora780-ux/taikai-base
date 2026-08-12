@@ -414,7 +414,7 @@ td.pt{font-weight:800;}
 .kobk-m.seed{border-color:#ecd9a0;background:#fffdf6;}
 
 @media print{
-  @page kobracket{ size:A4 landscape; margin:8mm; }
+  @page kobracket{ size:A4 portrait; margin:8mm; }
   body.pbk .screen > *{ display:none !important; }
   body.pbk .screen > .kobk{ display:block !important; page:kobracket; overflow:visible;
     border:0;box-shadow:none;padding:0;margin:0;background:#fff;
@@ -2094,7 +2094,7 @@ function printBracket(){
   layoutBracket();
   const rounds = cv.querySelector(".kobk-rounds");
   const w = rounds.scrollWidth, h = rounds.scrollHeight;
-  const PW = 1000, PH = 680;                        // A4横 印刷可能領域の目安(px)
+  const PW = 725, PH = 1050;                        // A4縦 印刷可能領域の目安(px・余白8mm)
   const scale = Math.min(PW/w, PH/h, 1);
   bk.style.setProperty("--kw", w+"px");
   bk.style.setProperty("--kh", h+"px");
