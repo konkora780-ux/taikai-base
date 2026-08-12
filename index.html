@@ -18,7 +18,7 @@
   --ok:#1f9d55; --na:#9aa4b2; --warn:#e0930c; --bad:#d6453d;
   --okbg:#e6f4ec; --nabg:#eef1f5; --warnbg:#fdf5e3; --badbg:#fbe7e5;
   --brand:#0d1b3d; --accent:#2148c7; --accent2:#3b6fe0; --accentbg:#e7edfd;
-  --gold:#e2b93b; --goldbg:#faf3dd;
+  --gold:#e2b93b; --goldbg:#faf3dd; --purple:#8a5cf0; --amber:#e79c1f;
   --grad:linear-gradient(135deg,#16266b 0%,#2148c7 55%,#3b6fe0 100%);
   --grad-gold:linear-gradient(135deg,#caa233,#f0d178);
   --shadow:0 1px 3px rgba(13,27,61,.07),0 6px 20px rgba(13,27,61,.09);
@@ -78,12 +78,6 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .brandhero .tag{margin-top:11px;font-size:13.5px;font-weight:800;color:var(--brand);letter-spacing:.03em;}
 .brandhero .tag::before,.brandhero .tag::after{content:"";display:inline-block;width:16px;height:2px;
   background:var(--gold);vertical-align:middle;margin:0 8px;}
-.hero{position:relative;overflow:hidden;border-radius:18px;margin-bottom:16px;
-  background:var(--grad);color:#fff;padding:20px 18px;box-shadow:var(--shadow-lg);}
-.hero::after{content:"🏆";position:absolute;right:2px;bottom:-16px;font-size:92px;opacity:.16;transform:rotate(-10deg);}
-.hero h2{margin:0;font-size:21px;font-weight:800;letter-spacing:.02em;position:relative;z-index:1;}
-.hero p{margin:6px 0 0;font-size:13px;opacity:.92;font-weight:500;position:relative;z-index:1;max-width:80%;}
-.hero .goldline{display:inline-block;width:36px;height:3px;border-radius:2px;background:var(--grad-gold);margin-top:11px;position:relative;z-index:1;}
 .block-label{font-size:12px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin:20px 4px 8px;}
 .block-label:first-child{margin-top:2px;}
 
@@ -121,54 +115,115 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .btnrow{display:flex;gap:8px;margin-top:12px;}
 .btnrow .btn{flex:1;}
 
-/* ===== ホーム：統計・開催中カード・クイックアクセス・特徴帯 ===== */
-.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 6px;}
-.stat-card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 13px;
-  display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);}
-.stat-ic{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-  font-size:17px;flex-shrink:0;}
-.stat-ic.c-blue{background:var(--accentbg);}
-.stat-ic.c-green{background:var(--okbg);}
-.stat-ic.c-gold{background:var(--goldbg);}
-.stat-ic.c-purple{background:#efe9fb;}
-.stat-txt{min-width:0;display:flex;flex-direction:column;gap:2px;}
-.stat-label{font-size:11px;color:var(--sub);font-weight:600;}
-.stat-value{font-size:19px;font-weight:800;color:var(--ink);line-height:1.2;}
-.stat-value small{font-size:11px;font-weight:600;color:var(--sub);margin-left:2px;}
+/* ===== ホーム（ワイド・デスクトップ版ダッシュボード） ===== */
+.home-full{width:100%;}
+.home-top{background:var(--brand);}
+.home-top-in{max-width:1240px;margin:0 auto;padding:14px 24px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.home-brand{display:flex;align-items:center;gap:10px;min-width:0;}
+.home-brand .mark{width:34px;height:34px;flex-shrink:0;}
+.home-brand b{display:block;color:#fff;font-size:19px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
+.home-brand small{display:block;color:#a9b6cc;font-size:11px;margin-top:1px;white-space:nowrap;}
+.home-actions{display:flex;gap:8px;flex-shrink:0;}
+.home-actions .btn{width:auto;}
+
+.hero{position:relative;overflow:hidden;
+  background:linear-gradient(90deg,#081a33 0%,#12336b 55%,#2148c7 100%);color:#fff;}
+.hero-in{max-width:1240px;margin:0 auto;padding:52px 24px 66px;}
+.hero h2{margin:0 0 14px;font-size:38px;line-height:1.28;font-weight:800;letter-spacing:.01em;}
+.hero p{margin:0 0 22px;font-size:14.5px;line-height:1.85;opacity:.88;max-width:520px;font-weight:500;}
+.hero .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin:0;}
+.hero .btnrow .btn{width:auto;flex:none;}
+
+.home-main{max-width:1240px;margin:0 auto;padding:0 24px 40px;}
+.home-warn{margin:-40px 0 22px;position:relative;z-index:2;}
+
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:-40px 0 22px;position:relative;z-index:2;}
+.stat-card{background:#fff;border-radius:14px;padding:16px;box-shadow:var(--shadow-lg);
+  display:flex;align-items:center;gap:12px;}
+.stat-ic{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.stat-ic svg{width:20px;height:20px;}
+.stat-ic.c-blue{background:var(--accent);}
+.stat-ic.c-green{background:var(--ok);}
+.stat-ic.c-gold{background:var(--amber);}
+.stat-ic.c-purple{background:var(--purple);}
+.stat-txt{min-width:0;display:flex;flex-direction:column;gap:1px;}
+.stat-label{font-size:12.5px;color:var(--sub);font-weight:600;}
+.stat-value{font-size:26px;font-weight:800;color:var(--ink);line-height:1.15;}
+.stat-value small{font-size:12px;font-weight:600;color:var(--sub);margin-left:3px;}
+
+.block-label-row{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px;}
+.block-label-row .block-label{margin:0;font-size:16px;}
+.link-more{font-size:13px;font-weight:700;color:var(--accent);background:none;border:0;padding:0;}
+
+.main-grid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start;}
+.panel{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:20px;}
+
+.tour-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.tcard{background:#fbfcfe;border:1.5px solid var(--line);border-radius:14px;padding:16px;}
+.tcard-badges{display:flex;gap:6px;margin-bottom:8px;}
 .badge.open{background:var(--accentbg);color:var(--accent);}
-.block-label-row{display:flex;align-items:center;justify-content:space-between;margin:20px 4px 8px;}
-.block-label-row .block-label{margin:0;}
-.link-more{font-size:12.5px;font-weight:700;color:var(--accent);background:none;border:0;padding:0;}
-.tcard{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;
-  margin-bottom:10px;box-shadow:var(--shadow);}
-.tcard-badges{display:flex;gap:6px;margin-bottom:6px;}
 .tcard-name{display:block;width:100%;text-align:left;background:none;border:0;padding:0;
-  font-size:17px;font-weight:800;color:var(--ink);margin-bottom:3px;}
+  font-size:16px;font-weight:800;color:var(--ink);margin-bottom:3px;}
 .tcard-meta{font-size:12px;color:var(--sub);margin-bottom:2px;}
-.tcard-period{font-size:12px;color:var(--sub);margin-bottom:8px;}
-.tcard-stats{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink);font-weight:600;margin-bottom:8px;}
-.tcard-stats .live-txt{color:var(--bad);}
+.tcard-period{font-size:12px;color:var(--sub);margin-bottom:10px;}
+.tstats{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0;}
+.tstat{display:flex;align-items:center;gap:6px;}
+.tstat .tsic{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.tstat .tsic svg{width:13px;height:13px;}
+.tstat .tsic.a{background:var(--accent);}
+.tstat .tsic.b{background:var(--ok);}
+.tstat .tsic.c{background:var(--bad);}
+.tstat b{font-size:13.5px;color:var(--ink);display:block;line-height:1.1;}
+.tstat small{font-size:10px;color:var(--sub);display:block;}
 .progress-bar{height:7px;border-radius:99px;background:var(--paper);overflow:hidden;}
-.progress-fill{height:100%;background:var(--grad);border-radius:99px;}
-.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
-.qa-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;
-  background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow);
-  text-align:left;transition:transform .08s;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;}
+.tprog-row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--sub);margin-bottom:5px;font-weight:600;}
+.tprog-row b{color:var(--accent);font-weight:800;}
+
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.qa-tile{display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+  background:#fbfcfe;border:1.5px solid var(--line);border-radius:12px;padding:14px;
+  text-align:left;transition:transform .08s,box-shadow .15s;}
+.qa-tile:hover{box-shadow:var(--shadow);transform:translateY(-2px);}
 .qa-tile:active{transform:scale(.97);}
-.qa-tile .ic{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;
-  font-size:15px;margin-bottom:6px;background:var(--paper);}
-.qa-tile.c-blue .ic{background:var(--accentbg);}
-.qa-tile.c-green .ic{background:var(--okbg);}
-.qa-tile.c-gold .ic{background:var(--goldbg);}
-.qa-tile.c-purple .ic{background:#efe9fb;}
+.qa-tile .ic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
+.qa-tile .ic svg{width:18px;height:18px;}
+.qa-tile.c-blue .ic{background:var(--accent);}
+.qa-tile.c-green .ic{background:var(--ok);}
+.qa-tile.c-gold .ic{background:var(--amber);}
+.qa-tile.c-purple .ic{background:var(--purple);}
 .qa-tile b{font-size:13.5px;font-weight:800;color:var(--ink);}
-.qa-tile small{font-size:11px;color:var(--sub);font-weight:500;}
-.feat-band{background:var(--brand);border-radius:16px;padding:16px;margin-top:22px;
-  display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.feat-item{color:#fff;display:flex;flex-direction:column;gap:2px;}
-.feat-item .ic{font-size:17px;}
-.feat-item b{font-size:12.5px;font-weight:800;}
-.feat-item small{font-size:10.5px;opacity:.78;font-weight:500;line-height:1.4;}
+.qa-tile small{font-size:11px;color:var(--sub);font-weight:500;line-height:1.4;}
+
+.home-full .block-label{font-size:16px;margin:30px 0 14px;}
+.pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;}
+.pick-grid .pick{margin-bottom:0;}
+
+.feat-band{background:var(--brand);margin-top:8px;}
+.feat-band-in{max-width:1240px;margin:0 auto;padding:28px 24px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:20px;}
+.feat-item{color:#fff;display:flex;align-items:flex-start;gap:10px;}
+.feat-item .ic{width:34px;height:34px;border-radius:9px;background:rgba(226,185,59,.18);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.feat-item .ic svg{width:17px;height:17px;color:var(--gold);}
+.feat-item b{display:block;font-size:13.5px;font-weight:800;margin-bottom:3px;}
+.feat-item small{display:block;font-size:11px;opacity:.78;font-weight:500;line-height:1.5;}
+
+@media (max-width:980px){
+  .stat-grid{grid-template-columns:1fr 1fr;}
+  .main-grid{grid-template-columns:1fr;}
+  .feat-band-in{grid-template-columns:1fr 1fr;}
+}
+@media (max-width:640px){
+  .home-top-in,.hero-in,.home-main,.feat-band-in{padding-left:16px;padding-right:16px;}
+  .hero h2{font-size:27px;}
+  .stat-grid{grid-template-columns:1fr 1fr;margin-top:16px;}
+  .tour-cards{grid-template-columns:1fr;}
+  .qa-grid{grid-template-columns:1fr 1fr;}
+  .feat-band-in{grid-template-columns:1fr;}
+  .home-actions .btn span{display:none;}
+}
 
 /* ===== フォーム ===== */
 label.f{display:block;font-size:12.5px;font-weight:700;color:var(--sub);margin:14px 2px 6px;}
@@ -1371,6 +1426,27 @@ function topbar({title, sub, back, act}){
 }
 
 /* ---------- ホーム ---------- */
+const HI = {
+  person:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>`,
+  plus:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`,
+  search:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`,
+  trophy:  `<svg viewBox="0 0 24 24" fill="#fff"><path d="M6 4h12v2h2a1 1 0 0 1 1 1v1c0 2.4-1.6 4.3-3.8 4.8C16.6 14 15 15.3 13 15.7V19h3v2H8v-2h3v-3.3c-2-.4-3.6-1.7-4.2-3.9C4.6 12.3 3 10.4 3 8V7a1 1 0 0 1 1-1h2V4z"/></svg>`,
+  play:    `<svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>`,
+  calendar:`<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`,
+  check:   `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg>`,
+  pin:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>`,
+  cal2:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>`,
+  team:    `<svg viewBox="0 0 24 24" fill="#fff"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h9v-2.5c0-.9.4-1.7 1-2.4C10 13.5 8.8 13 8 13zm8 0c-.3 0-.6 0-1 .1 1 .8 1.7 1.9 1.7 3.4V19H23v-2.5c0-2.3-4.7-3.5-7-3.5z"/></svg>`,
+  ball:    `<svg viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 9l6 3-6 3z"/></svg>`,
+  manage:  `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M4 5h16M4 12h7M4 19h10M15 15l4-4-4-4"/></svg>`,
+  edit:    `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M4 20l1-4.6L15.6 4.8a1.8 1.8 0 0 1 2.6 0l1 1a1.8 1.8 0 0 1 0 2.6L8.6 19 4 20z"/><path d="M13.5 6.5l4 4"/></svg>`,
+  doc:     `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-6z"/><path d="M14 2v6h5M8 13h8M8 17h8M8 9h3"/></svg>`,
+  shield:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 3.5v6c0 5-3.4 8.7-8 10.5-4.6-1.8-8-5.5-8-10.5v-6L12 2z"/><path d="M9 12l2 2 4-4"/></svg>`,
+  clock:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg>`,
+  chart:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M11 20V4M18 20v-7"/></svg>`,
+  cloud:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a4.5 4.5 0 0 1-.6-9A5.5 5.5 0 0 1 17 9a4 4 0 0 1 .5 8H7z"/><path d="M12 12v6M9.5 15.5L12 18l2.5-2.5"/></svg>`,
+};
+
 function viewHome(){
   const mine = state.user ? state.list.filter(t=>t.org_id===state.user.id) : [];
   const others = state.list.filter(t=> !state.user || t.org_id!==state.user.id);
@@ -1407,63 +1483,79 @@ function viewHome(){
       <div class="tcard-badges">${live?`<span class="badge live">● LIVE</span>`:""}<span class="badge open">開催中</span></div>
       <button class="tcard-name" onclick="openTournament('${t.id}')">${esc(t.name)}</button>
       <div class="tcard-meta">${tags?esc(tags)+"・":""}${esc(s)}・${esc(f)}${cfg.host?"・"+esc(cfg.host):""}</div>
-      ${period?`<div class="tcard-period">📅 ${esc(period)}</div>`:""}
-      <div class="tcard-stats">
-        <span>👥 ${b?b.teams:0}チーム</span><span>⚽ 試合進行 ${done}/${total}</span>
-        ${live?`<span class="live-txt">▶ 進行中の試合 ${live}試合</span>`:""}
+      ${period?`<div class="tcard-period">${HI.cal2} ${esc(period)}</div>`:""}
+      ${cfg.host?`<div class="tcard-period">${HI.pin} ${esc(cfg.host)}</div>`:""}
+      <div class="tstats">
+        <div class="tstat"><span class="tsic a">${HI.team}</span><b>${b?b.teams:0}</b><small>チーム</small></div>
+        <div class="tstat"><span class="tsic b">${HI.ball}</span><b>${done} / ${total}</b><small>試合進行</small></div>
+        ${live?`<div class="tstat"><span class="tsic c">${HI.play}</span><b>${live}</b><small>進行中の試合</small></div>`:""}
       </div>
+      <div class="tprog-row"><span>進行状況</span><b>${pct}%</b></div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <button class="btn sec sm" style="width:100%;margin-top:10px" onclick="openTournament('${t.id}')">大会を見る →</button>
+      <button class="btn sec sm" style="width:100%;margin-top:12px" onclick="openTournament('${t.id}')">大会を見る →</button>
     </div>`;
   };
   const showAll = !!state.homeShowAll;
   const listOpen = showAll ? mineOpen : mineOpen.slice(0,4);
 
-  return topbar({ title:"大会ベース", sub:"大会運営を、もっとスマートに。",
-    act: state.user
-      ? `<button class="act" onclick="logout()">${esc(state.user.code)} ⏻</button>`
-      : `<button class="act" onclick="go('login')">運営ログイン</button>` })
-  + `<div class="screen">
-    <div class="hero">
-      <h2>${state.user ? `${esc(state.user.code)} の大会運営` : "大会運営を、スマートに。"}</h2>
-      <p>結果を入れるだけで、順位表・トーナメント・得点ランキングが自動で完成。</p>
-      <span class="goldline"></span>
-      <div class="btnrow" style="margin-top:14px;position:relative;z-index:1">
+  return `<div class="home-full">
+    <div class="home-top"><div class="home-top-in">
+      <div class="home-brand">${TROPHY}<div><b>大会ベース</b><small>大会運営を、もっとスマートに。</small></div></div>
+      <div class="home-actions">
+        <button class="btn gold sm" onclick="go('${state.user?"new":"login"}')">${HI.person}<span>大会を作成</span></button>
         ${state.user
-          ? `<button class="btn gold sm" style="width:auto;flex:1" onclick="go('new')">＋ 大会を作成する</button>`
-          : `<button class="btn gold sm" style="width:auto;flex:1" onclick="go('login')">＋ 大会を作成する</button>`}
-        <button class="btn ghost sm" style="width:auto;flex:1;background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.5)"
-          onclick="document.getElementById('tlist')?.scrollIntoView({behavior:'smooth'})">🔍 大会を見る</button>
+          ? `<button class="btn ghost sm" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.55)" onclick="logout()">${HI.person}<span>${esc(state.user.code)} ⏻</span></button>`
+          : `<button class="btn ghost sm" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.55)" onclick="go('login')">${HI.person}<span>運営ログイン</span></button>`}
       </div>
+    </div></div>
+
+    <div class="hero"><div class="hero-in">
+      <h2>大会運営を、<br>もっとスマートに。</h2>
+      <p>大会の作成から、試合進行・結果入力・順位表・公式記録まで。<br>大会運営に必要な機能を、ひとつに。</p>
+      <div class="btnrow">
+        <button class="btn sm" onclick="go('${state.user?"new":"login"}')">${HI.plus}大会を作成する</button>
+        <button class="btn ghost sm" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.55)"
+          onclick="document.getElementById('tlist')?.scrollIntoView({behavior:'smooth'})">${HI.search}大会を見る</button>
+      </div>
+    </div></div>
+
+    <div class="home-main">
+      ${!sb ? `<div class="home-warn"><div class="setup-warn"><b>お試しモードです。</b>保存先（Supabase）が未設定なので、データはこの端末の中だけに残ります。複数の担当者で分担入力するには設定が必要です。</div></div>` : ""}
+      ${state.user ? `<div class="stat-grid">
+          ${statCard(HI.trophy,"c-blue","開催中の大会数", hs?mineOpen.length:"…", "大会")}
+          ${statCard(HI.play,"c-green","進行中の試合", hs?hs.liveAll:"…", "試合")}
+          ${statCard(HI.calendar,"c-gold","本日の試合", hs?hs.todayAll:"…", "試合")}
+          ${statCard(HI.check,"c-purple","終了した試合", hs?hs.doneAll:"…", "試合")}
+        </div>
+        <div class="main-grid">
+          <div class="panel">
+            <div class="block-label-row"><span class="block-label" style="margin:0">🏆 開催中の大会</span>
+              ${mineOpen.length>4?`<button class="link-more" onclick="state.homeShowAll=!state.homeShowAll;render()">${showAll?"閉じる":"すべて見る"} ›</button>`:""}
+            </div>
+            ${listOpen.length ? `<div class="tour-cards">${listOpen.map(tCardOf).join("")}</div>` : `<div class="empty">開催中の大会はまだありません。</div>`}
+          </div>
+          <div class="panel">
+            <div class="block-label-row"><span class="block-label" style="margin:0">⚡ クイックアクセス</span></div>
+            <div class="qa-grid">
+              <button class="qa-tile c-blue" onclick="go('new')"><span class="ic">${HI.trophy}</span><b>大会を作成</b><small>新しい大会を作成します</small></button>
+              <button class="qa-tile c-green" onclick="${qaGo}"><span class="ic">${HI.manage}</span><b>試合を管理</b><small>対戦表やスケジュール管理</small></button>
+              <button class="qa-tile c-gold" onclick="${qaGo}"><span class="ic">${HI.edit}</span><b>結果を入力</b><small>試合結果を入力・編集</small></button>
+              <button class="qa-tile c-purple" onclick="${qaGo}"><span class="ic">${HI.doc}</span><b>公式記録</b><small>結果表や記録を出力</small></button>
+            </div>
+            <button class="btn ghost sm" style="width:100%;margin-top:12px" onclick="go('roster')">📋 チーム・選手の台帳（${orgYear()}年度）</button>
+          </div>
+        </div>` : ""}
+      <div class="block-label" id="tlist">${state.user?"ほかの大会":"開催中の大会"}</div>
+      ${others.length ? `<div class="pick-grid">${others.map(cardOf).join("")}</div>`
+        : `<div class="empty">${state.loading?"読み込み中…":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
     </div>
-    ${!sb ? `<div class="setup-warn"><b>お試しモードです。</b>保存先（Supabase）が未設定なので、データはこの端末の中だけに残ります。複数の担当者で分担入力するには設定が必要です。</div>` : ""}
-    ${state.user ? `<div class="stat-grid">
-        ${statCard("🏆","c-blue","開催中の大会数", hs?mineOpen.length:"…", "大会")}
-        ${statCard("▶","c-green","進行中の試合", hs?hs.liveAll:"…", "試合")}
-        ${statCard("📅","c-gold","本日の試合", hs?hs.todayAll:"…", "試合")}
-        ${statCard("✅","c-purple","終了した試合", hs?hs.doneAll:"…", "試合")}
-      </div>
-      <div class="block-label-row"><span class="block-label">🏆 開催中の大会</span>
-        ${mineOpen.length>4?`<button class="link-more" onclick="state.homeShowAll=!state.homeShowAll;render()">${showAll?"閉じる":"すべて見る"} ›</button>`:""}
-      </div>
-      ${listOpen.length ? listOpen.map(tCardOf).join("") : `<div class="empty">開催中の大会はまだありません。</div>`}
-      <div class="block-label">⚡ クイックアクセス</div>
-      <div class="qa-grid">
-        <button class="qa-tile c-blue" onclick="go('new')"><span class="ic">🏆</span><b>大会を作成</b><small>新しい大会を作成します</small></button>
-        <button class="qa-tile c-green" onclick="${qaGo}"><span class="ic">🗂</span><b>試合を管理</b><small>対戦表やスケジュール管理</small></button>
-        <button class="qa-tile c-gold" onclick="${qaGo}"><span class="ic">📝</span><b>結果を入力</b><small>試合結果を入力・編集</small></button>
-        <button class="qa-tile c-purple" onclick="${qaGo}"><span class="ic">📄</span><b>公式記録</b><small>結果表や記録を出力</small></button>
-      </div>
-      <button class="btn ghost sm" style="width:100%;margin-top:6px" onclick="go('roster')">📋 チーム・選手の台帳（${orgYear()}年度）</button>` : ""}
-    <div class="block-label" id="tlist">${state.user?"ほかの大会":"開催中の大会"}</div>
-    ${others.length ? others.map(cardOf).join("")
-      : `<div class="empty">${state.loading?"読み込み中…":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
-    <div class="feat-band">
-      <div class="feat-item"><span class="ic">🛡️</span><b>安心のデータ管理</b><small>大切な大会データを安全に管理します</small></div>
-      <div class="feat-item"><span class="ic">🕐</span><b>リアルタイム更新</b><small>試合結果や順位表をリアルタイムで反映</small></div>
-      <div class="feat-item"><span class="ic">📈</span><b>多彩な集計機能</b><small>順位表・得点ランキングなど多彩な集計が可能</small></div>
-      <div class="feat-item"><span class="ic">☁️</span><b>公式記録を出力</b><small>公式戦に必要な記録を簡単に出力</small></div>
-    </div>
+
+    <div class="feat-band"><div class="feat-band-in">
+      <div class="feat-item"><span class="ic">${HI.shield}</span><div><b>安心のデータ管理</b><small>大切な大会データを安全に管理します</small></div></div>
+      <div class="feat-item"><span class="ic">${HI.clock}</span><div><b>リアルタイム更新</b><small>試合結果や順位表をリアルタイムで反映</small></div></div>
+      <div class="feat-item"><span class="ic">${HI.chart}</span><div><b>多彩な集計機能</b><small>順位表・得点ランキングなど多彩な集計が可能</small></div></div>
+      <div class="feat-item"><span class="ic">${HI.cloud}</span><div><b>公式記録を出力</b><small>公式戦に必要な記録を簡単に出力</small></div></div>
+    </div></div>
   </div>`;
 }
 
