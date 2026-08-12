@@ -92,7 +92,13 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   font-size:16px;font-weight:600;transition:transform .08s,border-color .15s;}
 .pick:active{transform:scale(.985);border-color:var(--accent);}
 .pick .meta{font-size:12px;color:var(--sub);font-weight:500;margin-top:2px;}
-.pick .chev{color:#c2cbd6;font-size:20px;flex-shrink:0;}
+.pick .chev{color:#c2cbd6;font-size:20px;flex-shrink:0;transition:transform .15s;}
+.team-acc{margin-bottom:10px;}
+.team-acc>summary{list-style:none;cursor:pointer;margin-bottom:0;}
+.team-acc>summary::-webkit-details-marker{display:none;}
+.team-acc[open]>summary{border-radius:14px 14px 0 0;border-bottom-color:transparent;}
+.team-acc[open]>summary .chev{transform:rotate(90deg);}
+.team-acc .tblwrap{border-top:0;border-radius:0 0 14px 14px;margin-top:-1px;}
 
 .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;flex-shrink:0;white-space:nowrap;}
 .badge.live{background:var(--badbg);color:var(--bad);}
@@ -692,6 +698,23 @@ const DB = {
     if(rteams.error) throw rteams.error;
     if(rmatches.error) throw rmatches.error;
     return { t:rt.data, teams:rteams.data||[], matches:rmatches.data||[] };
+  },
+
+  /* 公式記録の公開リンク：試合idだけで匿名に読む（大会・チームは所属大会を丸ごと読んで補う＝トーナメント枠の勝者参照も解決できるように） */
+  async loadMatchTarget(matchId){
+    if(!sb){
+      const d = local.read();
+      const m = d.matches.find(x=>x.id===matchId) || null;
+      if(!m) return { m:null, t:null, teams:[], matches:[] };
+      const { t, teams, matches } = await this.loadTournament(m.tournament_id);
+      return { m, t, teams, matches };
+    }
+    const rm = await sb.from("gn_matches").select("*").eq("id",matchId).maybeSingle();
+    if(rm.error) throw rm.error;
+    const m = rm.data;
+    if(!m) return { m:null, t:null, teams:[], matches:[] };
+    const { t, teams, matches } = await this.loadTournament(m.tournament_id);
+    return { m, t, teams, matches };
   },
 
   /* --- 台帳（チーム・選手・団体設定）を丸ごと読む --- */
@@ -1393,7 +1416,7 @@ function render(){
   const v = {
     home:viewHome, login:viewLogin, new:viewNew,
     t:viewTournament, match:viewMatch, teams:viewTeams, settings:viewSettings,
-    roster:viewRoster, club:viewClub, official:viewOfficial, lineup:viewLineup, sched:viewSchedule,
+    roster:viewRoster, club:viewClub, official:viewOfficial, officialPublic:viewOfficialPublic, lineup:viewLineup, sched:viewSchedule,
     entry:viewEntry, entrylinks:viewEntryLinks,
     clubentry:viewClubEntry, clubentrylinks:viewClubEntryLinks,
   }[state.view] || viewHome;
@@ -2559,7 +2582,9 @@ function tabAppearances(){
       players:[...stat.entries()].map(([name,s])=>({name,...s})).sort((a,b)=>(a.no??999)-(b.no??999)) });
   });
   if(!teamsOut.length) return `<div class="empty">まだ出場の記録がありません。<br>試合ごとにメンバー表を作ると、ここに出場した試合数がまとまります。</div>`;
-  return teamsOut.map(r=>`<div class="block-label">${esc(r.team)}</div>
+  return teamsOut.map(r=>`<details class="team-acc">
+    <summary class="pick"><span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.team)}</span>
+      <span class="meta">${r.players.length}名</span></span><span class="chev">›</span></summary>
     <div class="tblwrap"><table>
       <thead><tr><th>番号</th><th style="text-align:left">選手</th><th>試合</th><th>時間</th><th>得点</th></tr></thead>
       <tbody>${r.players.map(p=>{
@@ -2574,8 +2599,9 @@ function tabAppearances(){
           : esc(shown)}</td>
         <td>${p.goals||""}</td>
       </tr>`;}).join("")}</tbody>
-    </table></div>`).join("")
-    + `<p class="hint">各試合のメンバー表（スタメン／控え）と得点から集計しています。<b>時間</b>は選手交代の記録から自動計算します（アディショナルタイムは含めません）。手で書き換えるとその数字が優先されます。</p>`;
+    </table></div>
+  </details>`).join("")
+    + `<p class="hint">チーム名をタップすると出場記録が開きます。各試合のメンバー表（スタメン／控え）と得点から集計しています。<b>時間</b>は選手交代の記録から自動計算します（アディショナルタイムは含めません）。手で書き換えるとその数字が優先されます。</p>`;
 }
 /* 出場時間。書き換えていれば settings.playtime（チームid/選手名）の手入力を優先、無ければ自動計算値を使う */
 function playTimeOf(teamId, name){
@@ -3994,6 +4020,11 @@ function box(path, x1, x2, yTop, yBot, o){
   o = o || {};
   const size = o.size || 8;
   const h = yTop - yBot;
+  if(state.officialReadOnly){   // 一般公開の閲覧専用ビュー：入力欄ではなく文字だけ表示
+    const cls = (o.wrap?"fxw":"fx") + (o.align==="l"?" l":"");
+    return `<div class="${cls}"
+      style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</div>`;
+  }
   if(o.wrap){   // 折り返し可能な枠（チーム名など）＝textarea
     return `<textarea class="fx fxw${o.align==="l"?" l":""}" data-p="${path}"
       style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</textarea>`;
@@ -4192,6 +4223,17 @@ function viewOfficial(){
     </div></div>` : ""; })()}
     <div class="screen noprint">
       <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
+      <label class="f">一般公開</label>
+      <div class="seg">
+        <button class="${!state.official.public?"on":""}" onclick="setOfficialPublic(false)">非公開</button>
+        <button class="${state.official.public?"on":""}" onclick="setOfficialPublic(true)">公開する</button>
+      </div>
+      ${state.official.public ? `<div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+          <input class="in" style="flex:1;font-size:12px" readonly value="${officialLinkFor(m.id)}" onclick="this.select()">
+          <button class="btn ghost sm" style="width:auto" onclick="copyText('${officialLinkFor(m.id)}','リンクをコピーしました')">コピー</button>
+        </div>
+        <p class="hint" style="margin:-4px 0 10px">このリンクを開くと、ログインしていない方でもこの試合の公式記録を見られます（保存すると反映されます）。</p>`
+        : `<p class="hint" style="margin:-4px 0 10px">保護者・一般の方にもこの試合の公式記録を見てもらいたいときは「公開する」を選んでください（保存すると反映されます）。</p>`}
       <div class="btnrow">
         <button class="btn sec sm" style="flex:1" onclick="saveOfficial(true).then(()=>go('lineup'))">👥 メンバー表を編集</button>
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
@@ -4203,13 +4245,59 @@ function viewOfficial(){
       <button class="btn" onclick="saveOfficial()">保存する</button>
     </div>`;
 }
+function officialLinkFor(matchId){ return location.origin + location.pathname + "#om=" + matchId; }
+function setOfficialPublic(v){ if(!state.official) return; state.official.public = v; render(); }
 function backFromOfficial(){ state.official = null; go("t"); }
 function openOfficial(id){
   state.matchId = id;
+  state.officialReadOnly = false;
   const m = state.matches.find(x=>x.id===id);
   state.official = draftOfficial(m);
   state.sheetZoom = state.sheetZoom || 0.8;
   state.view = "official"; render();
+}
+
+/* --- 公式記録の一般公開リンク（ログイン不要・#om=試合id） --- */
+async function openOfficialPublic(matchId){
+  state.loading = true; state.view = "officialPublic"; state.officialPublicError = null; render();
+  try{
+    const { m, t, teams, matches } = await DB.loadMatchTarget(matchId);
+    if(!m || !t){
+      state.officialPublicError = "見つかりませんでした。リンクをご確認ください。";
+    } else if(!(m.official && m.official.public)){
+      state.t = t; state.matchId = m.id;
+      state.officialPublicError = "この試合の公式記録は、まだ一般公開されていません。";
+    } else {
+      state.t = t; state.teams = teams; state.matches = matches; state.matchId = m.id;
+      state.officialReadOnly = true;
+      state.official = draftOfficial(m);
+      state.sheetZoom = state.sheetZoom || 0.8;
+    }
+  }catch(e){ console.error(e); state.officialPublicError = "読み込めませんでした。少し時間をおいて開き直してください。"; }
+  state.loading = false; render();
+}
+function viewOfficialPublic(){
+  if(state.loading) return topbar({title:"公式記録"}) + `<div class="screen"><div class="empty">読み込み中…</div></div>`;
+  if(state.officialPublicError) return topbar({title:"公式記録", back: state.t ? "go('t')" : undefined})
+    + `<div class="screen"><div class="empty">${esc(state.officialPublicError)}</div></div>`;
+  const m = state.matches.find(x=>x.id===state.matchId);
+  if(!m) return topbar({title:"公式記録"}) + `<div class="screen"><div class="empty">見つかりません。</div></div>`;
+  const z = state.sheetZoom || 1;
+  return topbar({ title:"公式記録", sub:state.t.name, back:"go('t')" })
+  + `<div class="sheetbar noprint">
+      <span>表示の大きさ</span>
+      ${[0.6,0.8,1,1.4].map(v=>`<button class="${z===v?"on":""}" onclick="state.sheetZoom=${v};render()">${Math.round(v*100)}%</button>`).join("")}
+      <button onclick="window.print()">🖨 印刷・PDF</button>
+    </div>
+    <div class="sheetwrap"><div class="sheetscale" style="width:${pt(SHEET.W*z)};height:${pt(SHEET.H*z)}">
+      <div class="sheet-a4" style="transform:scale(${z})">${sheetLines()}${sheetFields()}</div>
+    </div></div>
+    ${(()=>{ const p2 = sheetPage2(state.official); return p2 ? `<div class="sheetwrap page2" style="margin-top:14px"><div class="sheetscale" style="width:${pt(SHEET.W*z)};height:${pt(SHEET.H*z)}">
+      <div class="sheet-a4" style="transform:scale(${z})">${p2}</div>
+    </div></div>` : ""; })()}
+    <div class="screen noprint">
+      <p class="hint">運営が公開した、この試合の公式記録です。</p>
+    </div>`;
 }
 function importLineupToOfficial(){
   const m = curMatchAny(); if(!m || !state.official) return;
@@ -5241,6 +5329,8 @@ function recomputeTotal(side, key){
   if(cm0){ state.loading=false; await openClubEntry(cm0[1]); return; }   // 台帳の記入リンク（ログイン不要）
   const em = location.hash.match(/entry=([0-9a-f-]{36})/i);
   if(em){ state.loading=false; await openEntry(em[1]); return; }   // 記入リンク（ログイン不要）
+  const om0 = location.hash.match(/om=([0-9a-f-]{36})/i);
+  if(om0){ state.loading=false; await openOfficialPublic(om0[1]); return; }   // 公式記録の公開リンク（ログイン不要）
 
   await Promise.all([reloadList(), reloadRoster()]);
   state.loading = false;
@@ -5255,6 +5345,8 @@ window.addEventListener("hashchange", ()=>{
   if(cm){ if(!state.clubEntry || state.clubEntry.clubId!==cm[1]) openClubEntry(cm[1]); return; }
   const em = location.hash.match(/entry=([0-9a-f-]{36})/i);
   if(em){ if(!state.entry || state.entry.team?.id!==em[1]) openEntry(em[1]); return; }
+  const om = location.hash.match(/om=([0-9a-f-]{36})/i);
+  if(om){ if(state.matchId!==om[1] || state.view!=="officialPublic") openOfficialPublic(om[1]); return; }
   const m = location.hash.match(/t=([0-9a-f-]{36})/i);
   if(m && (!state.t || state.t.id!==m[1])) openTournament(m[1]);
   else if(!m && state.view==="t") go("home");
