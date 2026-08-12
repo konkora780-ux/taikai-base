@@ -145,6 +145,11 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .ovlock[disabled]{opacity:.72;}
 .lockmsg{background:var(--warnbg);border:1.5px solid #f0d9a0;border-radius:12px;padding:10px 12px;
   font-size:13px;font-weight:600;color:#7a5a10;margin-bottom:12px;}
+.ofcard>summary{font-weight:700;font-size:14px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;}
+.ofcard>summary::-webkit-details-marker{display:none;}
+.ofcard>summary::before{content:"▸";color:var(--accent);font-size:12px;}
+.ofcard[open]>summary::before{content:"▾";}
+.ofcard[open]>summary{margin-bottom:8px;}
 
 /* ===== タブ ===== */
 .tabs{position:sticky;top:0;z-index:40;background:var(--paper);
@@ -797,6 +802,23 @@ function participantsOf(m, side){
   if(inMatch.length) return inMatch;
   const R = resolveSlot(m, side);
   return playersOf(R.id);
+}
+/* 選手交代用：OUT＝いまピッチにいる選手 / IN＝まだ出ていない控え（交代の履歴を反映） */
+function subFieldSets(m, side){
+  const lu = m.lineups && m.lineups[side];
+  const parts = participantsOf(m, side);
+  const hasRoles = lu && Array.isArray(lu.players) && lu.players.some(p=>p.role==="start");
+  if(!hasRoles) return { out: parts, in: parts };   // 先発/控えが未設定なら従来どおり全員
+  const starters = lu.players.filter(p=>p.role==="start").map(p=>p.pid);
+  const onSet = new Set(starters), everOn = new Set(starters);
+  (m.events||[]).filter(e=>e.type==="sub" && e.team===side).forEach(e=>{
+    if(e.outId) onSet.delete(e.outId);
+    if(e.playerId){ onSet.add(e.playerId); everOn.add(e.playerId); }
+  });
+  return {
+    out: parts.filter(p=> onSet.has(p.id)),     // 今ピッチにいる11人
+    in:  parts.filter(p=> !everOn.has(p.id)),   // 一度も出ていない控え
+  };
 }
 /* 得点イベントが「どちらのチームの得点か」（オウンゴールは相手の得点） */
 function scoringSideOf(ev){ return ev.type==="og" ? (ev.team==="H"?"A":"H") : ev.team; }
@@ -2042,9 +2064,10 @@ function drawLinks(){
       const fb = from.getBoundingClientRect(), tb = to.getBoundingClientRect();
       const x1 = fb.right-cb.left, y1 = fb.top+fb.height/2-cb.top;
       const x2 = tb.left-cb.left, y2 = tb.top+(sd==="home"?tb.height*0.34:tb.height*0.72)-cb.top;
-      const mxx = (x1+x2)/2;
+      const mxx = Math.round((x1+x2)/2);
       const col = src[0]==="L" ? "#c98a2e" : "#9fb0d6";
-      paths += `<path d="M${x1},${y1} C${mxx},${y1} ${mxx},${y2} ${x2},${y2}" fill="none" stroke="${col}" stroke-width="2" opacity=".8"/>`;
+      // 直角のカギ線（横→縦→横）＝ふつうのトーナメント表の線
+      paths += `<path d="M${x1},${Math.round(y1)} H${mxx} V${Math.round(y2)} H${x2}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".85" shape-rendering="crispEdges"/>`;
     });
   });
   svg.innerHTML = paths;
@@ -2281,6 +2304,36 @@ function viewMatch(){
   + `<div class="screen">
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
     <fieldset class="ovlock"${locked?" disabled":""}>
+    ${(()=>{ const of=m.official||{}; return `<details class="card ofcard">
+      <summary>📋 公式記録の記入（審判・天候・会場など）</summary>
+      <label class="f">試合形式</label>
+      <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）40分ハーフ / 予選リーグ">
+      <div class="row2">
+        <div><label class="f">主審</label><input class="in" value="${esc(of.referee||"")}" oninput="setOfficialField('referee',this.value)"></div>
+        <div><label class="f">第4審判</label><input class="in" value="${esc(of.fourth||"")}" oninput="setOfficialField('fourth',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">副審1</label><input class="in" value="${esc(of.ar1||"")}" oninput="setOfficialField('ar1',this.value)"></div>
+        <div><label class="f">副審2</label><input class="in" value="${esc(of.ar2||"")}" oninput="setOfficialField('ar2',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">運営責任者</label><input class="in" value="${esc(of.admin||"")}" oninput="setOfficialField('admin',this.value)"></div>
+        <div><label class="f">記録担当</label><input class="in" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">天候</label><input class="in" value="${esc(of.weather||"")}" oninput="setOfficialField('weather',this.value)"></div>
+        <div><label class="f">気温</label><input class="in" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">湿度</label><input class="in" value="${esc(of.humid||"")}" oninput="setOfficialField('humid',this.value)"></div>
+        <div><label class="f">風</label><input class="in" value="${esc(of.wind||"")}" oninput="setOfficialField('wind',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">観客数</label><input class="in" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
+        <div><label class="f">ピッチ(芝)</label><input class="in" value="${esc(of.pitch||"")}" oninput="setOfficialField('pitch',this.value)"></div>
+      </div>
+      <p class="hint">ここで入れた内容は公式記録の上部にそのまま入ります。日時・会場・得点・メンバーは下と自動で連動します。</p>
+    </details>`; })()}
     <div class="scorebox">
       <div class="scoreline">
         <div class="team">
@@ -2380,6 +2433,9 @@ function setField(k,v){
   m[k] = v;
   if(k==="status") render();
 }
+/* 結果入力画面から公式記録のヘッダー項目（審判・天候など）を直接入れる */
+function ensureMatchOfficial(m){ if(!m.official) m.official = draftOfficial(m); return m.official; }
+function setOfficialField(path, v){ const m = curMatch(); if(!m) return; pset(ensureMatchOfficial(m), path, v); }
 function setKickoff(v){
   const m = curMatch(); if(!m) return;
   m.kickoff = v ? new Date(v).toISOString() : null;
@@ -2513,11 +2569,12 @@ function openSubSheet(){
   </div>`;
   document.body.appendChild(el);
   let team="H", period=periods[0];
-  const fill = ()=>{
-    const ps = participantsOf(m, team);
-    const opts = `<option value="">（選手を選ぶ）</option>` + ps.map(p=>
+  const optHTML = list => `<option value="">（選手を選ぶ）</option>` + list.map(p=>
       `<option value="${p.id}">${p.no?esc(String(p.no))+" ":""}${esc(p.name)}</option>`).join("");
-    $("#sub-out").innerHTML = opts; $("#sub-in").innerHTML = opts;
+  const fill = ()=>{
+    const sets = subFieldSets(m, team);
+    $("#sub-out").innerHTML = optHTML(sets.out);   // 今ピッチにいる選手だけ
+    $("#sub-in").innerHTML  = optHTML(sets.in);    // まだ出ていない控えだけ
   };
   fill();
   el.querySelectorAll("#sub-team button").forEach(b=> b.onclick = ()=>{
@@ -3248,9 +3305,10 @@ function syncLineup(side){
 }
 function curMatchAny(){ return state.matches.find(x=>x.id===state.matchId); }
 function orderedLineup(lu){
-  const st = lu.players.filter(p=>p.role==="start").sort(byPosNo);
-  const sb = lu.players.filter(p=>p.role==="sub").sort(byNo);
-  return { starters:st, subs:sb, out:lu.players.filter(p=>p.role==="out") };
+  const players = (lu && Array.isArray(lu.players)) ? lu.players : [];
+  const st = players.filter(p=>p.role==="start").sort(byPosNo);
+  const sb = players.filter(p=>p.role==="sub").sort(byNo);
+  return { starters:st, subs:sb, out:players.filter(p=>p.role==="out") };
 }
 
 /* --- 編集画面 --- */
