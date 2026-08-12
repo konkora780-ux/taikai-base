@@ -463,7 +463,7 @@ const GROUP_NAMES = "ABCDEFGH".split("");
 const CARD_ICON = { yellow:"🟨", red:"🟥", green:"🟩" };
 const CARD_LABEL = { yellow:"警告", red:"退場", green:"グリーン" };
 /* 得点・交代の時間帯 */
-const PERIODS    = { "1H":"前半", "2H":"後半", "1ET":"延長前", "2ET":"延長後" };
+const PERIODS    = { "1H":"前半", "2H":"後半", "1ET":"延長前", "2ET":"延長後", "HT":"HT" };
 const PERIOD_REG = ["1H","2H"];      // ふつうの試合
 const PERIOD_ET  = ["1ET","2ET"];    // 延長を使う試合だけ
 
@@ -2586,7 +2586,7 @@ function openEventSheet(kind){
 }
 /* イベントを 時間帯→分 の順に並べる */
 function sortEvents(m){
-  const pIdx = p => ["1H","2H","1ET","2ET"].indexOf(p||"1H");
+  const pIdx = p => ["1H","HT","2H","1ET","2ET"].indexOf(p||"1H");
   (m.events||[]).sort((a,b)=> pIdx(a.period)-pIdx(b.period) || (a.minute??999)-(b.minute??999));
 }
 /* --- 選手交代の追加シート --- */
@@ -2610,9 +2610,12 @@ function openSubSheet(){
     <label class="f">時間帯</label>
     <div class="seg" id="sub-period">
       ${periods.map((p,i)=>`<button class="${i===0?"on":""}" data-v="${p}">${esc(PERIODS[p])}</button>`).join("")}
+      <button data-v="HT">HT（ハーフタイム）</button>
     </div>
-    <label class="f">分（入れなくてOK）</label>
-    <input class="in" id="sub-min" type="number" inputmode="numeric" placeholder="例）60">
+    <div id="sub-min-wrap">
+      <label class="f">分（入れなくてOK）</label>
+      <input class="in" id="sub-min" type="number" inputmode="numeric" placeholder="例）60">
+    </div>
     <div class="btnrow">
       <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
       <button class="btn" id="sub-ok">追加</button>
@@ -2635,12 +2638,13 @@ function openSubSheet(){
   el.querySelectorAll("#sub-period button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#sub-period button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); period=b.dataset.v;
+    $("#sub-min-wrap").style.display = period==="HT" ? "none" : "";   // HT交代は「分」を使わない
   });
   $("#sub-ok").onclick = ()=>{
     const outId = $("#sub-out").value || null;
     const inId  = $("#sub-in").value || null;
     if(!outId && !inId) return toast("OUTかINの選手を選んでください");
-    const minute = $("#sub-min").value ? num($("#sub-min").value) : null;
+    const minute = (period==="HT" || !$("#sub-min").value) ? null : num($("#sub-min").value);
     m.events = m.events || [];
     m.events.push({ type:"sub", team, outId, playerId:inId, minute, period });
     sortEvents(m);
@@ -3550,7 +3554,7 @@ function draftOfficial(m){
       const inNm    = inFull.replace(/^\d+\s/,"");
       const outRow  = outNm && s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===outNm);
       const inRow   = inNm  && s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===inNm);
-      if(outRow) outRow.subTime = e.minute!=null ? minuteText(e.minute,e.period,m)+"分" : outRow.subTime;
+      if(outRow) outRow.subTime = e.period==="HT" ? "HT" : e.minute!=null ? minuteText(e.minute,e.period,m)+"分" : outRow.subTime;
       if(inRow && outNo) inRow.subNo = outNo;
     });
     const keys = ["1H","2H","1ET","2ET"];               // 前半/後半/延長前/延長後 → scores[0..3]
