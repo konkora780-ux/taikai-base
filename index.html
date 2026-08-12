@@ -312,6 +312,7 @@ td.pt{font-weight:800;}
 .sheet-a4 .fx.pickable:hover{background:#fffbe9;}
 .sheet-a4 .kicklab{overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:1px 2px;border-radius:3px;}
 .sheet-a4 .kicklab:hover{background:#fffbe9;}
+.sheet-a4 .kicklab.tbd{color:#000;opacity:.4;}
 .sheet-a4 .fx:focus{outline:none;background:var(--accentbg);overflow:visible;text-overflow:clip;}
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
@@ -3807,12 +3808,13 @@ function sheetFields(){
   });
   F.push(box("H.pk", 230.7,264.5, 659.1,646.4));
   F.push(box("A.pk", 331.9,365.7, 659.1,646.4));
-  // キックオフ（コイントスで決めたチーム。タップでどちらのチームにも入れられる）
+  // キックオフ（コイントスで決めたチーム側に表示位置ごと出す＝左はHチーム側・右はAチーム側。タップでどちらにも変えられる）
   {
     const kt = o.kickoffTeam;
-    const ktLabel = kt==="H" ? (o.H.name||"") : kt==="A" ? (o.A.name||"") : "";
-    F.push(`<span class="lb pickable kicklab" data-tapk="kickoff"
-      style="left:${pt(115)};top:${pt(SHEET.H-662-7.5*0.82)};width:${pt(112)};font-size:${pt(7.5)}">KICK OFF${ktLabel?"："+esc(ktLabel):""}</span>`);
+    const onRight = kt==="A";
+    const x = onRight ? 420 : 115, w = onRight ? 140 : 112;
+    F.push(`<span class="lb pickable kicklab${kt?"":" tbd"}" data-tapk="kickoff"
+      style="left:${pt(x)};top:${pt(SHEET.H-662-7.5*0.82)};width:${pt(w)};font-size:${pt(7.5)}">KICK OFF</span>`);
   }
 
   // メンバー表
@@ -4501,7 +4503,7 @@ async function deleteTournament(){
    ========================================================================== */
 function go(v){
   state.view = v;
-  if(v==="home") location.hash = "";
+  if(v==="home"){ location.hash = ""; if(state.user) loadHomeStats(); }
   if(v==="t" && state.t) location.hash = "t=" + state.t.id;
   render();
 }
@@ -4549,6 +4551,46 @@ async function refresh(){
 async function reloadList(){
   try{ state.list = await DB.listTournaments(); }
   catch(e){ console.error(e); state.list = []; }
+}
+/* ホーム画面の集計（自分が運営する大会だけ・チーム数/試合の進み具合/今日の試合など）。1クエリでまとめて取る */
+let _homeStatsBusy = false;
+async function loadHomeStats(){
+  if(!state.user || _homeStatsBusy) return;
+  _homeStatsBusy = true;
+  try{
+    const mine = state.list.filter(t=>t.org_id===state.user.id);
+    const ids = mine.map(t=>t.id);
+    let matches=[], teams=[];
+    if(ids.length){
+      if(sb){
+        const [rm, rt] = await Promise.all([
+          sb.from("gn_matches").select("id,tournament_id,status,kickoff").in("tournament_id", ids),
+          sb.from("gn_teams").select("id,tournament_id").in("tournament_id", ids),
+        ]);
+        if(rm.error) throw rm.error;
+        if(rt.error) throw rt.error;
+        matches = rm.data||[]; teams = rt.data||[];
+      } else {
+        const d = local.read();
+        matches = d.matches.filter(m=>ids.includes(m.tournament_id));
+        teams   = d.teams.filter(x=>ids.includes(x.tournament_id));
+      }
+    }
+    const today = localDate(new Date().toISOString());
+    const byT = {};
+    ids.forEach(id=> byT[id] = { teams:0, total:0, done:0, live:0 });
+    teams.forEach(x=>{ if(byT[x.tournament_id]) byT[x.tournament_id].teams++; });
+    let liveAll=0, todayAll=0, doneAll=0;
+    matches.forEach(m=>{
+      const b = byT[m.tournament_id]; if(!b) return;
+      b.total++;
+      if(m.status==="done"){ b.done++; doneAll++; }
+      if(m.status==="live"){ b.live++; liveAll++; }
+      if(m.kickoff && localDate(m.kickoff)===today) todayAll++;
+    });
+    state.homeStats = { byT, liveAll, todayAll, doneAll };
+  }catch(e){ console.error(e); }
+  _homeStatsBusy = false; render();
 }
 function shareTournament(){
   const url = location.origin + location.pathname + "#t=" + state.t.id;
@@ -4989,7 +5031,7 @@ function recomputeTotal(side, key){
 
   const m = location.hash.match(/t=([0-9a-f-]{36})/i);
   if(m) await openTournament(m[1]);
-  else render();
+  else { render(); if(state.user) loadHomeStats(); }
 })();
 
 window.addEventListener("hashchange", ()=>{
