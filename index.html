@@ -2089,11 +2089,15 @@ function matchCard(m){
     ${scline}
     ${canEdit() ? (m.official&&m.official.public
       ? `<div class="mpub"><span class="pill ok">🔗 公式記録を公開中</span>
+          <button class="linkbtn" onclick="goOfficialPublic('${m.id}')">見る</button>
           <button class="linkbtn" onclick="copyText('${officialLinkFor(m.id)}','リンクをコピーしました')">リンクをコピー</button>
           <button class="linkbtn" style="color:var(--bad)" onclick="toggleMatchPublic('${m.id}')">非公開にする</button></div>`
-      : `<div class="mpub"><button class="linkbtn" onclick="toggleMatchPublic('${m.id}')">🔗 公式記録を公開する</button></div>`) : ""}
+      : `<div class="mpub"><button class="linkbtn" onclick="toggleMatchPublic('${m.id}')">🔗 公式記録を公開する</button></div>`)
+    : (m.official&&m.official.public
+      ? `<div class="mpub"><button class="linkbtn" onclick="goOfficialPublic('${m.id}')">📄 公式記録を見る</button></div>` : "")}
   </div>`;
 }
+function goOfficialPublic(id){ location.hash = "om=" + id; }
 
 /* ==========================================================================
    日程・会場のまとめ入力（F1）＋ 試合番号（B1）
@@ -2347,11 +2351,13 @@ function koMatchHTML(m, edit){
   const no = koMatchNo(m);
   const title = seed ? "シード" : `${esc(koRoundLabel(m))} ${no}`;
   const editBtn = edit ? `<button class="kobk-edit" title="枠の中身を編集" onclick="event.stopPropagation();openKoEditor('${m.id}')">✎</button>` : "";
+  const pubBtn = (m.official && m.official.public)
+    ? `<button class="kobk-edit" title="公式記録を見る" onclick="event.stopPropagation();goOfficialPublic('${m.id}')">📄</button>` : "";
   const body = seed ? koSeedSlot(m, isEmptySide(m,"H")?"A":"H")
                     : koSlot(m,"H") + koSlot(m,"A");
   const clk = edit ? ` onclick="openMatch('${m.id}')"` : "";
   return `<div class="kobk-m ${seed?"seed":""} ${edit?"clk":""}" id="komt-${m.id}" data-mid="${m.id}"${clk}>
-    <div class="kobk-mt"><span class="no">${title}</span>${editBtn}</div>${body}</div>`;
+    <div class="kobk-mt"><span class="no">${title}</span>${pubBtn}${editBtn}</div>${body}</div>`;
 }
 function koSlot(m, side){
   const r = resolveSlot(m, side);
