@@ -283,6 +283,8 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .mcard .mno{color:var(--gold);font-weight:800;}
 .mcard .mnote{margin:0 13px 10px;padding:7px 10px;background:var(--warnbg);border:1px solid #f0dca8;
   border-radius:8px;font-size:12.5px;color:#8a6206;font-weight:600;line-height:1.5;}
+.mcard .mpub{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:0 13px 10px;}
+.mcard .mpub .linkbtn{padding:2px 4px;}
 .mcard .mbody{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
   padding:12px 13px;gap:10px;width:100%;text-align:left;}
 .mcard .side{min-width:0;}
@@ -377,6 +379,8 @@ td.pt{font-weight:800;}
 
 .evrow{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13.5px;}
 .evrow:last-child{border-bottom:none;}
+.evrow .evmain{display:flex;align-items:center;gap:8px;flex:1;min-width:0;text-align:left;background:none;border:0;padding:4px 2px;border-radius:8px;}
+.evrow .evmain:active{background:var(--paper);}
 .evrow .ic{width:22px;text-align:center;flex-shrink:0;font-size:15px;}
 .evrow .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .evrow .mi{color:var(--sub);font-size:12px;flex-shrink:0;}
@@ -935,15 +939,16 @@ function participantsOf(m, side){
   const R = resolveSlot(m, side);
   return playersOf(R.id);
 }
-/* 選手交代用：OUT＝いまピッチにいる選手 / IN＝まだ出ていない控え（交代の履歴を反映） */
-function subFieldSets(m, side){
+/* 選手交代用：OUT＝いまピッチにいる選手 / IN＝まだ出ていない控え（交代の履歴を反映）
+   excludeIdx＝この交代イベント自身を編集中のとき、その1件を計算から除く（自分がOUT/INした選手も選べるように） */
+function subFieldSets(m, side, excludeIdx){
   const lu = m.lineups && m.lineups[side];
   const parts = participantsOf(m, side);
   const hasRoles = lu && Array.isArray(lu.players) && lu.players.some(p=>p.role==="start");
   if(!hasRoles) return { out: parts, in: parts };   // 先発/控えが未設定なら従来どおり全員
   const starters = lu.players.filter(p=>p.role==="start").map(p=>p.pid);
   const onSet = new Set(starters), everOn = new Set(starters);
-  (m.events||[]).filter(e=>e.type==="sub" && e.team===side).forEach(e=>{
+  (m.events||[]).filter((e,j)=> e.type==="sub" && e.team===side && j!==excludeIdx).forEach(e=>{
     if(e.outId) onSet.delete(e.outId);
     if(e.playerId){ onSet.add(e.playerId); everOn.add(e.playerId); }
   });
@@ -2082,6 +2087,11 @@ function matchCard(m){
     </${canEdit()?"button":"div"}>
     ${m.note?`<div class="mnote">📣 ${esc(m.note)}</div>`:""}
     ${scline}
+    ${canEdit() ? (m.official&&m.official.public
+      ? `<div class="mpub"><span class="pill ok">🔗 公式記録を公開中</span>
+          <button class="linkbtn" onclick="copyText('${officialLinkFor(m.id)}','リンクをコピーしました')">リンクをコピー</button>
+          <button class="linkbtn" style="color:var(--bad)" onclick="toggleMatchPublic('${m.id}')">非公開にする</button></div>`
+      : `<div class="mpub"><button class="linkbtn" onclick="toggleMatchPublic('${m.id}')">🔗 公式記録を公開する</button></div>`) : ""}
   </div>`;
 }
 
@@ -2669,9 +2679,11 @@ function viewMatch(){
       tx = `${esc(nm)} <small style="color:var(--sub)">${esc(tn)}</small>`;
     }
     return `<div class="evrow">
-      <span class="ic">${ic}</span>
-      <span class="tx">${tx}</span>
-      <span class="mi">${mi}</span>
+      <button class="evmain" onclick="editEvent(${i})">
+        <span class="ic">${ic}</span>
+        <span class="tx">${tx}</span>
+        <span class="mi">${mi}</span>
+      </button>
       <button class="del" onclick="delEvent(${i})">削除</button>
     </div>`;
   }).join("") || `<div class="hint" style="padding:8px 2px">まだ記録がありません。</div>`;
@@ -2842,6 +2854,13 @@ function setKickoff(v){
   const m = curMatch(); if(!m) return;
   m.kickoff = v ? new Date(v).toISOString() : null;
 }
+/* 記録の行をタップ → 種類に応じた編集シートを開く（得点者を空欄にする、時間を直すなどいろいろ変更できる） */
+function editEvent(i){
+  const m = curMatch(); if(!m) return;
+  const ev = (m.events||[])[i]; if(!ev) return;
+  if(ev.type==="sub") openSubSheet(i);
+  else openEventSheet((ev.type==="goal"||ev.type==="pk"||ev.type==="og") ? "goal" : "card", i);
+}
 function delEvent(i){
   const m = curMatch(); if(!m) return;
   const ev = (m.events||[])[i];
@@ -2861,9 +2880,11 @@ function toggleET(on){
   setMatchET(m, on); render();
 }
 
-/* --- 得点者・カードの追加シート --- */
-function openEventSheet(kind){
+/* --- 得点者・カードの追加／編集シート --- */
+function openEventSheet(kind, editIdx){
   const m = curMatch(); if(!m) return;
+  const editing = editIdx!=null;
+  const orig = editing ? m.events[editIdx] : null;
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
   const sp = sportOf(state.t);
   const types = kind==="goal"
@@ -2871,16 +2892,19 @@ function openEventSheet(kind){
     : [["yellow","🟨 警告"],["red","🟥 退場"],["green","🟩 グリーン"]];
   const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
   const hasAssist = kind==="goal" && !!(cfgOf(state.t).overview||{}).hasAssist;
+  let team = editing ? orig.team : "H";
+  let type = editing ? orig.type : types[0][0];
+  let period = editing ? (orig.period || periods[0]) : periods[0];
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
-    <h3>${kind==="goal"?"得点を追加":"カードを追加"}</h3>
+    <h3>${editing ? (kind==="goal"?"得点を編集":"カードを編集") : (kind==="goal"?"得点を追加":"カードを追加")}</h3>
     <label class="f">どちらのチーム</label>
     <div class="seg" id="ev-team">
-      <button class="on" data-v="H">${esc(H.label)}</button>
-      <button data-v="A">${esc(A.label)}</button>
+      <button class="${team==="H"?"on":""}" data-v="H">${esc(H.label)}</button>
+      <button class="${team==="A"?"on":""}" data-v="A">${esc(A.label)}</button>
     </div>
-    <label class="f">選手（この試合の出場選手から選べます）</label>
+    <label class="f">選手（この試合の出場選手から選べます・見つからなければ空欄でもOK）</label>
     <select class="in" id="ev-player"></select>
     ${hasAssist ? `<div id="ev-assist-wrap">
       <label class="f">アシスト（あれば選ぶ・任意）</label>
@@ -2888,46 +2912,48 @@ function openEventSheet(kind){
     </div>` : ""}
     <label class="f">種類</label>
     <div class="seg" id="ev-type">
-      ${types.map((t,i)=>`<button class="${i===0?"on":""}" data-v="${t[0]}">${esc(t[1])}</button>`).join("")}
+      ${types.map(t=>`<button class="${t[0]===type?"on":""}" data-v="${t[0]}">${esc(t[1])}</button>`).join("")}
     </div>
     <label class="f">時間帯</label>
     <div class="seg" id="ev-period">
-      ${periods.map((p,i)=>`<button class="${i===0?"on":""}" data-v="${p}">${esc(PERIODS[p])}</button>`).join("")}
+      ${periods.map(p=>`<button class="${p===period?"on":""}" data-v="${p}">${esc(PERIODS[p])}</button>`).join("")}
     </div>
     <label class="f">分（こまかい時間・入れなくてOK）</label>
-    <input class="in" id="ev-min" type="number" inputmode="numeric" placeholder="例）23">
+    <input class="in" id="ev-min" type="number" inputmode="numeric" placeholder="例）23" value="${editing&&orig.minute!=null?orig.minute:""}">
     <div class="btnrow">
+      ${editing?`<button class="btn danger" onclick="this.closest('.modal').remove();delEvent(${editIdx})">削除</button>`:""}
       <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
-      <button class="btn" id="ev-ok">追加</button>
+      <button class="btn" id="ev-ok">${editing?"保存":"追加"}</button>
     </div>
   </div>`;
   document.body.appendChild(el);
 
-  let team = "H", type = types[0][0], period = periods[0];
-  const fillPlayers = ()=>{
+  const fillPlayers = (applyOrig)=>{
     const ps = participantsOf(m, team);
     $("#ev-player").innerHTML = ps.length
       ? `<option value="">（選手を選ぶ・空欄でもOK）</option>` + ps.map(p=>
           `<option value="${p.id}">${p.no?esc(String(p.no))+" ":""}${esc(p.name)}</option>`).join("")
       : `<option value="">出場選手が未登録です</option>`;
-    if(hasAssist) fillAssist();
+    if(editing && applyOrig) $("#ev-player").value = orig.playerId || "";
+    if(hasAssist) fillAssist(applyOrig);
   };
-  const fillAssist = ()=>{
+  const fillAssist = (applyOrig)=>{
     const box = $("#ev-assist"); if(!box) return;
     const scorer = $("#ev-player").value;
     const ps = participantsOf(m, team).filter(p=> p.id!==scorer);   // 得点者本人は除く
     box.innerHTML = `<option value="">（なし）</option>` + ps.map(p=>
       `<option value="${p.id}">${p.no?esc(String(p.no))+" ":""}${esc(p.name)}</option>`).join("");
+    if(editing && applyOrig) box.value = orig.assistId || "";
   };
   const syncAssistVisibility = ()=>{
     const wrap = $("#ev-assist-wrap"); if(!wrap) return;
     wrap.style.display = type==="goal" ? "" : "none";   // PK・オウンゴールにはアシストなし
   };
-  fillPlayers();
-  if(hasAssist){ syncAssistVisibility(); $("#ev-player").onchange = fillAssist; }
+  fillPlayers(true);
+  if(hasAssist){ syncAssistVisibility(); $("#ev-player").onchange = ()=>fillAssist(false); }
   el.querySelectorAll("#ev-team button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-team button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on"); team = b.dataset.v; fillPlayers();
+    b.classList.add("on"); team = b.dataset.v; fillPlayers(false);
   });
   el.querySelectorAll("#ev-type button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-type button").forEach(x=>x.classList.remove("on"));
@@ -2943,15 +2969,28 @@ function openEventSheet(kind){
     const assistId = (hasAssist && type==="goal") ? ($("#ev-assist").value || null) : null;
     const minute = $("#ev-min").value ? num($("#ev-min").value) : null;
     m.events = m.events || [];
-    m.events.push({ type, team, playerId:pid, assistId, minute, period });
-    sortEvents(m);
-    // 得点なら点数も自動で足す（オウンゴールは相手の得点）
-    if(type==="goal"||type==="pk"||type==="og"){
-      m.home_score = m.home_score ?? 0; m.away_score = m.away_score ?? 0;
-      const scoringSide = type==="og" ? (team==="H"?"away":"home") : (team==="H"?"home":"away");
-      m[scoringSide+"_score"]++;
-      if(m.status==="todo") m.status = "live";
+    const isScoring = t => t==="goal"||t==="pk"||t==="og";
+    if(editing){
+      if(isScoring(orig.type)){   // 元の得点ぶんを一旦戻す
+        const oldSide = scoringSideOf(orig)==="H" ? "home" : "away";
+        m[oldSide+"_score"] = Math.max(0, (m[oldSide+"_score"]??0) - 1);
+      }
+      m.events[editIdx] = { type, team, playerId:pid, assistId, minute, period };
+      if(isScoring(type)){
+        m.home_score = m.home_score ?? 0; m.away_score = m.away_score ?? 0;
+        const newSide = scoringSideOf({type,team})==="H" ? "home" : "away";
+        m[newSide+"_score"]++;
+      }
+    } else {
+      m.events.push({ type, team, playerId:pid, assistId, minute, period });
+      if(isScoring(type)){
+        m.home_score = m.home_score ?? 0; m.away_score = m.away_score ?? 0;
+        const newSide = scoringSideOf({type,team})==="H" ? "home" : "away";
+        m[newSide+"_score"]++;
+        if(m.status==="todo") m.status = "live";
+      }
     }
+    sortEvents(m);
     el.remove(); render();
   };
 }
@@ -2961,18 +3000,22 @@ function sortEvents(m){
   (m.events||[]).sort((a,b)=> pIdx(a.period)-pIdx(b.period) || (a.minute??999)-(b.minute??999));
 }
 /* --- 選手交代の追加シート --- */
-function openSubSheet(){
+function openSubSheet(editIdx){
   const m = curMatch(); if(!m) return;
+  const editing = editIdx!=null;
+  const orig = editing ? m.events[editIdx] : null;
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
   const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
+  let team = editing ? orig.team : "H";
+  let period = editing ? (orig.period || periods[0]) : periods[0];
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
-    <h3>選手交代を追加</h3>
+    <h3>選手交代を${editing?"編集":"追加"}</h3>
     <label class="f">どちらのチーム</label>
     <div class="seg" id="sub-team">
-      <button class="on" data-v="H">${esc(H.label)}</button>
-      <button data-v="A">${esc(A.label)}</button>
+      <button class="${team==="H"?"on":""}" data-v="H">${esc(H.label)}</button>
+      <button class="${team==="A"?"on":""}" data-v="A">${esc(A.label)}</button>
     </div>
     <label class="f">OUT（下がる選手）</label>
     <select class="in" id="sub-out"></select>
@@ -2980,31 +3023,35 @@ function openSubSheet(){
     <select class="in" id="sub-in"></select>
     <label class="f">時間帯</label>
     <div class="seg" id="sub-period">
-      ${periods.map((p,i)=>`<button class="${i===0?"on":""}" data-v="${p}">${esc(PERIODS[p])}</button>`).join("")}
-      <button data-v="HT">HT（ハーフタイム）</button>
+      ${periods.map(p=>`<button class="${p===period?"on":""}" data-v="${p}">${esc(PERIODS[p])}</button>`).join("")}
+      <button class="${period==="HT"?"on":""}" data-v="HT">HT（ハーフタイム）</button>
     </div>
-    <div id="sub-min-wrap">
+    <div id="sub-min-wrap" style="${period==="HT"?"display:none":""}">
       <label class="f">分（入れなくてOK）</label>
-      <input class="in" id="sub-min" type="number" inputmode="numeric" placeholder="例）60">
+      <input class="in" id="sub-min" type="number" inputmode="numeric" placeholder="例）60" value="${editing&&orig.minute!=null?orig.minute:""}">
     </div>
     <div class="btnrow">
+      ${editing?`<button class="btn danger" onclick="this.closest('.modal').remove();delEvent(${editIdx})">削除</button>`:""}
       <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
-      <button class="btn" id="sub-ok">追加</button>
+      <button class="btn" id="sub-ok">${editing?"保存":"追加"}</button>
     </div>
   </div>`;
   document.body.appendChild(el);
-  let team="H", period=periods[0];
   const optHTML = list => `<option value="">（選手を選ぶ）</option>` + list.map(p=>
       `<option value="${p.id}">${p.no?esc(String(p.no))+" ":""}${esc(p.name)}</option>`).join("");
-  const fill = ()=>{
-    const sets = subFieldSets(m, team);
-    $("#sub-out").innerHTML = optHTML(sets.out);   // 今ピッチにいる選手だけ
-    $("#sub-in").innerHTML  = optHTML(sets.in);    // まだ出ていない控えだけ
+  const fill = (applyOrig)=>{
+    const sets = subFieldSets(m, team, editing?editIdx:undefined);
+    $("#sub-out").innerHTML = optHTML(sets.out);   // 今ピッチにいる選手だけ（編集中は自分自身のOUTも含む）
+    $("#sub-in").innerHTML  = optHTML(sets.in);    // まだ出ていない控えだけ（編集中は自分自身のINも含む）
+    if(editing && applyOrig){
+      $("#sub-out").value = orig.outId || "";
+      $("#sub-in").value  = orig.playerId || "";
+    }
   };
-  fill();
+  fill(true);
   el.querySelectorAll("#sub-team button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#sub-team button").forEach(x=>x.classList.remove("on"));
-    b.classList.add("on"); team=b.dataset.v; fill();
+    b.classList.add("on"); team=b.dataset.v; fill(false);
   });
   el.querySelectorAll("#sub-period button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#sub-period button").forEach(x=>x.classList.remove("on"));
@@ -3017,7 +3064,8 @@ function openSubSheet(){
     if(!outId && !inId) return toast("OUTかINの選手を選んでください");
     const minute = (period==="HT" || !$("#sub-min").value) ? null : num($("#sub-min").value);
     m.events = m.events || [];
-    m.events.push({ type:"sub", team, outId, playerId:inId, minute, period });
+    const ev = { type:"sub", team, outId, playerId:inId, minute, period };
+    if(editing) m.events[editIdx] = ev; else m.events.push(ev);
     sortEvents(m);
     el.remove(); render();
   };
@@ -4247,6 +4295,21 @@ function viewOfficial(){
 }
 function officialLinkFor(matchId){ return location.origin + location.pathname + "#om=" + matchId; }
 function setOfficialPublic(v){ if(!state.official) return; state.official.public = v; render(); }
+/* 日程・結果カードなどから、公式記録編集画面を開かずにその場で公開/非公開を切り替える */
+async function toggleMatchPublic(id){
+  const m = state.matches.find(x=>x.id===id); if(!m) return;
+  const of = ensureMatchOfficial(m);
+  const next = !of.public;
+  if(!next && !confirm("この試合の公式記録を非公開にします。よろしいですか？")) return;
+  of.public = next;
+  if(state.official && state.matchId===id) state.official.public = next;   // 編集画面を開いていれば表示も合わせる
+  m.updated_at = new Date().toISOString();
+  try{
+    await DB.upsert("gn_matches", stripMatch(m));
+    toast(next ? "公式記録を公開しました" : "非公開にしました");
+    render();
+  }catch(e){ console.error(e); toast("できませんでした: "+(e.message||e)); }
+}
 function backFromOfficial(){ state.official = null; go("t"); }
 function openOfficial(id){
   state.matchId = id;
