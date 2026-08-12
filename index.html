@@ -847,6 +847,26 @@ function matchETPlayed(m){
 /* --- PK戦：1人ずつ 〇×（成功/失敗）を記録する。系列は lineups._meta.pk に持つ --- */
 function pkArr(m, side){ return (m.lineups && m.lineups._meta && m.lineups._meta.pk && m.lineups._meta.pk[side]) || []; }
 function pkCount(m, side){ return pkArr(m, side).filter(v=>v==="o").length; }
+/* この試合で「PK戦を追加」したか（延長と同じ方式。明示ONか、〇×の記録があれば自動でも） */
+function matchPKPlayed(m){
+  return !!(m.lineups && m.lineups._meta && m.lineups._meta.usePK)
+    || pkArr(m,"H").length>0 || pkArr(m,"A").length>0;
+}
+function toggleUsePK(on){
+  const m = curMatch(); if(!m) return;
+  if(!on){
+    const has = pkArr(m,"H").some(v=>v) || pkArr(m,"A").some(v=>v);
+    if(has && !confirm("PK戦の記録が入っています。PK戦をやめると記録も消えます。よろしいですか？")) return;
+    m.lineups = m.lineups||{}; m.lineups._meta = m.lineups._meta||{};
+    m.lineups._meta.usePK = false;
+    m.lineups._meta.pk = { H:[], A:[] };
+    m.home_pk = null; m.away_pk = null;
+  } else {
+    ensurePK(m);
+    m.lineups._meta.usePK = true;
+  }
+  render();
+}
 function ensurePK(m){
   m.lineups = m.lineups || {};
   m.lineups._meta = m.lineups._meta || {};
@@ -2372,10 +2392,16 @@ function viewMatch(){
           <p class="hint" style="text-align:center;margin-top:4px">前後半の点は「得点を追加」で時間帯を選ぶと自動でここに入ります。</p>
         </div>` : ""}
       ${sp.pk && m.stage==="ko" ? `
-        <label class="f" style="margin-top:16px">PK戦（引き分けのときだけ・1人ずつ 〇×）</label>
+        <div style="text-align:center;margin-top:16px">
+          ${matchPKPlayed(m)
+            ? `<button class="btn ghost sm" style="width:auto" onclick="toggleUsePK(false)">PK戦をやめる</button>`
+            : `<button class="btn ghost sm" style="width:auto" onclick="toggleUsePK(true)">＋ PK戦を追加</button>`}
+        </div>
+        ${matchPKPlayed(m) ? `
+        <label class="f" style="margin-top:10px">PK戦（1人ずつ 〇×）</label>
         ${pkRowHTML(m,"H",H.label)}
         ${pkRowHTML(m,"A",A.label)}
-        <p class="hint">枠をタップで <b>〇（成功）→ ×（失敗）→ 空</b> に変わります。〇の数が公式記録のPK欄に入ります。</p>` : ""}
+        <p class="hint">枠をタップで <b>〇（成功）→ ×（失敗）→ 空</b> に変わります。〇の数が公式記録のPK欄に入ります。</p>` : ""}` : ""}
     </div>
 
     <div class="card">
