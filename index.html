@@ -3921,7 +3921,10 @@ function lineupSheetHTML(m){
 function applyLineupToOfficial(o, m, side, force){
   const s = o[side];
   ensureLineups(m);
-  const { starters, subs } = orderedLineup(m.lineups[side]);
+  const lu = m.lineups[side];
+  // 監督名もメンバー表から取り込む（手で公式記録の欄に書いていればそれを優先・force時は毎回取り込み直す）
+  if(force || !s.coach) s.coach = (lu && lu.coach) ? lu.coach : (force ? "" : s.coach);
+  const { starters, subs } = orderedLineup(lu);
   const rows = [...starters, ...subs];
   const hasAny = s.lineup.some(r=>r.name);
   if(hasAny && !force) return;
@@ -4075,7 +4078,7 @@ function box(path, x1, x2, yTop, yBot, o){
   const size = o.size || 8;
   const h = yTop - yBot;
   if(state.officialReadOnly){   // 一般公開の閲覧専用ビュー：入力欄ではなく文字だけ表示
-    const cls = (o.wrap?"fxw":"fx") + (o.align==="l"?" l":"");
+    const cls = "fx" + (o.wrap?" fxw":"") + (o.align==="l"?" l":"");
     return `<div class="${cls}"
       style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</div>`;
   }
@@ -4277,17 +4280,12 @@ function viewOfficial(){
     </div></div>` : ""; })()}
     <div class="screen noprint">
       <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
-      <label class="f">一般公開</label>
-      <div class="seg">
-        <button class="${!state.official.public?"on":""}" onclick="setOfficialPublic(false)">非公開</button>
-        <button class="${state.official.public?"on":""}" onclick="setOfficialPublic(true)">公開する</button>
+      <div class="callout ${state.official.public?"ok":""}" style="margin-bottom:12px">
+        ${state.official.public
+          ? `🔗 この試合の公式記録は一般公開中です。`
+          : `この試合の公式記録は非公開です。`}
+        公開・非公開の切り替えは、日程・結果の試合カードから行えます。
       </div>
-      ${state.official.public ? `<div style="display:flex;gap:8px;align-items:center;margin:8px 0">
-          <input class="in" style="flex:1;font-size:12px" readonly value="${officialLinkFor(m.id)}" onclick="this.select()">
-          <button class="btn ghost sm" style="width:auto" onclick="copyText('${officialLinkFor(m.id)}','リンクをコピーしました')">コピー</button>
-        </div>
-        <p class="hint" style="margin:-4px 0 10px">このリンクを開くと、ログインしていない方でもこの試合の公式記録を見られます（保存すると反映されます）。</p>`
-        : `<p class="hint" style="margin:-4px 0 10px">保護者・一般の方にもこの試合の公式記録を見てもらいたいときは「公開する」を選んでください（保存すると反映されます）。</p>`}
       <div class="btnrow">
         <button class="btn sec sm" style="flex:1" onclick="saveOfficial(true).then(()=>go('lineup'))">👥 メンバー表を編集</button>
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
@@ -4300,7 +4298,6 @@ function viewOfficial(){
     </div>`;
 }
 function officialLinkFor(matchId){ return location.origin + location.pathname + "#om=" + matchId; }
-function setOfficialPublic(v){ if(!state.official) return; state.official.public = v; render(); }
 /* 日程・結果カードなどから、公式記録編集画面を開かずにその場で公開/非公開を切り替える */
 async function toggleMatchPublic(id){
   const m = state.matches.find(x=>x.id===id); if(!m) return;
