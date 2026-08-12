@@ -822,6 +822,26 @@ function subFieldSets(m, side){
 }
 /* 得点イベントが「どちらのチームの得点か」（オウンゴールは相手の得点） */
 function scoringSideOf(ev){ return ev.type==="og" ? (ev.team==="H"?"A":"H") : ev.team; }
+/* この試合のハーフ分数（決勝だけ40分など、大会の既定と違うときは試合ごとに上書きできる） */
+function matchHalfMin(m, period){
+  const meta = (m && m.lineups && m.lineups._meta) || {};
+  const ov = cfgOf(state.t).overview || {};
+  if(period==="1ET"||period==="2ET") return meta.etHalfMin!=null ? meta.etHalfMin : (ov.etHalfMin||0);
+  return meta.halfMin!=null ? meta.halfMin : (ov.halfMin||0);
+}
+/* 時間表示：ハーフの分数を超えたら「35+1分」のようなアディショナルタイム表記にする（前後半/延長前後で長さが違う） */
+function minuteText(minute, period, m){
+  if(minute==null || minute==="") return "";
+  const len = matchHalfMin(m, period);
+  const n = num(minute);
+  if(len && n>len) return `${len}+${n-len}`;
+  return String(n);
+}
+function setMatchHalfMin(key, v){
+  const m = curMatch(); if(!m) return;
+  m.lineups = m.lineups || {}; m.lineups._meta = m.lineups._meta || {};
+  m.lineups._meta[key] = v==="" ? null : Math.max(1, num(v));
+}
 /* 時間帯ごとの得点数（side は "H" / "A"） */
 function periodScore(m, period, side){
   return (m.events||[]).filter(e=>
@@ -1736,7 +1756,7 @@ function matchCard(m){
   const scline = goals.length ? `<div class="scorers">⚽ ${goals.map(e=>{
       const tid = e.team==="H" ? H.id : A.id;
       const nm = e.playerId ? playerName(tid, e.playerId) : "得点";
-      return esc(nm) + (e.type==="og"?"(OG)":e.type==="pk"?"(PK)":"") + (e.minute?` ${e.minute}'`:"");
+      return esc(nm) + (e.type==="og"?"(OG)":e.type==="pk"?"(PK)":"") + (e.minute!=null?` ${minuteText(e.minute,e.period,m)}'`:"");
     }).join("、")}</div>` : "";
 
   return `<div class="mcard ${canEdit()?"editable":""}">
@@ -2300,7 +2320,7 @@ function viewMatch(){
     const tid = ev.team==="H" ? H.id : A.id;
     const tn  = ev.team==="H" ? H.label : A.label;
     const per = ev.period ? esc(PERIODS[ev.period]||"") : "";
-    const mi  = `${per}${ev.minute?" "+esc(String(ev.minute))+"'":""}`;
+    const mi  = `${per}${ev.minute!=null?" "+esc(minuteText(ev.minute,ev.period,m))+"'":""}`;
     let ic, tx;
     if(ev.type==="sub"){
       ic = "🔄";
@@ -2324,10 +2344,15 @@ function viewMatch(){
   + `<div class="screen">
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
     <fieldset class="ovlock"${locked?" disabled":""}>
-    ${(()=>{ const of=m.official||{}; return `<details class="card ofcard">
+    ${(()=>{ const of=m.official||{}; const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
       <summary>📋 公式記録の記入（審判・天候・会場など）</summary>
       <label class="f">試合形式</label>
       <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）40分ハーフ / 予選リーグ">
+      <label class="f">この試合だけ時間が違う場合（決勝だけ40分など・空なら大会の設定${ov.halfMin?"（"+ov.halfMin+"分ハーフ）":""}のまま）</label>
+      <div class="row2">
+        <div><input class="in" type="number" inputmode="numeric" placeholder="前後半 例）40" value="${meta.halfMin??""}" oninput="setMatchHalfMin('halfMin',this.value)"></div>
+        <div><input class="in" type="number" inputmode="numeric" placeholder="延長 例）10" value="${meta.etHalfMin??""}" oninput="setMatchHalfMin('etHalfMin',this.value)"></div>
+      </div>
       <div class="row2">
         <div><label class="f">主審</label><input class="in" value="${esc(of.referee||"")}" oninput="setOfficialField('referee',this.value)"></div>
         <div><label class="f">第4審判</label><input class="in" value="${esc(of.fourth||"")}" oninput="setOfficialField('fourth',this.value)"></div>
@@ -3509,10 +3534,24 @@ function draftOfficial(m){
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
       const c = s.cards[ci];
       if(!c.name){
-        c.time = e.minute?e.minute+"分":""; c.kind = {yellow:"警",red:"退",green:"緑"}[e.type]||"";
+        c.time = e.minute!=null?minuteText(e.minute,e.period,m)+"分":""; c.kind = {yellow:"警",red:"退",green:"緑"}[e.type]||"";
         c.no = (nm.match(/^(\d+)\s/)||[])[1]||""; c.name = nm.replace(/^\d+\s/,"");
       }
       ci++;
+    });
+    // 選手交代：OUTした先発の行に「時間」だけ、INした控えの行に「交代した相手の背番号」だけを入れる
+    //   （見本の様式どおり＝時間と番号を別の行に分けて書く。毎回リセットして選手交代の記録から入れ直す）
+    s.lineup.forEach(r=>{ r.subNo=""; r.subTime=""; });
+    evs.filter(e=>e.type==="sub").forEach(e=>{
+      const outFull = e.outId    ? playerName(R.id, e.outId)    : "";
+      const inFull  = e.playerId ? playerName(R.id, e.playerId) : "";
+      const outNo   = (outFull.match(/^(\d+)\s/)||[])[1] || "";
+      const outNm   = outFull.replace(/^\d+\s/,"");
+      const inNm    = inFull.replace(/^\d+\s/,"");
+      const outRow  = outNm && s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===outNm);
+      const inRow   = inNm  && s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===inNm);
+      if(outRow) outRow.subTime = e.minute!=null ? minuteText(e.minute,e.period,m)+"分" : outRow.subTime;
+      if(inRow && outNo) inRow.subNo = outNo;
     });
     const keys = ["1H","2H","1ET","2ET"];               // 前半/後半/延長前/延長後 → scores[0..3]
     const etPlayed = matchETPlayed(m);                   // 「延長を追加」した試合か（0-0でも0を入れる）
@@ -3548,7 +3587,7 @@ function draftOfficial(m){
       const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
       const prev = o.goals[i] || emptyGoalRow();
       return {
-        time:   e.minute ? e.minute+"分" : (prev.time||""),
+        time:   e.minute!=null ? minuteText(e.minute,e.period,m)+"分" : (prev.time||""),
         team:   (e.type==="og" ? (e.team==="H"?A.label:H.label) : R.label) || "",
         no:     (nm.match(/^(\d+)\s/)||[])[1] || (nm?"":prev.no||""),
         scorer: nm ? (nm.replace(/^\d+\s/,"")+suffix) : (prev.scorer||suffix),
