@@ -310,6 +310,8 @@ td.pt{font-weight:800;}
 .sheet-a4 .fx.l{text-align:left;}
 .sheet-a4 .fx.pickable{cursor:pointer;}
 .sheet-a4 .fx.pickable:hover{background:#fffbe9;}
+.sheet-a4 .kicklab{overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:1px 2px;border-radius:3px;}
+.sheet-a4 .kicklab:hover{background:#fffbe9;}
 .sheet-a4 .fx:focus{outline:none;background:var(--accentbg);overflow:visible;text-overflow:clip;}
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
@@ -3363,7 +3365,7 @@ const SHEET = { W:595.28, H:842,
     [32,739,"ﾏｯﾁｺﾐｯｼｮﾅｰ",6],[149,739,"主審",8],[252,739,"副審１",8],[360,739,"副審２",8],[464,739,"第４審判",8],
     [32,726,"運営責任者",7],[141,726,"記録担当",8],[256,726,"天候",8],[364,726,"気温",8],[472,726,"湿度",8],
     [45,713,"風",8],[145,713,"観客数",8],[248,713,"ピッチ(芝)",7],
-    [290,700,"前半",8],[290,688,"後半",8],[283,676,"延長前半",7],[283,663,"延長後半",7],[143,662,"KICK OFF",8],[293,650,"PK",8],
+    [290,700,"前半",8],[290,688,"後半",8],[283,676,"延長前半",7],[283,663,"延長後半",7],[293,650,"PK",8],
     /* メンバー表のヘッダー（No./時間/シュート/得点/選手名/番号/位置・延前延後）は
        セル中央そろえで memberHeaderHTML() が動的に描画（延長時のみ延前/延後） */
     [93,360,"警告・退場",8],[240,360,"監督",8],[341,360,"監督",8],[464,360,"警告・退場",8],
@@ -3805,6 +3807,13 @@ function sheetFields(){
   });
   F.push(box("H.pk", 230.7,264.5, 659.1,646.4));
   F.push(box("A.pk", 331.9,365.7, 659.1,646.4));
+  // キックオフ（コイントスで決めたチーム。タップでどちらのチームにも入れられる）
+  {
+    const kt = o.kickoffTeam;
+    const ktLabel = kt==="H" ? (o.H.name||"") : kt==="A" ? (o.A.name||"") : "";
+    F.push(`<span class="lb pickable kicklab" data-tapk="kickoff"
+      style="left:${pt(115)};top:${pt(SHEET.H-662-7.5*0.82)};width:${pt(112)};font-size:${pt(7.5)}">KICK OFF${ktLabel?"："+esc(ktLabel):""}</span>`);
+  }
 
   // メンバー表
   ROW_PLAYER.forEach(([t,b],i)=>{
@@ -4905,7 +4914,18 @@ $("#app").addEventListener("click", e=>{
   else if(k==="cardno")   openCardNoPicker(el.dataset.side, +el.dataset.idx);
   else if(k==="seq")      openSeqPicker(+el.dataset.idx, +el.dataset.ci);
   else if(k==="shot")     openShotPicker(el.dataset.side, +el.dataset.idx, el.dataset.half);
+  else if(k==="kickoff")  openKickoffPicker();
 });
+/* キックオフ＝コイントスで決めたチーム。どちらのチームにも入れられる */
+function openKickoffPicker(){
+  const o = state.official; if(!o) return;
+  const m = curMatchAny(); const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
+  const opts = [{v:"H",label:o.H.name||H.label||"ホーム"},{v:"A",label:o.A.name||A.label||"アウェイ"}];
+  chooseModal("キックオフ（コイントスで決めたチーム）", opts, (pick,act)=>{
+    if(act==="clear"){ o.kickoffTeam = null; render(); return; }
+    o.kickoffTeam = pick.v; render();
+  }, {clear:true});
+}
 /* シュート：前半/後半を選ぶ（1〜のリスト・手入力も可）。本人の計とチーム合計を自動計算 */
 const SHOT_HALF_LABEL = { s1:"前半", s2:"後半", e1:"延長前半", e2:"延長後半" };
 function openShotPicker(side, idx, half){
