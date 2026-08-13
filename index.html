@@ -466,6 +466,13 @@ td.pt{font-weight:800;}
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
 .sheet-a4 .fxw.l{text-align:left;}
+/* 一般公開の閲覧専用セル：inputと違い縦方向は自動で中央そろえにならないのでflexで中央そろえにする */
+.sheet-a4 .fx-ro{position:absolute;padding:0 1pt;box-sizing:border-box;color:#000;font-family:inherit;
+  letter-spacing:-0.2pt;line-height:1.15;
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.sheet-a4 .fx-ro.l{justify-content:flex-start;text-align:left;}
+.sheet-a4 .fx-ro.wrap{white-space:normal;word-break:break-word;line-height:1.05;text-overflow:clip;}
 
 /* ===== メンバー表（編集行） ===== */
 .lurow{display:flex;align-items:center;gap:7px;background:#fff;border:1.5px solid var(--line);
@@ -4153,8 +4160,8 @@ function box(path, x1, x2, yTop, yBot, o){
   o = o || {};
   const size = o.size || 8;
   const h = yTop - yBot;
-  if(state.officialReadOnly){   // 一般公開の閲覧専用ビュー：入力欄ではなく文字だけ表示
-    const cls = "fx" + (o.wrap?" fxw":"") + (o.align==="l"?" l":"");
+  if(state.officialReadOnly){   // 一般公開の閲覧専用ビュー：入力欄ではなく文字だけ表示（fx-ro＝縦方向も中央そろえ）
+    const cls = "fx-ro" + (o.wrap?" wrap":"") + (o.align==="l"?" l":"");
     return `<div class="${cls}"
       style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</div>`;
   }
