@@ -64,7 +64,8 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .topbar .ttl{flex:1;min-width:0;}
 .topbar h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.03em;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.topbar .sub{font-size:11.5px;opacity:.82;font-weight:500;}
+.topbar .sub{font-size:11.5px;opacity:.82;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .topbar .act{font-size:13px;padding:6px 11px;border-radius:8px;background:rgba(255,255,255,.16);font-weight:600;flex-shrink:0;}
 
 .screen{max-width:640px;margin:0 auto;padding:14px;}
@@ -274,6 +275,38 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
   color:var(--sub);background:#fff;border:1.5px solid var(--line);white-space:nowrap;}
 .tabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(33,72,199,.3);}
 
+/* ===== 大会画面：PC用の左サイドバー（980px以上だけ表示・それ未満は今までどおり上部タブ） =====
+   980px以上では「上の青いバーは画面いっぱいの幅・その下に左サイドバー＋右コンテンツ」のアプリらしい骨格にする。
+   青いバー・サイドバー・コンテンツをそれぞれ独立してスクロールさせる方式（sticky同士の重なりを避けるため）。 */
+.tsidebar{display:none;}
+@media (min-width:980px){
+  .tourwrap{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  .tourwrap > .topbar{position:static;flex:0 0 auto;}   /* 画面いっぱいの幅の固定ヘッダーとして常時表示 */
+  .tourwrap > .topbar .back{display:none;}   /* サイドバーに「大会一覧へ」があるので二重にしない */
+  .twrap{display:flex;align-items:stretch;flex:1;min-height:0;
+    max-width:1320px;margin:0 auto;width:100%;}
+  .tsidebar{display:flex;flex-direction:column;flex:0 0 240px;width:240px;height:100%;overflow-y:auto;
+    background:#fff;border-right:1.5px solid var(--line);padding:20px 16px;box-sizing:border-box;}
+  .tsb-back{align-self:flex-start;background:none;border:0;padding:0;margin-bottom:16px;
+    font-size:12.5px;font-weight:700;color:var(--accent);}
+  .tsb-head{display:flex;align-items:flex-start;gap:9px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--line);}
+  .tsb-head .mark{width:26px;height:26px;flex-shrink:0;margin-top:1px;}
+  .tsb-head b{display:block;font-size:14.5px;font-weight:800;color:var(--ink);line-height:1.35;}
+  .tsb-head small{display:block;font-size:11px;color:var(--sub);margin-top:3px;line-height:1.4;}
+  .tsidebar nav{display:flex;flex-direction:column;gap:2px;}
+  .tsidebar nav button{text-align:left;padding:10px 12px;border-radius:9px;font-size:13.5px;
+    font-weight:700;color:var(--sub);white-space:normal;}
+  .tsidebar nav button:hover{background:var(--paper);color:var(--ink);}
+  .tsidebar nav button.on{background:var(--accentbg);color:var(--accent);}
+  .tsb-foot{display:flex;flex-direction:column;align-items:flex-start;gap:9px;margin-top:20px;
+    padding-top:16px;border-top:1px solid var(--line);}
+  .tsb-foot .linkbtn{padding:0;font-size:12.5px;}
+  .tsb-foot .linkbtn.on{text-decoration:underline;}
+  .tmain{flex:1;min-width:0;height:100%;overflow-y:auto;}
+  .tmain > .tabs{display:none;}           /* 横タブはサイドバーのnavに置き換え */
+  .tmain > .screen{max-width:900px;padding:24px;}
+}
+
 /* ===== 試合カード ===== */
 .mcard{background:#fff;border:1.5px solid var(--line);border-radius:14px;
   margin-bottom:9px;box-shadow:var(--shadow);overflow:hidden;}
@@ -368,13 +401,13 @@ td.pt{font-weight:800;}
   padding:16px 14px;box-shadow:var(--shadow);margin-bottom:14px;}
 .scoreline{display:flex;align-items:center;gap:6px;}
 .scoreline .team{flex:1;min-width:0;text-align:center;}
-.scoreline .team .tn{font-size:14px;font-weight:700;line-height:1.3;
+.scoreline .team .tn{font-size:15px;font-weight:700;line-height:1.3;
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-.stepper{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:9px;}
-.stepper button{width:34px;height:34px;border-radius:50%;background:var(--accentbg);
-  color:var(--accent);font-size:20px;font-weight:800;line-height:1;flex-shrink:0;}
+.stepper{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;}
+.stepper button{width:44px;height:44px;border-radius:50%;background:var(--accentbg);
+  color:var(--accent);font-size:22px;font-weight:800;line-height:1;flex-shrink:0;}
 .stepper button:active{transform:scale(.9);}
-.stepper .v{font-size:30px;font-weight:800;min-width:40px;text-align:center;font-variant-numeric:tabular-nums;}
+.stepper .v{font-size:32px;font-weight:800;min-width:44px;text-align:center;font-variant-numeric:tabular-nums;}
 .vs{font-size:13px;color:var(--na);font-weight:700;padding:0 2px;}
 
 .evrow{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13.5px;}
@@ -482,6 +515,11 @@ td.pt{font-weight:800;}
   .mb-cols{break-inside:avoid;}
   body{background:#fff;padding:0;}
   .screen{max-width:none;padding:0;}
+  /* PC用サイドバー骨格（height:100vh/overflow:hidden）は印刷時は解除して全部そのまま出す */
+  .tourwrap{display:block !important;height:auto !important;overflow:visible !important;}
+  .twrap{display:block !important;max-width:none !important;}
+  .tsidebar{display:none !important;}
+  .tmain{overflow:visible !important;height:auto !important;}
   .tblwrap,.bracket,.card,.mcard{box-shadow:none;break-inside:avoid;}
   .bracket{overflow:visible;}
   /* 用紙は原寸で1ページに */
@@ -1569,7 +1607,8 @@ function viewHome(){
             <div class="block-label-row"><span class="block-label" style="margin:0">🏆 開催中の大会</span>
               ${mineOpen.length>4?`<button class="link-more" onclick="state.homeShowAll=!state.homeShowAll;render()">${showAll?"閉じる":"すべて見る"} ›</button>`:""}
             </div>
-            ${listOpen.length ? `<div class="tour-cards">${listOpen.map(tCardOf).join("")}</div>` : `<div class="empty">開催中の大会はまだありません。</div>`}
+            ${listOpen.length ? `<div class="tour-cards">${listOpen.map(tCardOf).join("")}</div>`
+              : `<div class="empty">開催中の大会はまだありません。<div style="margin-top:10px"><button class="btn sec sm" onclick="go('new')">＋ 大会を作成</button></div></div>`}
           </div>
           <div class="panel">
             <div class="block-label-row"><span class="block-label" style="margin:0">⚡ クイックアクセス</span></div>
@@ -1971,12 +2010,10 @@ async function createTournament(){
 }
 
 /* ---------- 大会画面 ---------- */
-function viewTournament(){
-  const t = state.t;
-  if(!t) return topbar({title:"大会", back:"go('home')"}) + `<div class="empty">読み込み中…</div>`;
+/* 大会内タブの一覧（サイドバー・横タブ両方で共用） */
+function tournamentTabs(t, cfg){
   const f = FORMATS[t.format];
-  const cfg = cfgOf(t);
-  const tabs = [
+  return [
     ["overview","大会概要"],
     ["schedule","日程・結果"],
     ...(f.hasLeague ? [["table","順位表"],["matrix","戦績表"]] : []),
@@ -1988,6 +2025,30 @@ function viewTournament(){
     ...(canEdit() && sportOf(t).cards ? [["cards","警告・退場"]] : []),
     ...(canEdit() ? [["team","チーム・選手"]] : []),
   ];
+}
+/* PC用サイドバー（大会に紐づく画面ならどこからでも呼べる・activeKeyは選択中のタブ名か"settings"） */
+function tournamentSidebar(activeKey){
+  const t = state.t, f = FORMATS[t.format], cfg = cfgOf(t);
+  const tabs = tournamentTabs(t, cfg);
+  return `<aside class="tsidebar noprint">
+    <button class="tsb-back" onclick="go('home')">‹ 大会一覧へ</button>
+    <div class="tsb-head">${TROPHY}<div><b>${esc(t.name)}</b><small>${esc(SPORTS[t.sport]?.label||"")}・${esc(f.label)}${cfg.host?"・"+esc(cfg.host):""}</small></div></div>
+    <nav>${tabs.map(([k,l])=>
+      `<button class="${activeKey===k?"on":""}" onclick="setTab('${k}')">${esc(l)}</button>`).join("")}</nav>
+    <div class="tsb-foot">
+      ${canEdit() ? `<button class="linkbtn${activeKey==="settings"?" on":""}" onclick="go('settings')">⚙ 大会の設定</button>` : ""}
+      <button class="linkbtn" onclick="window.print()">🖨 印刷・PDF</button>
+      <button class="linkbtn" onclick="shareTournament()">🔗 共有</button>
+      <button class="linkbtn" onclick="refresh()">↻ 更新</button>
+    </div>
+  </aside>`;
+}
+function viewTournament(){
+  const t = state.t;
+  if(!t) return topbar({title:"大会", back:"go('home')"}) + `<div class="empty">読み込み中…</div>`;
+  const f = FORMATS[t.format];
+  const cfg = cfgOf(t);
+  const tabs = tournamentTabs(t, cfg);
   // 保護者・一般が管理タブのURL状態で来ても、日程にフォールバックする
   const ADMIN_TABS = ["cards","team"];
   if(!canEdit() && ADMIN_TABS.includes(state.tab)) state.tab = "schedule";
@@ -1996,11 +2057,13 @@ function viewTournament(){
     bracket:tabBracket, scorers:tabScorers, assists:tabAssists, cards:tabCards, appear:tabAppearances, team:tabTeam,
   }[state.tab] || tabSchedule;
 
-  return topbar({ title:t.name, sub:`${SPORTS[t.sport]?.label||""}・${f.label}${cfg.host?"・"+cfg.host:""}`,
+  return `<div class="tourwrap">`
+  + topbar({ title:t.name, sub:`${SPORTS[t.sport]?.label||""}・${f.label}${cfg.host?"・"+cfg.host:""}`,
       back:"go('home')",
       act: canEdit() ? `<button class="act" onclick="go('settings')">設定</button>`
                      : `<button class="act" onclick="shareTournament()">共有</button>` })
-  + `<div class="tabs">${tabs.map(([k,l])=>
+  + `<div class="twrap">${tournamentSidebar(state.tab)}<div class="tmain">
+    <div class="tabs">${tabs.map(([k,l])=>
       `<button class="${state.tab===k?"on":""}" onclick="setTab('${k}')">${esc(l)}</button>`).join("")}</div>
     <div class="screen">${body()}
       <div class="btnrow noprint">
@@ -2008,9 +2071,10 @@ function viewTournament(){
         <button class="btn ghost sm" style="flex:1" onclick="shareTournament()">🔗 共有</button>
         <button class="btn ghost sm" style="flex:1" onclick="refresh()">↻ 更新</button>
       </div>
-    </div>`;
+    </div>
+  </div></div></div>`;
 }
-function setTab(k){ state.tab=k; render(); }
+function setTab(k){ state.tab=k; state.view="t"; render(); }
 
 /* 試合を「試合順」に並べる（キックオフ→ステージ→並び順） */
 function matchesInOrder(){
@@ -2694,45 +2758,12 @@ function viewMatch(){
     </div>`;
   }).join("") || `<div class="hint" style="padding:8px 2px">まだ記録がありません。</div>`;
 
-  return topbar({ title:"結果を入れる", sub:label, back:"go('t')" })
-  + `<div class="screen">
+  return `<div class="tourwrap">`
+  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:"go('t')" })
+  + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    <div class="screen">
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
     <fieldset class="ovlock"${locked?" disabled":""}>
-    ${(()=>{ const of=m.official||{}; const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
-      <summary>📋 公式記録の記入（審判・天候・会場など）</summary>
-      <label class="f">試合形式</label>
-      <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）40分ハーフ / 予選リーグ">
-      <label class="f">この試合だけ時間が違う場合（決勝だけ40分など・空なら大会の設定${ov.halfMin?"（"+ov.halfMin+"分ハーフ）":""}のまま）</label>
-      <div class="row2">
-        <div><input class="in" type="number" inputmode="numeric" placeholder="前後半 例）40" value="${meta.halfMin??""}" oninput="setMatchHalfMin('halfMin',this.value)"></div>
-        <div><input class="in" type="number" inputmode="numeric" placeholder="延長 例）10" value="${meta.etHalfMin??""}" oninput="setMatchHalfMin('etHalfMin',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">主審</label><input class="in" value="${esc(of.referee||"")}" oninput="setOfficialField('referee',this.value)"></div>
-        <div><label class="f">第4審判</label><input class="in" value="${esc(of.fourth||"")}" oninput="setOfficialField('fourth',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">副審1</label><input class="in" value="${esc(of.ar1||"")}" oninput="setOfficialField('ar1',this.value)"></div>
-        <div><label class="f">副審2</label><input class="in" value="${esc(of.ar2||"")}" oninput="setOfficialField('ar2',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">運営責任者</label><input class="in" value="${esc(of.admin||"")}" oninput="setOfficialField('admin',this.value)"></div>
-        <div><label class="f">記録担当</label><input class="in" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">天候</label><input class="in" value="${esc(of.weather||"")}" oninput="setOfficialField('weather',this.value)"></div>
-        <div><label class="f">気温</label><input class="in" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">湿度</label><input class="in" value="${esc(of.humid||"")}" oninput="setOfficialField('humid',this.value)"></div>
-        <div><label class="f">風</label><input class="in" value="${esc(of.wind||"")}" oninput="setOfficialField('wind',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">観客数</label><input class="in" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
-        <div><label class="f">ピッチ(芝)</label><input class="in" value="${esc(of.pitch||"")}" oninput="setOfficialField('pitch',this.value)"></div>
-      </div>
-      <p class="hint">ここで入れた内容は公式記録の上部にそのまま入ります。日時・会場・得点・メンバーは下と自動で連動します。</p>
-    </details>`; })()}
     <div class="scorebox">
       <div class="scoreline">
         <div class="team">
@@ -2752,6 +2783,10 @@ function viewMatch(){
             <button onclick="bump('away',1)">＋</button>
           </div>
         </div>
+      </div>
+      <div class="seg" style="margin-top:14px">
+        ${[["todo","未実施"],["live","試合中"],["done","🏁 終了"]].map(([k,l])=>
+          `<button class="${m.status===k?"on":""}" onclick="${k==="done"?"setMatchDone()":`setField('status','${k}')`}">${esc(l)}</button>`).join("")}
       </div>
       ${sp.scorers ? `
         <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
@@ -2791,35 +2826,62 @@ function viewMatch(){
         <p class="hint">枠をタップで <b>〇（成功）→ ×（失敗）→ 空</b> に変わります。〇の数が公式記録のPK欄に入ります。</p>` : ""}` : ""}
     </div>
 
-    <div class="card">
-      <label class="f">試合の状態</label>
-      <div class="seg">
-        ${[["todo","未実施"],["live","試合中"],["done","終了"]].map(([k,l])=>
-          `<button class="${m.status===k?"on":""}" onclick="setField('status','${k}')">${esc(l)}</button>`).join("")}
-      </div>
-      <label class="f">キックオフ</label>
-      <input class="in" type="datetime-local" value="${esc(kickoffLocal)}" oninput="setKickoff(this.value)">
-      <label class="f">会場</label>
-      <input class="in" value="${esc(m.venue||"")}" oninput="setField('venue',this.value)" placeholder="例）第1グラウンド">
-    </div>
-
     ${sp.scorers ? `<div class="card">
-      <label class="f">得点者・記録</label>
+      <label class="f">得点・選手交代・警告</label>
+      <div class="btnrow">
+        <button class="btn sec" style="flex:1" onclick="openEventSheet('goal')">⚽ 得点</button>
+        ${sp.cards?`<button class="btn sec" style="flex:1" onclick="openEventSheet('card')">🟨 警告・退場</button>`:""}
+      </div>
+      <div class="btnrow">
+        <button class="btn sec" style="flex:1" onclick="openSubSheet()">🔄 選手交代</button>
+      </div>
       ${evList}
-      <div class="btnrow">
-        <button class="btn sec sm" style="flex:1" onclick="openEventSheet('goal')">⚽ 得点を追加</button>
-        ${sp.cards?`<button class="btn sec sm" style="flex:1" onclick="openEventSheet('card')">🟨 カードを追加</button>`:""}
-      </div>
-      <div class="btnrow">
-        <button class="btn sec sm" style="flex:1" onclick="openSubSheet()">🔄 選手交代を追加</button>
-      </div>
     </div>` : ""}
 
     <div class="card">
+      <label class="f">キックオフ・会場</label>
+      <input class="in" type="datetime-local" value="${esc(kickoffLocal)}" oninput="setKickoff(this.value)">
+      <input class="in" style="margin-top:8px" value="${esc(m.venue||"")}" oninput="setField('venue',this.value)" placeholder="会場（例：第1グラウンド）">
       <label class="f">メモ（保護者・観覧者にも表示されます）</label>
       <input class="in" value="${esc(m.note||"")}" oninput="setField('note',this.value)" placeholder="例）雷のため30分遅延中／雨天のため時間短縮">
       <p class="hint">試合の連絡に。保存すると、結果を見ている人の画面にも 📣 で出ます。</p>
     </div>
+
+    ${(()=>{ const of=m.official||{}; const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
+      <summary>📋 公式記録の詳細（審判・天候など・あとからでもOK）</summary>
+      <label class="f">試合形式</label>
+      <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）40分ハーフ / 予選リーグ">
+      <label class="f">この試合だけ時間が違う場合（決勝だけ40分など・空なら大会の設定${ov.halfMin?"（"+ov.halfMin+"分ハーフ）":""}のまま）</label>
+      <div class="row2">
+        <div><input class="in" type="number" inputmode="numeric" placeholder="前後半 例）40" value="${meta.halfMin??""}" oninput="setMatchHalfMin('halfMin',this.value)"></div>
+        <div><input class="in" type="number" inputmode="numeric" placeholder="延長 例）10" value="${meta.etHalfMin??""}" oninput="setMatchHalfMin('etHalfMin',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">主審</label><input class="in" value="${esc(of.referee||"")}" oninput="setOfficialField('referee',this.value)"></div>
+        <div><label class="f">第4審判</label><input class="in" value="${esc(of.fourth||"")}" oninput="setOfficialField('fourth',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">副審1</label><input class="in" value="${esc(of.ar1||"")}" oninput="setOfficialField('ar1',this.value)"></div>
+        <div><label class="f">副審2</label><input class="in" value="${esc(of.ar2||"")}" oninput="setOfficialField('ar2',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">運営責任者</label><input class="in" value="${esc(of.admin||"")}" oninput="setOfficialField('admin',this.value)"></div>
+        <div><label class="f">記録担当</label><input class="in" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">天候</label><input class="in" value="${esc(of.weather||"")}" oninput="setOfficialField('weather',this.value)"></div>
+        <div><label class="f">気温</label><input class="in" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">湿度</label><input class="in" value="${esc(of.humid||"")}" oninput="setOfficialField('humid',this.value)"></div>
+        <div><label class="f">風</label><input class="in" value="${esc(of.wind||"")}" oninput="setOfficialField('wind',this.value)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">観客数</label><input class="in" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
+        <div><label class="f">ピッチ(芝)</label><input class="in" value="${esc(of.pitch||"")}" oninput="setOfficialField('pitch',this.value)"></div>
+      </div>
+      <p class="hint">ここで入れた内容は公式記録の上部にそのまま入ります。日時・会場・得点・メンバーは下と自動で連動します。</p>
+    </details>`; })()}
 
     </fieldset>
     ${locked
@@ -2830,7 +2892,15 @@ function viewMatch(){
       <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openOfficial('${m.id}'))">📄 公式記録</button>
     </div>
     <div class="btnrow"><button class="btn ghost" onclick="go('t')">${locked?"戻る":"保存せずに戻る"}</button></div>
-  </div>`;
+    </div>
+  </div></div></div>`;
+}
+/* 「試合を終了する」は取り消しにくい操作なので確認する（誤タップ防止） */
+function setMatchDone(){
+  const m = curMatch(); if(!m) return;
+  if(m.status==="done") return;
+  if(!confirm("この試合を「終了」にします。以降は内容を変更できなくなります（後から「修正する」で直せます）。よろしいですか？")) return;
+  setField('status','done');
 }
 
 function curMatch(){ return state.matches.find(x=>x.id===state.matchId); }
@@ -3105,8 +3175,10 @@ function viewTeams(){
     (a.grp||"").localeCompare(b.grp||"") || a.sort_order-b.sort_order);
   const blocks = blocksOf(state.t);
   const f = FORMATS[state.t.format];
-  return topbar({ title:"チーム・選手", back:"go('t')" })
-  + `<div class="screen">
+  return `<div class="tourwrap">`
+  + topbar({ title:"チーム・選手", sub:state.t.name, back:"go('t')" })
+  + `<div class="twrap">${tournamentSidebar("team")}<div class="tmain">
+    <div class="screen">
     <p class="lead">この大会にエントリーするチームと選手です。台帳から入れると、背番号ごとそのまま入ります（この大会だけ番号を書き換えることもできます）。</p>
     ${ts.map(t=>{
       const club = t.club_id ? clubById(t.club_id) : null;
@@ -3116,7 +3188,7 @@ function viewTeams(){
         ${blocks.length>0 && f.hasLeague ? `<select class="in" style="max-width:120px" onchange="editTeam('${t.id}','grp',this.value)">
           ${blocks.map(b=>`<option value="${b.id}" ${t.grp===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}
         </select>` : ""}
-        <button class="btn ghost sm" style="flex:0 0 auto;width:auto" onclick="removeTeam('${t.id}')">削除</button>
+        <button class="btn danger sm" style="flex:0 0 auto;width:auto" onclick="removeTeam('${t.id}')">削除</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px">
         <label class="f" style="margin:0">選手 ${(t.players||[]).length}名${club?`　<span style="color:var(--accent)">台帳：${esc(club.name)}</span>`:""}</label>
@@ -3134,7 +3206,8 @@ function viewTeams(){
     ${f.hasLeague?`<div class="btnrow"><button class="btn ghost sm" onclick="rebuildLeague()">🔄 リーグの対戦カードを作り直す</button></div>
       <p class="hint">チームやブロックを変えたら、対戦カードを作り直してください（入力済みの結果は消えます）。</p>`:""}
     <button class="btn" style="margin-top:6px" onclick="saveTeams()">保存する</button>
-  </div>`;
+    </div>
+  </div></div></div>`;
 }
 function editTeam(id,k,v){
   const t = state.teams.find(x=>x.id===id); if(!t) return;
@@ -3820,9 +3893,11 @@ function viewLineup(){
   const warn = starters.length!==need
     ? `<span style="color:var(--warn)">スタメン ${starters.length}／${need}</span>` : `スタメン ${starters.length}`;
 
-  return topbar({ title:"メンバー表", sub:`${H.label} vs ${A.label}`, back:"go('t')",
+  return `<div class="tourwrap">`
+  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"go('t')",
       act:`<button class="act" onclick="saveLineup()">保存</button>` })
-  + `<div class="tabs">
+  + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    <div class="tabs">
       <button class="${side==="H"?"on":""}" onclick="state.lineupSide='H';render()">${esc(H.label||"ホーム")}</button>
       <button class="${side==="A"?"on":""}" onclick="state.lineupSide='A';render()">${esc(A.label||"アウェイ")}</button>
     </div>
@@ -3848,7 +3923,8 @@ function viewLineup(){
         <button class="btn sec sm" style="flex:1" onclick="saveLineup(true).then(()=>openOfficial('${m.id}'))">📄 公式記録へ</button>
       </div>
     </div>
-    ${lineupSheetHTML(m)}`;
+    ${lineupSheetHTML(m)}
+  </div></div></div>`;
 }
 
 /* --- 操作 --- */
@@ -4265,9 +4341,11 @@ function viewOfficial(){
   const m = state.matches.find(x=>x.id===state.matchId);
   if(!m) return topbar({title:"公式記録", back:"go('t')"}) + `<div class="empty">見つかりません。</div>`;
   const z = state.sheetZoom || 1;
-  return topbar({ title:"公式記録", sub:state.t.name, back:"backFromOfficial()",
+  return `<div class="tourwrap">`
+  + topbar({ title:"公式記録", sub:state.t.name, back:"backFromOfficial()",
       act:`<button class="act" onclick="saveOfficial()">保存</button>` })
-  + `<div class="sheetbar noprint">
+  + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    <div class="sheetbar noprint">
       <span>表示の大きさ</span>
       ${[0.6,0.8,1,1.4].map(v=>`<button class="${z===v?"on":""}" onclick="state.sheetZoom=${v};render()">${Math.round(v*100)}%</button>`).join("")}
       <button onclick="window.print()">🖨 印刷・PDF</button>
@@ -4295,7 +4373,8 @@ function viewOfficial(){
       </div>
       <p class="hint" style="margin-top:2px">得点・スコア・PKは、公式記録を開くたび試合結果から自動で入れ直します（審判名・メンバー・シュート・経過記号などの手入力は残ります）。</p>
       <button class="btn" onclick="saveOfficial()">保存する</button>
-    </div>`;
+    </div>
+  </div></div></div>`;
 }
 function officialLinkFor(matchId){ return location.origin + location.pathname + "#om=" + matchId; }
 /* 日程・結果カードなどから、公式記録編集画面を開かずにその場で公開/非公開を切り替える */
@@ -4519,8 +4598,10 @@ async function saveOfficial(silent){
 /* ---------- 大会の設定 ---------- */
 function viewSettings(){
   const t = state.t, cfg = cfgOf(t);
-  return topbar({ title:"大会の設定", back:"go('t')" })
-  + `<div class="screen">
+  return `<div class="tourwrap">`
+  + topbar({ title:"大会の設定", sub:t.name, back:"go('t')" })
+  + `<div class="twrap">${tournamentSidebar("settings")}<div class="tmain">
+    <div class="screen">
     <div class="card">
       <label class="f">大会名</label>
       <input class="in" value="${esc(t.name)}" onchange="t_set('name',this.value)">
@@ -4602,7 +4683,8 @@ function viewSettings(){
     <button class="btn" onclick="saveSettings()">保存する</button>
     <div class="btnrow"><button class="btn sec" onclick="go('teams')">チーム・選手を編集</button></div>
     <div class="btnrow"><button class="btn danger" onclick="deleteTournament()">この大会を削除する</button></div>
-  </div>`;
+    </div>
+  </div></div></div>`;
 }
 function t_set(k,v){ state.t[k] = v; }
 function cfg_set(k,v){ state.t.settings = Object.assign(cfgOf(state.t), {[k]:v}); }
@@ -4682,7 +4764,7 @@ function r1Render(){
   const ms = state.matches.filter(m=>m.stage==="ko" && m.round===1 && m.slot!==99).sort((a,b)=>a.slot-b.slot);
   body.innerHTML = (ms.length ? ms.map((m,i)=>`<div class="bmmatch">
       <div class="bmmhead"><span class="bmno">マッチ${i+1}</span>
-        <button class="btn ghost sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
+        <button class="btn danger sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
       ${r1Sel(m,"home")}<div class="bmvs2">vs</div>${r1Sel(m,"away")}
     </div>`).join("") : `<div class="hint" style="padding:6px 2px">まだ1回戦のマッチがありません。「＋ マッチを追加」で作ってください。</div>`)
     + `<button class="btn sec sm" onclick="bmAddMatch(1)" style="margin-top:8px">＋ マッチを追加</button>`;
@@ -4729,7 +4811,7 @@ function laterRender(){
       <div class="hint" style="margin:0 0 6px">${r}回戦（${ms.length}マッチ）</div>
       ${ms.map((m,i)=>`<div class="bmmatch">
         <div class="bmmhead"><span class="bmno">マッチ${i+1}</span>
-          <button class="btn ghost sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
+          <button class="btn danger sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
         ${laterSel(m,"home")}<div class="bmvs2">vs</div>${laterSel(m,"away")}
       </div>`).join("") || `<div class="hint" style="padding:4px 2px">マッチなし</div>`}
       <button class="btn sec sm" onclick="bmAddMatch(${r})">＋ この回戦にマッチを追加</button></div>`;
@@ -4757,6 +4839,7 @@ async function bmAddMatch(round){
   if(bmActive) bmActive(); else render();
 }
 async function bmDelMatch(id){
+  if(!confirm("このマッチを削除します。よろしいですか？")) return;
   state.matches = state.matches.filter(m=>m.id!==id);
   try{ await DB.remove("gn_matches", id); }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
   if(bmActive) bmActive(); else render();
