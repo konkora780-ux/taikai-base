@@ -2026,7 +2026,7 @@ function tournamentTabs(t, cfg){
     ...(f.hasLeague ? [["table","順位表"],["matrix","戦績表"]] : []),
     ...(f.hasKO ? [["bracket","トーナメント表"]] : []),
     ...(sportOf(t).scorers ? [["scorers","得点ランキング"]] : []),
-    ...(sportOf(t).scorers && cfg.overview?.hasAssist ? [["assists","アシストランキング"]] : []),
+    ...(sportOf(t).scorers ? [["assists","アシストランキング"]] : []),
     ["appear","出場記録"],
     // 警告・退場／チーム・選手 は管理者だけ（保護者・一般には出さない）
     ...(canEdit() && sportOf(t).cards ? [["cards","警告・退場"]] : []),
@@ -2974,7 +2974,7 @@ function openEventSheet(kind, editIdx){
     ? [["goal","得点"],["pk","PK"],["og","オウンゴール"]]
     : [["yellow","🟨 警告"],["red","🟥 退場"],["green","🟩 グリーン"]];
   const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
-  const hasAssist = kind==="goal" && !!(cfgOf(state.t).overview||{}).hasAssist;
+  const hasAssist = kind==="goal";   // アシストは得点者と同じように毎回選べる（大会設定でのON/OFFは廃止）
   let team = editing ? orig.team : "H";
   let type = editing ? orig.type : types[0][0];
   let period = editing ? (orig.period || periods[0]) : periods[0];
@@ -4099,7 +4099,7 @@ function draftOfficial(m){
     o.goals = goalsE.slice(0,28).map((e,i)=>{   // 1〜14点=1枚目 / 15〜28点=2枚目に続ける
       const R = e.team==="H"?H:A;
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
-      const anm = e.assistId ? playerName(R.id, e.assistId).replace(/^\d+\s/,"") : "";
+      const anm = e.assistId ? playerName(R.id, e.assistId) : "";   // 背番号も残す（例：「8 中澄恵大」）
       const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
       const prev = o.goals[i] || emptyGoalRow();
       return {
@@ -4674,12 +4674,6 @@ function viewSettings(){
         <button class="${!cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',false);render()">なし</button>
         <button class="${cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',true);render()">あり</button>
       </div>
-      ${sportOf(t).scorers?`<label class="f">アシストランキング</label>
-      <div class="seg">
-        <button class="${!cfg.overview?.hasAssist?"on":""}" onclick="ov_set('hasAssist',false);render()">なし</button>
-        <button class="${cfg.overview?.hasAssist?"on":""}" onclick="ov_set('hasAssist',true);render()">あり</button>
-      </div>
-      <p class="hint" style="margin:-4px 0 0">「あり」にすると「得点を追加」でアシスト選手を選べるようになり、タブに「アシストランキング」が出ます。</p>`:""}
       <label class="f">順位決定方法</label>
       <textarea class="in" style="min-height:96px" onchange="ov_set('rankRule',this.value)" placeholder="(1)勝点 (2)得失点差 …">${esc(cfg.overview?.rankRule||"")}</textarea>
       <label class="f">警告の累積</label>
