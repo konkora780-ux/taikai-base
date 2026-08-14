@@ -3760,7 +3760,6 @@ const SHEET = { W:595.28, H:842,
     [93,360,"警告・退場",8],[240,360,"監督",8],[341,360,"監督",8],[464,360,"警告・退場",8],
     [37,348,"時間",8],[65,348,"種別",6],[82,348,"番号",6],[118,348,"選手名",8],[172,348,"理由",8],
     [408,348,"時間",8],[436,348,"種別",6],[453,348,"番号",6],[489,348,"選手名",8],[543,348,"理由",8],
-    [234,329,"後半",7],[251,329,"前半",7],[282,329,"チーム合計",6.5],[335,329,"前半",7],[352,329,"後半",7],
     [285,310,"シュート",7],[293,297,"GK",7],[293,284,"CK",7],[286,271,"直接FK",7],[286,259,"間接FK",7],
     [285,246,"(ｵﾌｻｲﾄﾞ)",6],[293,233,"PK",7],
     [32,221,"得点時間",7],[67,221,"得点チーム",7],[116,221,"No.",7],[151,221,"得点者",7],[201,221,"アシスト",7],
@@ -3779,6 +3778,9 @@ const ROW_CARD   = [[343.7,331.1],[331.1,318.5],[318.5,305.9],[305.9,293.2],[293
                     [280.6,268],[268,255.4],[255.4,242.8],[242.8,230.2]];
 const ROW_TOTAL  = [[318.5,305.9],[305.9,293.2],[293.2,280.6],[280.6,268],[268,255.4],[255.4,242.8],[242.8,230.2]];
 const TOTAL_KEYS = ["shot","gk","ck","fk","ifk","off","pk"];
+// チーム合計の列区切り（左から）：H＝延前/延後/後半/前半/計、A＝計/前半/後半/延前/延後（中央のシュート等ラベル欄281.3-315.1を挟んで左右対称）
+const TOT_H = [199.9,216.18,232.46,248.74,265.02,281.3];
+const TOT_A = [315.1,331.38,347.66,363.94,380.22,396.5];
 const ROW_GOAL   = [[217.6,204.9],[204.9,192.3],[192.3,179.7],[179.7,167.1],[167.1,154.5],[154.5,141.9],[141.9,129.3]];
 /* 得点経過の行は入った得点の数だけ動的に増やす（最低7・最大14）。同じ枠内を等分する。 */
 const GOAL_TOP = 217.6, GOAL_BOT = 129.3;
@@ -3804,7 +3806,7 @@ function emptySide(){
     scores:[null,null,null,null],
     lineup:Array.from({length:20},()=>({memberId:null,no:"",name:"",pos:"",g:"",s1:"",s2:"",st:"",e1:"",e2:"",subNo:"",subTime:""})),
     cards:Array.from({length:9},()=>({time:"",kind:"",no:"",name:"",reason:""})),
-    tot:Object.fromEntries(TOTAL_KEYS.map(k=>[k,["","",""]])),
+    tot:Object.fromEntries(TOTAL_KEYS.map(k=>[k,["","","","",""]])),   // 0前半/1後半/2計/3延前/4延後
     pks:Array.from({length:14},()=>""),
   };
 }
@@ -4135,6 +4137,19 @@ function memberHeaderHTML(et){
   o += cl(433.1,et?517.5:483.7, GRP,"シュート",8) + cl(517.5,568.1, GRP,"交代",8);
   return o;
 }
+/* チーム合計欄のヘッダー（延前/延後/後半/前半/計・中央にチーム合計タイトル）。中央そろえで作るので位置がずれない */
+function totalsHeaderHTML(){
+  const S = SHEET.H;
+  const cl = (x1,x2,y,t,s)=> `<span class="lbc" style="left:${pt((x1+x2)/2)};top:${pt(S-y-s*0.82)};font-size:${pt(s)}">${esc(t)}</span>`;
+  const Y = 329;
+  let o = "";
+  o += cl(TOT_H[0],TOT_H[1], Y,"延前",6) + cl(TOT_H[1],TOT_H[2], Y,"延後",6)
+     + cl(TOT_H[2],TOT_H[3], Y,"後半",6.5) + cl(TOT_H[3],TOT_H[4], Y,"前半",6.5) + cl(TOT_H[4],TOT_H[5], Y,"計",6.5);
+  o += cl(281.3,315.1, Y,"チーム合計",6.5);
+  o += cl(TOT_A[0],TOT_A[1], Y,"計",6.5) + cl(TOT_A[1],TOT_A[2], Y,"前半",6.5) + cl(TOT_A[2],TOT_A[3], Y,"後半",6.5)
+     + cl(TOT_A[3],TOT_A[4], Y,"延前",6) + cl(TOT_A[4],TOT_A[5], Y,"延後",6);
+  return o;
+}
 /* --- 用紙を描く --- */
 const pt = v => v.toFixed(2)+"pt";
 function sheetLines(){
@@ -4149,6 +4164,7 @@ function sheetLines(){
     out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-y)};width:${pt(568.1-28.4)};height:.5pt"></i>`; }
   // メンバー表のヘッダー（セル中央そろえ・延長時のみ延前/延後）
   out += memberHeaderHTML(matchETPlayed(curMatchAny()||{}));
+  out += totalsHeaderHTML();
   // スタメン(11人)とサブ(12人目以降)の境目を太線に（メンバー表の両チーム）
   out += `<i class="ln" style="left:${pt(28.4)};top:${pt(SHEET.H-482.5)};width:${pt(568.1-28.4)};height:1.5pt"></i>`;
   // PK経過欄：チーム名と〇の数の仕切り線
@@ -4162,7 +4178,7 @@ function box(path, x1, x2, yTop, yBot, o){
   const h = yTop - yBot;
   if(state.officialReadOnly){   // 一般公開の閲覧専用ビュー：入力欄ではなく文字だけ表示（fx-ro＝縦方向も中央そろえ）
     const cls = "fx-ro" + (o.wrap?" wrap":"") + (o.align==="l"?" l":"");
-    return `<div class="${cls}"
+    return `<div class="${cls}" data-p="${path}"
       style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</div>`;
   }
   if(o.wrap){   // 折り返し可能な枠（チーム名など）＝textarea
@@ -4259,15 +4275,19 @@ function sheetFields(){
     F.push(box(`A.cards.${i}.reason`,534.3,568.1,t,b,{align:"l",size:6}));
   });
 
-  // チーム合計
+  // チーム合計（延長込み・5列＝延前/延後/後半/前半/計。延長非対象は空欄のまま使わなくてOK）
   ROW_TOTAL.forEach(([t,b],i)=>{
     const k = TOTAL_KEYS[i];
-    F.push(box(`H.tot.${k}.1`, 230.7,247.6, t,b,{size:7}));   // 後半
-    F.push(box(`H.tot.${k}.0`, 247.6,264.5, t,b,{size:7}));   // 前半
-    F.push(box(`H.tot.${k}.2`, 264.5,281.3, t,b,{size:7}));   // 計
-    F.push(box(`A.tot.${k}.2`, 315.1,331.9, t,b,{size:7}));
-    F.push(box(`A.tot.${k}.0`, 331.9,348.8, t,b,{size:7}));
-    F.push(box(`A.tot.${k}.1`, 348.8,365.7, t,b,{size:7}));
+    F.push(box(`H.tot.${k}.3`, TOT_H[0],TOT_H[1], t,b,{size:6.5}));   // 延前
+    F.push(box(`H.tot.${k}.4`, TOT_H[1],TOT_H[2], t,b,{size:6.5}));   // 延後
+    F.push(box(`H.tot.${k}.1`, TOT_H[2],TOT_H[3], t,b,{size:7}));     // 後半
+    F.push(box(`H.tot.${k}.0`, TOT_H[3],TOT_H[4], t,b,{size:7}));     // 前半
+    F.push(box(`H.tot.${k}.2`, TOT_H[4],TOT_H[5], t,b,{size:7}));     // 計
+    F.push(box(`A.tot.${k}.2`, TOT_A[0],TOT_A[1], t,b,{size:7}));     // 計
+    F.push(box(`A.tot.${k}.0`, TOT_A[1],TOT_A[2], t,b,{size:7}));     // 前半
+    F.push(box(`A.tot.${k}.1`, TOT_A[2],TOT_A[3], t,b,{size:7}));     // 後半
+    F.push(box(`A.tot.${k}.3`, TOT_A[3],TOT_A[4], t,b,{size:6.5}));   // 延前
+    F.push(box(`A.tot.${k}.4`, TOT_A[4],TOT_A[5], t,b,{size:6.5}));   // 延後
   });
 
   // 得点経過（時間=手書き / チーム=選択 / 番号=出場者から選択→得点者自動 / アシスト=手書き / 経過=記号選択）
@@ -5403,7 +5423,7 @@ $("#app").addEventListener("input", e=>{
   const el = e.target.closest(".fx"); if(!el || !el.dataset.p || !state.official) return;
   pset(state.official, el.dataset.p, el.value);
   if(/^(H|A)\.scores\./.test(el.dataset.p)) refreshTotals();
-  const tm = el.dataset.p.match(/^(H|A)\.tot\.(\w+)\.(0|1)$/);   // 前半/後半→計を自動計算（I10/I11）
+  const tm = el.dataset.p.match(/^(H|A)\.tot\.(\w+)\.(0|1|3|4)$/);   // 前半/後半/延前/延後→計を自動計算（I10/I11）
   if(tm){ recomputeTotal(tm[1], tm[2]); }
   // 選手のシュート前半/後半を手入力→本人の計＋チーム合計を自動計算
   const sm = el.dataset.p.match(/^(H|A)\.lineup\.\d+\.(s1|s2|e1|e2)$/);
@@ -5446,18 +5466,20 @@ function computeShots(side){
   });
   S.tot.shot[0] = f?String(f):"";
   S.tot.shot[1] = h?String(h):"";
+  S.tot.shot[3] = ef?String(ef):"";
+  S.tot.shot[4] = eh?String(eh):"";
   S.tot.shot[2] = (f||h||ef||eh) ? String(f+h+ef+eh) : "";   // 計＝前後半＋延長ぶん
 }
 /* 計算結果をDOMに反映（再描画せずに・手入力中のフォーカスを保つため） */
 function syncShotDOM(side){
   const S = state.official[side];
   S.lineup.forEach((r,i)=>{ const el=document.querySelector(`.fx[data-p="${side}.lineup.${i}.st"]`); if(el) el.value=r.st; });
-  ["0","1","2"].forEach(j=>{ const el=document.querySelector(`.fx[data-p="${side}.tot.shot.${j}"]`); if(el) el.value=S.tot.shot[j]; });
+  ["0","1","2","3","4"].forEach(j=>{ const el=document.querySelector(`.fx[data-p="${side}.tot.shot.${j}"]`); if(el) el.value=S.tot.shot[j]; });
 }
-/* チーム合計：計 = 前半 + 後半 */
+/* チーム合計：計 = 前半 + 後半 + 延前 + 延後 */
 function recomputeTotal(side, key){
   const arr = state.official[side].tot[key];
-  arr[2] = String(num(arr[0]) + num(arr[1]));
+  arr[2] = String(num(arr[0]) + num(arr[1]) + num(arr[3]) + num(arr[4]));
   const el = document.querySelector(`.fx[data-p="${side}.tot.${key}.2"]`);
   if(el) el.value = arr[2];
 }
