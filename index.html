@@ -1773,7 +1773,7 @@ function viewHome(){
 }
 
 function scrollToPublicTournaments(){
-  const target = document.getElementById(state.user ? "current-tournaments" : "tlist");
+  const target = document.getElementById("current-tournaments") || document.getElementById("tlist");
   if(!target) return;
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   requestAnimationFrame(()=>{
