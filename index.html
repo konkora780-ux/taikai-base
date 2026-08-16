@@ -1740,7 +1740,7 @@ function viewHome(){
           ${statCard(HI.check,"c-purple","終了した試合", hs?hs.doneAll:"…", "試合")}
         </div>
         <div class="main-grid">
-          <div class="panel">
+          <div class="panel" id="current-tournaments">
             <div class="block-label-row"><span class="block-label" style="margin:0">🏆 開催中の大会</span>
               ${mineOpen.length>4?`<button class="link-more" onclick="state.homeShowAll=!state.homeShowAll;render()">${showAll?"閉じる":"すべて見る"} ›</button>`:""}
             </div>
@@ -1773,7 +1773,7 @@ function viewHome(){
 }
 
 function scrollToPublicTournaments(){
-  const target = document.getElementById("tlist");
+  const target = document.getElementById(state.user ? "current-tournaments" : "tlist");
   if(!target) return;
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   requestAnimationFrame(()=>{
