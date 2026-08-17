@@ -1806,10 +1806,13 @@ function viewHome(){
   const isOpenT = t=>{ const b = hs && hs.byT[t.id]; if(!b) return true; return b.total===0 || b.done<b.total; };
   const mineOpen = mine.filter(isOpenT);
   const mineDone = mine.filter(t=>!isOpenT(t));   // 自分の団体の終了済み大会（従来はどこにも出ていなかった）
+  const othersOpen = others.filter(isOpenT);
+  const othersDone = others.filter(t=>!isOpenT(t));   // 従来は開催中/終了を問わず「開催中の大会」に全部混ざっていた（未ログイン時に顕著）
   const qaTarget = mineOpen[0] || mine[0];
   const qaGo = qaTarget ? `openTournament('${qaTarget.id}')` : "go('new')";
   const showQA = mineOpen.length <= 1;   // 開催中が2つ以上あると「どの大会か」曖昧になるので隠す
   const showDone = !!state.homeShowDone;
+  const showOthersDone = !!state.homeShowOthersDone;
 
   const cardOf = (t, opts)=>{
     opts = opts || {};
@@ -1922,8 +1925,14 @@ function viewHome(){
         </div>
         <div class="pick-grid">${(showDone?mineDone:mineDone.slice(0,4)).map(t=>cardOf(t,{done:true})).join("")}</div>` : ""}
       <div class="block-label" id="tlist">${state.user?"ほかの団体の公開大会":"開催中の大会"}</div>
-      ${others.length ? `<div class="pick-grid">${others.map(cardOf).join("")}</div>`
-        : `<div class="empty">${state.loading?"読み込み中…":state.user?"ほかの団体が作った大会はまだありません。":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
+      ${othersOpen.length ? `<div class="pick-grid">${othersOpen.map(cardOf).join("")}</div>`
+        : `<div class="empty">${state.loading?"読み込み中…"
+            : others.length ? "現在、開催中の大会はありません。"
+            : state.user?"ほかの団体が作った大会はまだありません。":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
+      ${othersDone.length ? `<div class="block-label-row" style="margin-top:18px"><span class="block-label" style="margin:0">🏁 終了した大会</span>
+          ${othersDone.length>4?`<button class="link-more" onclick="state.homeShowOthersDone=!state.homeShowOthersDone;render()">${showOthersDone?"閉じる":"すべて見る"} ›</button>`:""}
+        </div>
+        <div class="pick-grid">${(showOthersDone?othersDone:othersDone.slice(0,4)).map(t=>cardOf(t,{done:true})).join("")}</div>` : ""}
     </div>
 
     <div class="feat-band"><div class="feat-band-in">
@@ -5548,7 +5557,7 @@ async function deleteTournament(){
    ========================================================================== */
 function go(v){
   state.view = v;
-  if(v==="home"){ location.hash = ""; if(state.user) loadHomeStats(); }
+  if(v==="home"){ location.hash = ""; loadHomeStats(); }
   if(v==="t" && state.t) location.hash = "t=" + state.t.id;
   render();
 }
@@ -5600,11 +5609,11 @@ async function reloadList(){
 /* ホーム画面の集計（自分が運営する大会だけ・チーム数/試合の進み具合/今日の試合など）。1クエリでまとめて取る */
 let _homeStatsBusy = false;
 async function loadHomeStats(){
-  if(!state.user || _homeStatsBusy) return;
+  if(_homeStatsBusy || !state.list.length) return;
   _homeStatsBusy = true;
   try{
-    const mine = state.list.filter(t=>t.org_id===state.user.id);
-    const ids = mine.map(t=>t.id);
+    // 自分の団体ぶんだけでなく一覧に出る全大会を対象にする（未ログインのゲスト表示でも開催中/終了を判定できるように）
+    const ids = state.list.map(t=>t.id);
     let matches=[], teams=[];
     if(ids.length){
       if(sb){
@@ -5625,13 +5634,16 @@ async function loadHomeStats(){
     const byT = {};
     ids.forEach(id=> byT[id] = { teams:0, total:0, done:0, live:0 });
     teams.forEach(x=>{ if(byT[x.tournament_id]) byT[x.tournament_id].teams++; });
+    // 上部の統計カード（進行中/本日/終了の試合数）は自分の団体ぶんだけに絞る（ゲストには表示されないので0のままでよい）
+    const mineIds = new Set(state.user ? state.list.filter(t=>t.org_id===state.user.id).map(t=>t.id) : []);
     let liveAll=0, todayAll=0, doneAll=0;
     matches.forEach(m=>{
       const b = byT[m.tournament_id]; if(!b) return;
       b.total++;
-      if(m.status==="done"){ b.done++; doneAll++; }
-      if(m.status==="live"){ b.live++; liveAll++; }
-      if(m.kickoff && localDate(m.kickoff)===today) todayAll++;
+      const mine = mineIds.has(m.tournament_id);
+      if(m.status==="done"){ b.done++; if(mine) doneAll++; }
+      if(m.status==="live"){ b.live++; if(mine) liveAll++; }
+      if(mine && m.kickoff && localDate(m.kickoff)===today) todayAll++;
     });
     state.homeStats = { byT, liveAll, todayAll, doneAll };
   }catch(e){ console.error(e); }
@@ -6069,7 +6081,7 @@ function recomputeTotal(side, key){
 
   const m = location.hash.match(/t=([0-9a-f-]{36})/i);
   if(m) await openTournament(m[1]);
-  else { render(); if(state.user) loadHomeStats(); }
+  else { render(); loadHomeStats(); }
 })();
 
 window.addEventListener("hashchange", ()=>{
