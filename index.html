@@ -999,13 +999,23 @@ const DB = {
     if(!sb){
       const d = local.read();
       const map = {};
-      d.entry.filter(e=>e.tournament_id===tournamentId).forEach(e=>map[e.team_id]={code:e.code,submitted_at:e.submitted_at});
+      d.entry.filter(e=>e.tournament_id===tournamentId).forEach(e=>map[e.team_id]={code:e.code,submitted_at:e.submitted_at,expires_at:e.expires_at||null});
       return map;
     }
-    const { data, error } = await sb.from("gn_entry").select("team_id,code,submitted_at").eq("tournament_id",tournamentId);
+    const { data, error } = await sb.from("gn_entry").select("team_id,code,submitted_at,expires_at").eq("tournament_id",tournamentId);
     if(error) throw error;
-    const map = {}; (data||[]).forEach(e=>map[e.team_id]={code:e.code,submitted_at:e.submitted_at});
+    const map = {}; (data||[]).forEach(e=>map[e.team_id]={code:e.code,submitted_at:e.submitted_at,expires_at:e.expires_at||null});
     return map;
+  },
+  // 本部：この大会の記入コードすべてに提出期限を一括設定（nullで解除）
+  async setEntriesExpiry(tournamentId, isoOrNull){
+    if(!sb){
+      const d = local.read();
+      d.entry.filter(e=>e.tournament_id===tournamentId).forEach(e=> e.expires_at=isoOrNull);
+      local.write(d); return;
+    }
+    const { error } = await sb.from("gn_entry").update({ expires_at:isoOrNull }).eq("tournament_id",tournamentId);
+    if(error) throw error;
   },
   // 本部：コードが無いチームに発行して保存
   async ensureEntries(teams, tournamentId, orgId){
@@ -1056,13 +1066,23 @@ const DB = {
   async loadClubEntries(orgId){
     if(!sb){
       const d = local.read(); const map = {};
-      d.clubEntry.filter(e=>e.org_id===orgId).forEach(e=>map[e.club_id]={code:e.code,submitted_at:e.submitted_at});
+      d.clubEntry.filter(e=>e.org_id===orgId).forEach(e=>map[e.club_id]={code:e.code,submitted_at:e.submitted_at,expires_at:e.expires_at||null});
       return map;
     }
-    const { data, error } = await sb.from("gn_club_entry").select("club_id,code,submitted_at").eq("org_id",orgId);
+    const { data, error } = await sb.from("gn_club_entry").select("club_id,code,submitted_at,expires_at").eq("org_id",orgId);
     if(error) throw error;
-    const map = {}; (data||[]).forEach(e=>map[e.club_id]={code:e.code,submitted_at:e.submitted_at});
+    const map = {}; (data||[]).forEach(e=>map[e.club_id]={code:e.code,submitted_at:e.submitted_at,expires_at:e.expires_at||null});
     return map;
+  },
+  // 本部：台帳の記入コードすべてに提出期限を一括設定（nullで解除）
+  async setClubEntriesExpiry(orgId, isoOrNull){
+    if(!sb){
+      const d = local.read();
+      d.clubEntry.filter(e=>e.org_id===orgId).forEach(e=> e.expires_at=isoOrNull);
+      local.write(d); return;
+    }
+    const { error } = await sb.from("gn_club_entry").update({ expires_at:isoOrNull }).eq("org_id",orgId);
+    if(error) throw error;
   },
   // 本部：コードが無いチームに発行して保存
   async ensureClubEntries(clubs, orgId){
@@ -5911,16 +5931,48 @@ async function openEntryLinks(){
   state.loading=false; render();
 }
 function entryLinkFor(teamId){ return location.origin + location.pathname + "#entry=" + teamId; }
+/* 記入コードの提出期限（任意）：一覧の中の1件でも期限が入っていればそれを代表値として表示する（一括設定が前提のため） */
+function entryExpiryInfo(map){
+  const withExp = Object.values(map||{}).find(e=>e.expires_at);
+  if(!withExp) return { text:"設定なし（いつでも提出できます）", iso:null };
+  const d = new Date(withExp.expires_at);
+  const label = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日まで`;
+  return { text: d.getTime() < Date.now() ? `${label}（期限切れ・提出できません）` : `${label}提出できます`, iso:withExp.expires_at };
+}
+async function applyEntryExpiry(){
+  const v = document.getElementById("entry-exp-date")?.value;
+  if(!v) return toast("日付を選んでください");
+  try{
+    await DB.setEntriesExpiry(state.t.id, new Date(v+"T23:59:59").toISOString());
+    toast("提出期限を設定しました");
+    await openEntryLinks();
+  }catch(e){ toast("設定できませんでした: "+(e.message||e)); }
+}
+async function clearEntryExpiry(){
+  if(!confirm("提出期限をなくします。よろしいですか？")) return;
+  try{ await DB.setEntriesExpiry(state.t.id, null); toast("期限をなくしました"); await openEntryLinks(); }
+  catch(e){ toast("解除できませんでした: "+(e.message||e)); }
+}
 function viewEntryLinks(){
   if(!state.t) return topbar({title:"記入リンクを配る", back:"go('home')"}) + `<div class="empty">大会が選ばれていません。</div>`;
   if(state.loading) return topbar({title:"記入リンクを配る", back:"go('t')"}) + `<div class="empty">準備中…</div>`;
   const map = state.entryMap||{};
   const total = state.teams.length;
   const done = state.teams.filter(t=>map[t.id]?.submitted_at).length;
+  const exp = entryExpiryInfo(map);
   return topbar({ title:"記入リンクを配る", sub:state.t.name, back:"go('t')" })
   + `<div class="screen">
     <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分の名簿だけを入力・提出できます（他チームや結果は触れません）。</p>
     <div class="callout ${done===total&&total?"ok":""}" style="margin-bottom:10px">提出状況：<b>${done} / ${total}</b> チーム${done===total&&total?"（全チーム提出ずみ）":"が提出ずみ"}</div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="lbl" style="margin:0 0 6px">提出期限（任意・全チーム共通）</div>
+      <p class="hint" style="margin:0 0 8px">現在：${exp.text}</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" class="in" id="entry-exp-date" style="flex:1">
+        <button class="btn sec sm" onclick="applyEntryExpiry()">この日までに設定</button>
+        ${exp.iso ? `<button class="btn ghost sm" onclick="clearEntryExpiry()">解除</button>` : ""}
+      </div>
+    </div>
     <button class="btn ghost sm noprint" style="margin-bottom:10px" onclick="window.print()">🖨 一覧を印刷して配る</button>
     ${state.teams.map(t=>{
       const e = map[t.id]||{}; const link = entryLinkFor(t.id);
@@ -6077,15 +6129,39 @@ async function openClubEntryLinks(){
   state.loading=false; render();
 }
 function clubEntryLinkFor(clubId){ return location.origin + location.pathname + "#croster=" + clubId; }
+async function applyClubEntryExpiry(){
+  const v = document.getElementById("club-exp-date")?.value;
+  if(!v) return toast("日付を選んでください");
+  try{
+    await DB.setClubEntriesExpiry(state.user.id, new Date(v+"T23:59:59").toISOString());
+    toast("提出期限を設定しました");
+    await openClubEntryLinks();
+  }catch(e){ toast("設定できませんでした: "+(e.message||e)); }
+}
+async function clearClubEntryExpiry(){
+  if(!confirm("提出期限をなくします。よろしいですか？")) return;
+  try{ await DB.setClubEntriesExpiry(state.user.id, null); toast("期限をなくしました"); await openClubEntryLinks(); }
+  catch(e){ toast("解除できませんでした: "+(e.message||e)); }
+}
 function viewClubEntryLinks(){
   if(state.loading) return topbar({title:"台帳の記入リンク", back:"go('roster')"}) + `<div class="empty">準備中…</div>`;
   const map = state.clubEntryMap||{};
   const clubs = state.clubs.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja"));
   const total = clubs.length, done = clubs.filter(c=>map[c.id]?.submitted_at).length;
+  const exp = entryExpiryInfo(map);
   return topbar({ title:"台帳の記入リンクを配る", sub:`${orgYear()}年度`, back:"go('roster')" })
   + `<div class="screen">
     <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分のチーム名・選手を登録できます。<b>新年度は先に「新年度にする」で学年をくり上げてから</b>配ると、各チームが現在の名簿を読み込んで新入生を足すだけで済みます。提出内容は台帳に反映されます。</p>
     <div class="callout ${done===total&&total?"ok":""}" style="margin-bottom:10px">提出状況：<b>${done} / ${total}</b> チームが提出ずみ</div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="lbl" style="margin:0 0 6px">提出期限（任意・全チーム共通）</div>
+      <p class="hint" style="margin:0 0 8px">現在：${exp.text}</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" class="in" id="club-exp-date" style="flex:1">
+        <button class="btn sec sm" onclick="applyClubEntryExpiry()">この日までに設定</button>
+        ${exp.iso ? `<button class="btn ghost sm" onclick="clearClubEntryExpiry()">解除</button>` : ""}
+      </div>
+    </div>
     <button class="btn ghost sm noprint" style="margin-bottom:10px" onclick="window.print()">🖨 一覧を印刷して配る</button>
     ${clubs.length ? clubs.map(c=>{
       const e = map[c.id]||{}; const link = clubEntryLinkFor(c.id);
