@@ -819,6 +819,7 @@ const state = {
   showGrads:false,  // 卒業した選手も表示するか
   official:null,    // 編集中の公式記録
   sheetZoom:0.8,
+  bracket:null,     // 表示中のトーナメント（1位T・2位T…を複数持てる）
 };
 const canEdit = ()=> !!(state.user && state.t && state.t.org_id === state.user.id);
 const orgYear = ()=> state.org?.year ?? fiscalYear();
@@ -1070,6 +1071,7 @@ function entryCode(){
    ========================================================================== */
 const sportOf = t => SPORTS[t?.sport] || SPORTS.soccer;
 const cfgOf   = t => Object.assign({ win:3, draw:1, lose:0, groups:["A"], advance:2,
+                                     advanceBy:{}, wildcards:[], wcRule:"total", brackets:null,
                                      venues:[], koSize:8, thirdPlace:false, duration:20 }, t?.settings||{});
 
 /* ブロック（部・組）: 新形式 settings.blocks=[{id,name}]。旧 groups(文字)も読めるように */
@@ -1080,6 +1082,87 @@ function blocksOf(t){
   return gs.map(g=>({ id:g, name:/^[A-H]$/.test(g)? g+"組" : g }));
 }
 function blockName(t, id){ return (blocksOf(t).find(b=>b.id===id)||{}).name || ""; }
+
+/* ==========================================================================
+   トーナメント（櫓）を複数持てるようにする（1位トーナメント・2位トーナメント…）
+   KOマッチの grp 列に櫓のidを入れる。旧データは grp=null → 先頭（main）の櫓とみなす。
+   ========================================================================== */
+const KO_MAIN = "main";
+function bracketsOf(t){
+  const s = t?.settings || {};
+  if(Array.isArray(s.brackets) && s.brackets.length) return s.brackets;
+  return [{ id:KO_MAIN, name: t?.format==="league_ko" ? "決勝トーナメント" : "トーナメント" }];
+}
+function bracketIdOf(m){ return m?.grp || KO_MAIN; }
+function bracketName(t, id){ return (bracketsOf(t).find(b=>b.id===id)||{}).name || ""; }
+/* いま表示・編集している櫓のid（消えた櫓を指していたら先頭に戻す） */
+function curBracketId(){
+  const bs = bracketsOf(state.t);
+  return bs.some(b=>b.id===state.bracket) ? state.bracket : bs[0].id;
+}
+/* 櫓ごとのKOマッチ。bid省略＝いま表示中の櫓。cons=true で順位決定戦（slot99）も含む */
+function koMatchesOf(bid, cons){
+  const id = bid || curBracketId();
+  return state.matches.filter(m=> m.stage==="ko" && bracketIdOf(m)===id && (cons || m.slot!==99));
+}
+function setBracket(id){ state.bracket = id; render(); }
+
+/* ---------- 予選リーグからの勝ち上がり（ブロックごとに数を変えられる） ---------- */
+/* このブロックから決勝トーナメントへ上がる数（未設定なら全体の advance） */
+function advanceOf(blockId){
+  const cfg = cfgOf(state.t);
+  const v = (cfg.advanceBy||{})[blockId];
+  return (v==null || v==="") ? Math.max(0, num(cfg.advance)) : Math.max(0, num(v));
+}
+/* 枠の選択肢に出す最大順位＝いちばんチーム数の多いブロックの数 */
+function maxRankOf(){
+  const bs = blocksOf(state.t);
+  if(!bs.length) return 0;
+  return Math.max(1, ...bs.map(b=> state.teams.filter(t=>t.grp===b.id).length));
+}
+/* そのブロックの予選が全部終わったか */
+function blockDone(blockId){
+  const gm = state.matches.filter(x=>x.stage==="league" && x.grp===blockId);
+  return !!gm.length && gm.every(isDone);
+}
+function allBlocksDone(){
+  const bs = blocksOf(state.t);
+  return !!bs.length && bs.every(b=>blockDone(b.id));
+}
+/* --- ワイルドカード：各ブロックの<rank>位どうしを横に並べて比べる ---
+   そのブロックが<rank>位まで直接勝ち上がる場合、そのチームはもう枠を持っているので対象から外す
+   （例：1部は2位まで勝ち上がり＋「各組2位から1チーム」なら、1部の2位は拾わず2部・3部の2位だけで競う）。
+   ブロックのチーム数が違う大会では「1試合平均」で比べる設定（wcRule="avg"）も使える。 */
+function wildcardRows(rank){
+  const cfg = cfgOf(state.t);
+  const avg = cfg.wcRule === "avg";
+  const rows = [];
+  blocksOf(state.t).forEach(b=>{
+    if(!blockDone(b.id)) return;
+    if(advanceOf(b.id) >= rank) return;            // すでに直接勝ち上がっている順位はワイルドカード対象外
+    const r = standings(b.id)[rank-1];
+    if(r) rows.push(Object.assign({}, r, { blockId:b.id, blockName:b.name }));
+  });
+  const k = r => (avg && r.pl) ? 1/r.pl : 1;
+  rows.sort((a,b)=> (b.pts*k(b))-(a.pts*k(a)) || (b.gd*k(b))-(a.gd*k(a))
+                 || (b.gf*k(b))-(a.gf*k(a)) || a.name.localeCompare(b.name,"ja"));
+  return rows;
+}
+/* 設定されているワイルドカード枠の一覧 [{rank,count}] */
+function wildcardsOf(t){
+  const w = cfgOf(t).wildcards;
+  return Array.isArray(w) ? w.filter(x=>x && num(x.rank)>0 && num(x.count)>0) : [];
+}
+/* そのチームがワイルドカードで勝ち上がるか（順位表の色分け用）→ 何番目か / 0=対象外 */
+function wildcardHit(teamId){
+  let n = 0;
+  wildcardsOf(state.t).forEach(w=>{
+    const rows = wildcardRows(num(w.rank));
+    const i = rows.findIndex(r=>r.id===teamId);
+    if(i >= 0 && i < num(w.count)) n = i+1;
+  });
+  return n;
+}
 
 const teamById = id => state.teams.find(t=>t.id===id) || null;
 const teamName = id => teamById(id)?.name || "";
@@ -1272,8 +1355,8 @@ function pkRowHTML(m, side, label){
     <span class="pkcount">〇${pkCount(m,side)}</span></div>`;
 }
 /* このトーナメントの総ラウンド数（実際の櫓の最大round。無ければ koSize から） */
-function koTotalRounds(){
-  const ko = (state.matches||[]).filter(m=>m.stage==="ko" && m.slot!==99);
+function koTotalRounds(bid){
+  const ko = koMatchesOf(bid);
   if(ko.length) return Math.max(...ko.map(m=>m.round));
   return Math.round(Math.log2(cfgOf(state.t).koSize||2)) || 1;
 }
@@ -1281,7 +1364,7 @@ function koTotalRounds(){
 function etAppliesToMatch(m){
   const ov = cfgOf(state.t).overview || {};
   if(!ov.hasET || !m || m.stage!=="ko") return false;   // 延長はトーナメント戦のみ
-  const left = koTotalRounds() - m.round;                 // 0=決勝, 1=準決勝, 2=準々決勝 …
+  const left = koTotalRounds(bracketIdOf(m)) - m.round;   // 0=決勝, 1=準決勝, 2=準々決勝 …
   const thr = ({ all:99, qf:2, sf:1, final:0 })[ov.etFrom||"all"];
   return left <= thr;
 }
@@ -1321,17 +1404,39 @@ function buildLeagueMatches(tid, teams, groups){
   return out;
 }
 
-/* --- 予選リーグの通過枠を「A組1位 vs B組2位」のように交差させて並べる --- */
-function qualifierSlots(groups, advance){
+/* --- 予選リーグの通過枠を「A組1位 vs B組2位」のように交差させて並べる ---
+   adv は数値でも、ブロックidごとに数を返す関数でもよい（1部は2位まで／2部は1位だけ、など）。
+   wcList=[{rank,count}] はワイルドカード枠（各組◯位のうち成績上位◯チーム）。 */
+function qualifierSlots(groups, adv, wcList){
   const G = groups.length, out = [];
+  const advOf = typeof adv === "function" ? (g=>Math.max(0,num(adv(g)))) : (()=>Math.max(0,num(adv)));
   if(G === 1){
-    for(let r=1; r<=advance; r++) out.push(`G:${groups[0]}#${r}`);
-    return out;
+    for(let r=1; r<=advOf(groups[0]); r++) out.push(`G:${groups[0]}#${r}`);
+  }else{
+    const maxAdv = Math.max(0, ...groups.map(advOf));
+    for(let r=1; r<=maxAdv; r+=2){
+      for(let i=0; i<G; i++){
+        if(r <= advOf(groups[i])) out.push(`G:${groups[i]}#${r}`);
+        const j = (i+1)%G;                                          // 同じ組同士が1回戦で当たらないように
+        if(r+1 <= advOf(groups[j])) out.push(`G:${groups[j]}#${r+1}`);
+      }
+    }
   }
-  for(let r=1; r<=advance; r+=2){
-    for(let i=0; i<G; i++){
-      out.push(`G:${groups[i]}#${r}`);
-      if(r+1 <= advance) out.push(`G:${groups[(i+1)%G]}#${r+1}`);   // 同じ組同士が1回戦で当たらないように
+  (wcList||[]).forEach(w=>{
+    for(let n=1; n<=num(w.count); n++) out.push(`B:${num(w.rank)}#${n}`);
+  });
+  // ブロックごとに勝ち上がる数が違うと、同じ組同士が1回戦で当たる並びになることがある。
+  // その組だけ後ろの枠と入れ替えて直す（入れ替え先で新しい同組対決を作らないことも確認する）。
+  const blkOf = s => (s||"").slice(0,2)==="G:" ? s.slice(2).split("#")[0] : null;
+  for(let i=0; i+1<out.length; i+=2){
+    const b = blkOf(out[i]);
+    if(!b || b !== blkOf(out[i+1])) continue;
+    for(let j=i+2; j<out.length; j++){
+      if(blkOf(out[j]) === b) continue;
+      const partner = (j%2===0) ? out[j+1] : out[j-1];         // 入れ替え先の相手
+      if(partner!=null && blkOf(partner) === blkOf(out[i+1])) continue;
+      const tmp = out[i+1]; out[i+1] = out[j]; out[j] = tmp;
+      break;
     }
   }
   return out;
@@ -1357,17 +1462,18 @@ function distributePairs(items, koSize){
 function assignSide(m, side, v){
   m[side+"_team"] = null; m[side+"_src"] = null;
   if(!v) return;
-  if(typeof v === "string" && /^(G|W|L|T):/.test(v)) m[side+"_src"] = v;  // 組順位/勝者/敗者/自由文字の枠
+  if(typeof v === "string" && /^(G|B|W|L|T):/.test(v)) m[side+"_src"] = v;  // 組順位/ワイルドカード/勝者/敗者/自由文字の枠
   else m[side+"_team"] = v;
 }
-function buildKOMatches(tid, size, pairs, thirdPlace){
+function buildKOMatches(tid, size, pairs, thirdPlace, bracketId){
+  const bid = bracketId || KO_MAIN;
   const rounds = Math.round(Math.log2(size));
   const grid = [];                                  // grid[r][s] = match
   for(let r=1; r<=rounds; r++){
     grid[r] = [];
     const n = size / Math.pow(2,r);
     for(let s=0; s<n; s++){
-      grid[r][s] = newMatch(tid,{ stage:"ko", round:r, slot:s, sort_order:r*100+s });
+      grid[r][s] = newMatch(tid,{ stage:"ko", grp:bid, round:r, slot:s, sort_order:r*100+s });
     }
   }
   // 1回戦にチーム（または「A組1位」などの枠）を配置
@@ -1396,11 +1502,20 @@ function buildKOMatches(tid, size, pairs, thirdPlace){
   if(thirdPlace && rounds>=2){
     const f = out.filter(m=>m.round===rounds-1 && m.slot!==99).sort((a,b)=>a.slot-b.slot);
     if(f.length>=2){
-      out.push(newMatch(tid,{ stage:"ko", round:rounds, slot:99, sort_order:rounds*100+99,
+      out.push(newMatch(tid,{ stage:"ko", grp:bid, round:rounds, slot:99, sort_order:rounds*100+99,
         home_src:"L:"+f[0].id, away_src:"L:"+f[1].id }));
     }
   }
   return out;
+}
+
+/* 中身が空の櫓のひな形（準決勝2つ→決勝1つ）。追加したトーナメントの出発点にする */
+function emptyBracketSkeleton(tid, bid){
+  const a = newMatch(tid,{ stage:"ko", grp:bid, round:1, slot:0, sort_order:100 });
+  const b = newMatch(tid,{ stage:"ko", grp:bid, round:1, slot:1, sort_order:101 });
+  const f = newMatch(tid,{ stage:"ko", grp:bid, round:2, slot:0, sort_order:200,
+                           home_src:"W:"+a.id, away_src:"W:"+b.id });
+  return [a,b,f];
 }
 
 function newMatch(tid, o){
@@ -1433,6 +1548,13 @@ function resolveSlot(m, side, seen){
     const H = resolveSlot(pm,"H",new Set(seen)), A = resolveSlot(pm,"A",new Set(seen));
     const hit = ((kind==="W") === (w===H.id)) ? H : A;
     return { id:hit.id, label:hit.label||"—", kind:"team" };
+  }
+  if(kind==="B"){                                   // B:<順位>#<n> ＝ 各組<順位>位のうち成績が<n>番目
+    const p = key.split("#"), rank = num(p[0]), nth = Math.max(1, num(p[1]));
+    const label = `各組${rank}位の${nth}番目`;
+    if(!allBlocksDone()) return { id:null, label, kind:"from" };   // 全ブロックが終わるまでは枠のまま
+    const row = wildcardRows(rank)[nth-1];
+    return row ? { id:row.id, label:row.name, kind:"team" } : { id:null, label, kind:"from" };
   }
   if(kind==="G"){                                   // G:<ブロックid>#<順位>（旧: G:A1）
     let g, rank;
@@ -1835,7 +1957,21 @@ const OVERVIEW_DEFAULT = {
 const draft = { name:"", sport:"soccer", format:"league", host:"", dateStart:"", dateEnd:"",
                 gradeCat:"", scope:"", promote:0, relegate:0,
                 overview:{...OVERVIEW_DEFAULT},
-                blocks:["1部"], advance:2, koSize:8, thirdPlace:false, teams:"", picked:[], assign:{} };
+                blocks:["1部"], advance:2, advanceByIdx:{}, wildcards:[], wcRule:"total",
+                bracketNames:[], koSize:8, thirdPlace:false, teams:"", picked:[], assign:{} };
+
+/* 予選からの勝ち上がり（作成画面用） */
+function draftAdvOf(i){
+  const v = draft.advanceByIdx[i];
+  return (v==null || v==="") ? num(draft.advance) : Math.max(0, num(v));
+}
+function setDraftAdv(i, v){ draft.advanceByIdx[i] = (v===""? "" : Math.max(0,+v||0)); render(); }
+function addWildcard(){ draft.wildcards.push({ rank:3, count:1 }); render(); }
+function setWildcard(i,k,v){ draft.wildcards[i][k] = Math.max(1,+v||1); render(); }
+function removeWildcard(i){ draft.wildcards.splice(i,1); render(); }
+function addDraftBracket(){ draft.bracketNames.push(`${draft.bracketNames.length+2}位トーナメント`); render(); }
+function setDraftBracket(i,v){ draft.bracketNames[i]=v; }
+function removeDraftBracket(i){ draft.bracketNames.splice(i,1); render(); }
 
 /* ブロック（部・組）の編集 */
 function addBlock(){ draft.blocks.push(""); render(); }
@@ -1846,6 +1982,10 @@ function removeBlock(i){
   draft.blocks.splice(i,1);
   Object.keys(draft.assign).forEach(k=>{ if(draft.assign[k]===i) delete draft.assign[k];
     else if(draft.assign[k]>i) draft.assign[k]--; });   // 詰めた分ずらす
+  const adv = {};                                       // ブロック別の勝ち上がり数も同じようにずらす
+  Object.keys(draft.advanceByIdx).forEach(k=>{
+    const n = +k; if(n===i) return; adv[n>i ? n-1 : n] = draft.advanceByIdx[k]; });
+  draft.advanceByIdx = adv;
   render();
 }
 function setAssign(name, idx){ draft.assign[name]=+idx; }
@@ -2039,9 +2179,39 @@ function viewNew(){
         <button class="btn sec sm" onclick="addBlock()">＋ ブロックを追加</button>` : ""}
 
       ${draft.format==="league_ko" ? `
-        <label class="f">各ブロックから決勝トーナメントへ進む数</label>
+        <label class="f">決勝トーナメントへ進む数（全ブロック共通）</label>
         <div class="seg">${[1,2,3,4].map(n=>
-          `<button class="${draft.advance===n?"on":""}" style="min-width:44px" onclick="draft.advance=${n};render()">${n}位まで</button>`).join("")}</div>` : ""}
+          `<button class="${draft.advance===n?"on":""}" style="min-width:44px" onclick="draft.advance=${n};render()">${n}位まで</button>`).join("")}</div>
+        ${draft.blocks.length>1 ? `
+        <label class="f">ブロックごとに変える（空欄なら上の共通の数）</label>
+        <p class="hint" style="margin:0 0 8px">「1部は2位まで、2部は1位だけ」のように、ブロックごとに勝ち上がる数を変えられます。</p>
+        ${draft.blocks.map((nm,i)=>`<div class="lurow" style="box-shadow:none">
+          <span class="lunm">${esc(nm||`${i+1}部`)}</span>
+          <input class="in" type="number" inputmode="numeric" min="0" style="max-width:110px"
+                 placeholder="${draft.advance}" value="${draft.advanceByIdx[i]??""}"
+                 onchange="setDraftAdv(${i},this.value)">
+        </div>`).join("")}` : ""}
+
+        <label class="f">ワイルドカード（各組◯位から成績のよいチームを拾う）</label>
+        <p class="hint" style="margin:0 0 8px">「各組3位のうち成績上位2チームも勝ち上がり」のような変則的な勝ち上がりに使います。</p>
+        ${draft.wildcards.map((w,i)=>`<div class="row2" style="margin-bottom:6px;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span class="hint" style="margin:0">各組</span>
+            <input class="in" type="number" inputmode="numeric" min="1" style="max-width:74px" value="${num(w.rank)}" onchange="setWildcard(${i},'rank',this.value)">
+            <span class="hint" style="margin:0">位のうち　上位</span>
+            <input class="in" type="number" inputmode="numeric" min="1" style="max-width:74px" value="${num(w.count)}" onchange="setWildcard(${i},'count',this.value)">
+            <span class="hint" style="margin:0">チーム</span>
+          </div>
+          <button class="btn ghost sm" style="flex:0 0 auto;width:auto" onclick="removeWildcard(${i})">削除</button>
+        </div>`).join("")}
+        <button class="btn sec sm" onclick="addWildcard()">＋ ワイルドカードを追加</button>
+        ${draft.wildcards.length && draft.blocks.length>1 ? `
+        <label class="f">ブロックのチーム数が違うときの比べ方</label>
+        <div class="seg">
+          <button class="${draft.wcRule!=="avg"?"on":""}" onclick="draft.wcRule='total';render()">合計で比べる</button>
+          <button class="${draft.wcRule==="avg"?"on":""}" onclick="draft.wcRule='avg';render()">1試合平均で比べる</button>
+        </div>
+        <p class="hint">試合数が同じなら「合計」で構いません。組によって試合数が違う大会は「1試合平均」が公平です。</p>` : ""}` : ""}
 
       ${draft.format==="ko" ? `
         <label class="f">トーナメントの枠</label>
@@ -2054,7 +2224,19 @@ function viewNew(){
         <div class="seg">
           <button class="${draft.thirdPlace?"":"on"}" onclick="draft.thirdPlace=false;render()">なし</button>
           <button class="${draft.thirdPlace?"on":""}" onclick="draft.thirdPlace=true;render()">あり</button>
-        </div>` : ""}
+        </div>
+
+        <label class="f">トーナメントの数</label>
+        <p class="hint" style="margin:0 0 8px">「1位トーナメント」「2位トーナメント」のように、いくつでも作れます。1つめは自動で作られ、追加したぶんは空の櫓ができるので、あとから「トーナメント表」で組んでください。</p>
+        <div class="lurow" style="box-shadow:none">
+          <span class="lunm">${draft.format==="league_ko"?"決勝トーナメント":"トーナメント"}</span>
+          <span class="hint" style="margin:0">1つめ</span>
+        </div>
+        ${draft.bracketNames.map((nm,i)=>`<div class="row2" style="margin-bottom:6px;align-items:center">
+          <input class="in" value="${esc(nm)}" oninput="setDraftBracket(${i},this.value)" placeholder="例）2位トーナメント">
+          <button class="btn ghost sm" style="flex:0 0 auto;width:auto" onclick="removeDraftBracket(${i})">削除</button>
+        </div>`).join("")}
+        <button class="btn sec sm" onclick="addDraftBracket()">＋ トーナメントを追加</button>` : ""}
 
       ${f.hasLeague ? `
         <label class="f">昇格・降格ライン（順位表に色帯で出ます・0でなし）</label>
@@ -2104,10 +2286,23 @@ async function createTournament(){
     ? draft.blocks.map((nm,i)=>({ id:uid(), name:(nm||"").trim() || `${i+1}部` }))
     : [];
   const blockIds = blocks.map(b=>b.id);
+  // ブロックごとの勝ち上がり数（作成画面では並び順の番号で持っている）を id に付け替える
+  const advanceBy = {};
+  blocks.forEach((b,i)=>{ const v = draft.advanceByIdx[i]; if(v!=null && v!=="") advanceBy[b.id] = Math.max(0,num(v)); });
+  const advOf = id => advanceBy[id] != null ? advanceBy[id] : Math.max(0,num(draft.advance));
+  const wildcards = (draft.wildcards||[]).filter(w=>num(w.rank)>0 && num(w.count)>0)
+                                         .map(w=>({ rank:num(w.rank), count:num(w.count) }));
+  const wcTotal = wildcards.reduce((a,w)=>a+w.count, 0);
+  // トーナメント（櫓）の一覧。1つめは既定名、以降は作成画面で付けた名前
+  const brackets = f.hasKO
+    ? [{ id:KO_MAIN, name: draft.format==="league_ko" ? "決勝トーナメント" : "トーナメント" }]
+        .concat((draft.bracketNames||[]).map((nm,i)=>({ id:uid(), name:(nm||"").trim() || `${i+2}位トーナメント` })))
+    : [];
   const pow2 = n => Math.pow(2, Math.max(1, Math.ceil(Math.log2(Math.max(2, n)))));
+  const qualifiers = blockIds.reduce((a,id)=>a+advOf(id), 0) + wcTotal;
   const koSize = draft.format==="ko"
       ? Math.max(draft.koSize, pow2(names.length))        // チームが枠より多ければ枠を広げる
-      : pow2(blocks.length * draft.advance);
+      : pow2(qualifiers);
 
   const t = {
     id:tid, org_id:state.user.id, name:draft.name.trim(),
@@ -2117,7 +2312,8 @@ async function createTournament(){
                promote:draft.promote||0, relegate:draft.relegate||0,
                overview:{...draft.overview},
                date:draft.dateStart, dateStart:draft.dateStart, dateEnd:draft.dateEnd,
-               blocks, advance:draft.advance, koSize, thirdPlace:draft.thirdPlace,
+               blocks, advance:draft.advance, advanceBy, wildcards, wcRule:draft.wcRule||"total",
+               brackets, koSize, thirdPlace:draft.thirdPlace,
                venues:[], duration:20 },
     created_at:new Date().toISOString(),
   };
@@ -2141,8 +2337,10 @@ async function createTournament(){
   if(f.hasKO){
     const items = draft.format==="ko"
         ? []                                              // トーナメントのみ：空櫓スタート（作成後に各枠へ配置）
-        : qualifierSlots(blockIds, draft.advance);        // 予選つき：1部1位…の枠
-    matches = matches.concat(buildKOMatches(tid, koSize, distributePairs(items, koSize), draft.thirdPlace));
+        : qualifierSlots(blockIds, advOf, wildcards);     // 予選つき：1部1位…＋ワイルドカードの枠
+    matches = matches.concat(buildKOMatches(tid, koSize, distributePairs(items, koSize), draft.thirdPlace, KO_MAIN));
+    // 2つめ以降のトーナメントは空の櫓（準決勝2＋決勝1）を用意し、中身はあとから組む
+    brackets.slice(1).forEach(b=> matches.push(...emptyBracketSkeleton(tid, b.id)));
   }
   matches.forEach(m=> m.org_id = state.user.id);
 
@@ -2152,7 +2350,9 @@ async function createTournament(){
     await DB.upsert("gn_matches", matches);
   }catch(e){ console.error(e); return toast("保存できませんでした: "+(e.message||e)); }
 
-  Object.assign(draft, { name:"", host:"", dateStart:"", dateEnd:"", teams:"", picked:[], assign:{}, blocks:["1部"], gradeCat:"", scope:"", promote:0, relegate:0, overview:{...OVERVIEW_DEFAULT} });
+  Object.assign(draft, { name:"", host:"", dateStart:"", dateEnd:"", teams:"", picked:[], assign:{}, blocks:["1部"],
+                         advanceByIdx:{}, wildcards:[], wcRule:"total", bracketNames:[],
+                         gradeCat:"", scope:"", promote:0, relegate:0, overview:{...OVERVIEW_DEFAULT} });
   await reloadList();
   openTournament(tid);
 }
@@ -2231,6 +2431,11 @@ function matchesInOrder(){
     if(a.kickoff && !b.kickoff) return -1;
     if(!a.kickoff && b.kickoff) return 1;
     if(a.stage!==b.stage) return a.stage==="league" ? -1 : 1;
+    if(a.stage==="ko"){                                    // 櫓が複数あるときは櫓ごとにまとめる
+      const ids = bracketsOf(state.t).map(x=>x.id);
+      const ia = ids.indexOf(bracketIdOf(a)), ib = ids.indexOf(bracketIdOf(b));
+      if(ia!==ib) return ia-ib;
+    }
     return (a.sort_order||0)-(b.sort_order||0);
   });
 }
@@ -2244,7 +2449,9 @@ function tabSchedule(){
     <button class="btn sec sm" style="flex:1" onclick="go('sched')">🗓 日程・会場をまとめて入力</button></div>`;
   ms.forEach(m=>{
     const bn = blockName(state.t, m.grp);
-    const key = m.stage==="league" ? (bn ? `${bn} リーグ` : "リーグ戦") : koRoundLabel(m);
+    const multiKo = bracketsOf(state.t).length > 1;   // 櫓が複数あるときは「2位T 準決勝」のように出す
+    const key = m.stage==="league" ? (bn ? `${bn} リーグ` : "リーグ戦")
+              : (multiKo ? `${bracketName(state.t, bracketIdOf(m))} ${koRoundLabel(m)}` : koRoundLabel(m));
     if(key!==lastKey){ out += `<div class="block-label">${esc(key)}</div>`; lastKey = key; }
     out += matchCard(m);
   });
@@ -2252,19 +2459,21 @@ function tabSchedule(){
 }
 
 function koRoundNames(){ return (cfgOf(state.t).overview||{}).roundNames || {}; }
-function koMaxRound(){
-  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
+function koMaxRound(bid){
+  const ko = koMatchesOf(bid);
   return ko.length ? Math.max(...ko.map(m=>m.round)) : Math.round(Math.log2(cfgOf(state.t).koSize||2));
 }
 function koMatchNo(m){   // 同回戦内の通し番号（1始まり）
-  const ms = state.matches.filter(x=>x.stage==="ko" && x.round===m.round && x.slot!==99).sort((a,b)=>a.slot-b.slot);
+  const ms = koMatchesOf(bracketIdOf(m)).filter(x=>x.round===m.round).sort((a,b)=>a.slot-b.slot);
   return ms.findIndex(x=>x.id===m.id)+1;
 }
 function koRoundLabel(m){
   if(m.slot===99) return "3位決定戦";
+  const bid = bracketIdOf(m);
   const names = koRoundNames();                 // 本部が自由に付けた回戦名を優先
-  if(names[m.round]) return names[m.round];
-  const left = koMaxRound() - m.round;           // 実際の最大回戦から算出
+  if(names[`${bid}:${m.round}`]) return names[`${bid}:${m.round}`];
+  if(bid===KO_MAIN && names[m.round]) return names[m.round];   // 旧データ（櫓1つのころ）
+  const left = koMaxRound(bid) - m.round;        // 実際の最大回戦から算出
   return ["決勝","準決勝","準々決勝"][left] || `${m.round}回戦`;   // 不戦勝はシードとして1回戦の枠に出る
 }
 function shortName(m){ return koRoundLabel(m) + koMatchNo(m); }
@@ -2462,13 +2671,16 @@ function tabTable(){
   const cfg = cfgOf(state.t);
   const blocks = blocksOf(state.t);
   const one = blocks.length<=1;
-  const adv = state.t.format==="league_ko" ? cfg.advance : 0;
+  const isLK = state.t.format==="league_ko";
+  const hasWC = isLK && wildcardsOf(state.t).length>0;
   const usedZones = new Set();
+  let wcShown = false;
   const body = (blocks.length?blocks:[null]).map(b=>{
     const rows = standings(b?b.id:null);
     if(!rows.length) return "";
     const n = rows.length;
     const pc = promoConfig(b, cfg);
+    const adv = (isLK && b) ? advanceOf(b.id) : (isLK ? Math.max(0,num(cfg.advance)) : 0);
     return `${(b && !one)?`<div class="block-label">${esc(b.name)}</div>`:""}
     <div class="tblwrap"><table>
       <thead><tr><th></th><th style="text-align:left">チーム</th><th>勝点</th><th>試合</th><th>勝</th><th>分</th><th>敗</th><th>得点</th><th>失点</th><th>得失差</th></tr></thead>
@@ -2477,8 +2689,11 @@ function tabTable(){
         const zc = z ? STAND_ZONES[z] : null;
         const bg = zc ? `background:${zc.bg}` : "";
         const mark = zc ? `<span title="${zc.label}" style="color:${zc.col};font-weight:800"> ${zc.mark}</span>` : "";
-        return `<tr class="${adv&&i<adv?"adv":""}" style="${bg}">
-        <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}</td>
+        const wc = (hasWC && !(adv && i<adv)) ? wildcardHit(r.id) : 0;   // 進出枠外だがワイルドカードで勝ち上がり
+        if(wc) wcShown = true;
+        const wcMark = wc ? `<span title="ワイルドカードで勝ち上がり" style="color:var(--accent);font-weight:800"> ◎${wc}</span>` : "";
+        return `<tr class="${(adv&&i<adv)||wc?"adv":""}" style="${bg}">
+        <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}${wcMark}</td>
         <td class="pt">${r.pts}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
         <td>${r.gf}</td><td>${r.ga}</td><td>${r.gd>0?"+":""}${r.gd}</td>
       </tr>`;}).join("")}</tbody>
@@ -2487,7 +2702,7 @@ function tabTable(){
   const legend = ["up","upPo","downPo","down"].filter(z=>usedZones.has(z))
     .map(z=>`<span style="color:${STAND_ZONES[z].col};font-weight:700">${STAND_ZONES[z].mark} ${STAND_ZONES[z].label}</span>`).join("　");
   return body
-  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${adv?`色つきが決勝トーナメント進出（各ブロック${adv}位まで）。`:""}${legend?`<br>${legend}`:""}</p>`
+  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${isLK?`色つきが決勝トーナメント進出。${esc(advanceSummary())}`:""}${wcShown?`<br>◎ はワイルドカード（各組の同順位どうしを${cfg.wcRule==="avg"?"1試合平均":"合計"}で比べた順）で勝ち上がるチームです。`:""}${legend?`<br>${legend}`:""}</p>`
   + (canEdit()?`<div class="btnrow noprint"><button class="btn sec sm" onclick="go('settings')">⚙ リーグごとの昇格・降格・入れ替え戦を設定</button></div>`:"");
 }
 
@@ -2521,21 +2736,23 @@ function tabMatrix(){
 /* --- トーナメント表 --- */
 function tabBracket(){
   const cfg = cfgOf(state.t);
-  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
+  const bid = curBracketId();
+  const ko  = koMatchesOf(bid);
   const edit = canEdit();
+  const head = bracketSwitcher(bid, edit);
   if(!ko.length){
-    let e = `<div class="empty">トーナメントがありません。</div>`;
+    let e = head + `<div class="empty">このトーナメントにはまだマッチがありません。</div>`;
     if(edit) e += koEditBar(cfg);
     return e;
   }
   const rounds = Math.max(...ko.map(m=>m.round));
   // 櫓メーカーと同じ描画（フィーダー中間配置＋SVG曲線）。作ったとおりに一般の方も見える。
-  let html = `<div class="kobk" id="koBracket"><div class="kobk-canvas" id="koCanvas">
+  let html = head + `<div class="kobk" id="koBracket"><div class="kobk-canvas" id="koCanvas">
     <div class="kobk-svg"><svg id="koLinks" width="100%" height="100%"></svg></div>
     <div class="kobk-rounds">`;
   for(let r=1; r<=rounds; r++){
     const ms = ko.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
-    const rn = koRoundLabel({round:r, slot:0});
+    const rn = koRoundLabel({round:r, slot:0, grp:bid});
     html += `<div class="kobk-round" data-r="${r}">
       <div class="kobk-rhead"><span class="kobk-rname"${edit?` onclick="renameKoRound(${r})" title="タップで回戦名を変える" style="cursor:pointer"`:""}>${esc(rn)}</span>${edit?`<button class="kobk-radd" title="この回戦にマッチを足す" onclick="bmAddMatch(${r})">＋マッチ</button>`:""}</div>
       <div class="kobk-rbody">`
@@ -2547,14 +2764,95 @@ function tabBracket(){
   html += `<div class="btnrow noprint" style="margin-bottom:10px">
     <button class="btn ghost sm" style="flex:1" onclick="printBracket()">🖨 トーナメント表をA4印刷</button></div>`;
   if(edit) html += koEditBar(cfg);
-  const consolations = state.matches.filter(m=>m.slot===99).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const consolations = state.matches.filter(m=>m.slot===99 && bracketIdOf(m)===bid)
+                                    .sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   consolations.forEach(c=>{
     html += `<div class="block-label">${esc(koRoundLabel(c))}${edit?` <button class="kobk-radd" onclick="openKoEditor('${c.id}')">✎編集</button>`:""}</div>` + matchCard(c);
   });
-  if(state.t.format==="league_ko"){
-    html += `<p class="hint">予選リーグの順位が確定すると、枠のチーム名が自動で入ります（各組${cfg.advance}位まで）。</p>`;
+  // 予選からの勝ち上がり枠が実際に入っている櫓にだけ、その説明を出す
+  const hasQualSlot = koMatchesOf(bid, true).some(m=>
+    ["home_src","away_src"].some(k=> m[k] && /^(G|B):/.test(m[k])));
+  if(state.t.format==="league_ko" && hasQualSlot){
+    html += `<p class="hint">${esc(advanceSummary())}予選リーグの順位が確定すると、枠のチーム名が自動で入ります。</p>`;
   }
   return html;
+}
+
+/* 予選からの勝ち上がりを1行で説明する（ブロックごとの数＋ワイルドカード） */
+function advanceSummary(){
+  const bs = blocksOf(state.t);
+  if(!bs.length) return "";
+  const parts = bs.filter(b=>advanceOf(b.id)>0).map(b=>`${b.name}${advanceOf(b.id)}位まで`);
+  wildcardsOf(state.t).forEach(w=>
+    parts.push(`各組${num(w.rank)}位のうち成績上位${num(w.count)}チーム`));
+  return parts.length ? parts.join("・") + "が決勝トーナメントへ進みます。" : "";
+}
+
+/* --- トーナメントの切り替え（1位T・2位T…）と追加・名前変更・削除 --- */
+function bracketSwitcher(bid, edit){
+  const bs = bracketsOf(state.t);
+  if(bs.length<=1 && !edit) return "";
+  const tabs = bs.map(b=>{
+    const n = koMatchesOf(b.id, true).length;
+    return `<button class="${b.id===bid?"on":""}" onclick="setBracket('${b.id}')">${esc(b.name)}${n?`<span style="opacity:.6"> ${n}</span>`:""}</button>`;
+  }).join("");
+  let h = "";
+  if(bs.length>1) h += `<div class="seg noprint" style="margin-bottom:8px;flex-wrap:wrap">${tabs}</div>`;
+  else if(edit)   h += `<div class="block-label" style="margin-top:0">${esc(bs[0].name)}</div>`;
+  if(edit){
+    h += `<div class="btnrow noprint" style="margin-bottom:10px">
+      <button class="btn ghost sm" onclick="addBracket()">＋ トーナメントを追加</button>
+      <button class="btn ghost sm" onclick="renameBracket('${bid}')">名前を変える</button>
+      ${bs.length>1?`<button class="btn ghost sm" onclick="removeBracket('${bid}')">このトーナメントを削除</button>`:""}
+    </div>`;
+  }
+  return h;
+}
+async function saveTournamentSettings(){
+  const { id,org_id,name,sport,format,settings,created_at } = state.t;
+  await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
+}
+async function addBracket(){
+  const bs = bracketsOf(state.t).slice();
+  const nm = prompt("トーナメントの名前", `${bs.length+1}位トーナメント`);
+  if(nm==null) return;
+  // 旧データ（brackets未設定）のときは、いまの櫓を main として残したうえで足す
+  const nb = { id:uid(), name:(nm.trim() || `${bs.length+1}位トーナメント`) };
+  const next = bs.concat([nb]);
+  const skel = emptyBracketSkeleton(state.t.id, nb.id);
+  skel.forEach(m=> m.org_id = state.user?.id || null);
+  cfg_set("brackets", next);
+  try{
+    await saveTournamentSettings();
+    await DB.upsert("gn_matches", skel.map(stripMatch));
+  }catch(e){ return toast("保存できませんでした: "+(e.message||e)); }
+  state.matches.push(...skel);
+  state.bracket = nb.id;
+  toast("トーナメントを追加しました"); render();
+}
+async function renameBracket(id){
+  const bs = bracketsOf(state.t);
+  const cur = bs.find(b=>b.id===id); if(!cur) return;
+  const nm = prompt("トーナメントの名前", cur.name);
+  if(nm==null || !nm.trim()) return;
+  cfg_set("brackets", bs.map(b=> b.id===id ? {...b, name:nm.trim()} : b));
+  try{ await saveTournamentSettings(); }catch(e){ return toast("保存できませんでした: "+(e.message||e)); }
+  render();
+}
+async function removeBracket(id){
+  const bs = bracketsOf(state.t);
+  if(bs.length<=1) return toast("トーナメントは1つ以上必要です");
+  const ms = koMatchesOf(id, true);
+  if(!confirm(`「${bracketName(state.t,id)}」を削除します。\nこのトーナメントの${ms.length}試合の記録もすべて消えます。よろしいですか？`)) return;
+  const next = bs.filter(b=>b.id!==id);
+  cfg_set("brackets", next);
+  state.matches = state.matches.filter(m=>!ms.some(x=>x.id===m.id));
+  try{
+    if(ms.length) await DB.remove("gn_matches", ms.map(m=>m.id));
+    await saveTournamentSettings();
+  }catch(e){ return toast("削除できませんでした: "+(e.message||e)); }
+  state.bracket = next[0].id;
+  toast("削除しました"); render();
 }
 
 /* 1マッチの櫓カード（シードは1チームのみ表示） */
@@ -2610,7 +2908,7 @@ function layoutBracket(){
   let globalBottom = 0;
   rounds.forEach(rd=>{
     const r = +rd.dataset.r;
-    const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===r).sort((a,b)=>a.slot-b.slot);
+    const ms = koMatchesOf().filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
     let prevBottom = -Infinity;
     ms.forEach(m=>{
       const el = document.getElementById("komt-"+m.id); if(!el) return;
@@ -2635,7 +2933,7 @@ function drawLinks(){
   const cb = canvas.getBoundingClientRect();
   svg.setAttribute("width", cb.width); svg.setAttribute("height", cb.height);
   let paths = "";
-  state.matches.filter(m=>m.stage==="ko" && m.slot!==99).forEach(m=>{
+  koMatchesOf().forEach(m=>{
     ["home","away"].forEach(sd=>{
       const src = m[sd+"_src"]; if(!src || !/^(W|L):/.test(src)) return;
       const from = document.getElementById("komt-"+src.slice(2)), to = document.getElementById("komt-"+m.id);
@@ -2653,12 +2951,14 @@ function drawLinks(){
 }
 /* 回戦名を自由に変える（本部のみ・overview.roundNamesに保存） */
 async function renameKoRound(r){
-  const cur = koRoundLabel({round:r, slot:0});
+  const bid = curBracketId();
+  const cur = koRoundLabel({round:r, slot:0, grp:bid});
   const v = prompt(`${r}回戦の表示名（空欄で自動に戻す）`, cur);
   if(v==null) return;
   const s = state.t.settings = cfgOf(state.t);
   const rn = Object.assign({}, s.overview?.roundNames||{});
-  if(v.trim()==="") delete rn[r]; else rn[r] = v.trim();
+  const key = `${bid}:${r}`;
+  if(v.trim()===""){ delete rn[key]; if(bid===KO_MAIN) delete rn[r]; } else rn[key] = v.trim();
   s.overview = Object.assign({}, s.overview||{}, {roundNames:rn});
   try{
     const { id,org_id,name,sport,format,settings,created_at } = state.t;
@@ -2688,11 +2988,10 @@ function printBracket(){
 /* --- 1回戦の組み合わせを手で決める --- */
 function openSeedSheet(){
   const cfg = cfgOf(state.t);
-  const r1 = state.matches.filter(m=>m.stage==="ko" && m.round===1 && m.slot!==99)
-                          .sort((a,b)=>a.slot-b.slot);
+  const r1 = koMatchesOf().filter(m=>m.round===1).sort((a,b)=>a.slot-b.slot);
   const opts = [{v:"", l:"（なし・不戦勝）"}];
   if(state.t.format==="league_ko"){
-    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+    opts.push(...qualifierOpts());
   }
   state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=> opts.push({v:t.id, l:t.name}));
   const sel = (m,side)=>{
@@ -4795,6 +5094,40 @@ function viewSettings(){
       </div>`).join("")}
       <p class="hint">リーグ名も直せます。順位表に色帯で反映されます。リーグ数を増減するときは大会を作り直してください。</p>
     </div>` : ""}
+    ${t.format==="league_ko" ? `<div class="card">
+      <label class="f">決勝トーナメントへの勝ち上がり</label>
+      <p class="hint" style="margin:0 0 10px">ブロックごとに勝ち上がる数を変えたり、「各組3位のうち成績上位2チーム」のようなワイルドカードを足せます。<b>ここを変えても組んである櫓は変わりません</b>。枠の中身は「トーナメント表」の ✎ で選び直してください。</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <span class="hint" style="margin:0">共通で</span>
+        <input class="in" type="number" inputmode="numeric" min="0" style="max-width:88px" value="${num(cfg.advance)}" onchange="cfg_set('advance',Math.max(0,+this.value||0));render()">
+        <span class="hint" style="margin:0">位まで</span>
+      </div>
+      ${blocksOf(t).map(b=>`<div class="lurow" style="box-shadow:none">
+        <span class="lunm">${esc(b.name)}</span>
+        <input class="in" type="number" inputmode="numeric" min="0" style="max-width:110px"
+               placeholder="${num(cfg.advance)}" value="${(cfg.advanceBy||{})[b.id]??""}"
+               onchange="setBlockAdvance('${b.id}',this.value)">
+      </div>`).join("")}
+      <label class="f">ワイルドカード（各組◯位から成績のよいチームを拾う）</label>
+      ${wildcardsOf(t).length ? (cfg.wildcards||[]).map((w,i)=>`<div class="row2" style="margin-bottom:6px;align-items:center">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="hint" style="margin:0">各組</span>
+          <input class="in" type="number" inputmode="numeric" min="1" style="max-width:74px" value="${num(w.rank)}" onchange="setTWildcard(${i},'rank',this.value)">
+          <span class="hint" style="margin:0">位のうち　上位</span>
+          <input class="in" type="number" inputmode="numeric" min="1" style="max-width:74px" value="${num(w.count)}" onchange="setTWildcard(${i},'count',this.value)">
+          <span class="hint" style="margin:0">チーム</span>
+        </div>
+        <button class="btn ghost sm" style="flex:0 0 auto;width:auto" onclick="removeTWildcard(${i})">削除</button>
+      </div>`).join("") : `<p class="hint" style="margin:0 0 8px">まだありません。</p>`}
+      <button class="btn sec sm" onclick="addTWildcard()">＋ ワイルドカードを追加</button>
+      ${wildcardsOf(t).length && blocksOf(t).length>1 ? `
+      <label class="f">ブロックのチーム数が違うときの比べ方</label>
+      <div class="seg">
+        <button class="${cfg.wcRule!=="avg"?"on":""}" onclick="cfg_set('wcRule','total');render()">合計で比べる</button>
+        <button class="${cfg.wcRule==="avg"?"on":""}" onclick="cfg_set('wcRule','avg');render()">1試合平均で比べる</button>
+      </div>` : ""}
+      <p class="hint" style="margin-top:10px">いまの設定：${esc(advanceSummary()||"（勝ち上がりなし）")}</p>
+    </div>` : ""}
     <div class="card">
       <label class="f">記入リンクでチームに伝えること（任意）</label>
       <textarea class="in" style="min-height:64px" placeholder="例）背番号は1〜25。学年も入れてください。締切は8/10。" onchange="cfg_set('entryNote',this.value)">${esc(cfg.entryNote||"")}</textarea>
@@ -4865,12 +5198,13 @@ async function autoDrawKO(){
   const cfg = cfgOf(state.t);
   const ids = state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).map(t=>t.id);
   if(ids.length < 2) return toast("チームが2つ以上必要です");
-  const doneKO = state.matches.some(m=>m.stage==="ko" && isDone(m));
+  const bid = curBracketId();
+  const doneKO = koMatchesOf(bid, true).some(isDone);
   if(doneKO && !confirm("トーナメント表を作り直します。入力済みの結果は消えます。よろしいですか？")) return;
   const pow2 = n => Math.pow(2, Math.max(1, Math.ceil(Math.log2(Math.max(2, n)))));
   const size = pow2(ids.length);
-  const oldKO = state.matches.filter(m=>m.stage==="ko");
-  const newKO = buildKOMatches(state.t.id, size, distributePairs(ids, size), !!cfg.thirdPlace);
+  const oldKO = koMatchesOf(bid, true);
+  const newKO = buildKOMatches(state.t.id, size, distributePairs(ids, size), !!cfg.thirdPlace, bid);
   newKO.forEach(m=> m.org_id = state.user.id);
   try{
     if(oldKO.length) await DB.remove("gn_matches", oldKO.map(m=>m.id));
@@ -4881,35 +5215,52 @@ async function autoDrawKO(){
       await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
     }
   }catch(e){ console.error(e); return toast("作成できませんでした: "+(e.message||e)); }
-  state.matches = state.matches.filter(m=>m.stage!=="ko").concat(newKO);
+  state.matches = state.matches.filter(m=>!oldKO.some(x=>x.id===m.id)).concat(newKO);
   toast(`トーナメント表を作成しました（${ids.length}チーム）`); render();
 }
 /* ===== 櫓メーカー：①1回戦を組む窓 ／ ②2回戦以降を組む窓 ===== */
 let bmActive = null;   // いま開いている編集窓の再描画関数
 function bmMatchNo(m){  // 同じ回戦の中で上から何番目のマッチか（1始まり）
-  const same = state.matches.filter(x=>x.stage==="ko" && x.slot!==99 && x.round===m.round).sort((a,b)=>a.slot-b.slot);
+  const same = koMatchesOf(bracketIdOf(m)).filter(x=>x.round===m.round).sort((a,b)=>a.slot-b.slot);
   return same.findIndex(x=>x.id===m.id) + 1;
 }
 function bmMaxRound(){
-  const ko = state.matches.filter(m=>m.stage==="ko" && m.slot!==99);
+  const ko = koMatchesOf();
   return ko.length ? Math.max(...ko.map(m=>m.round)) : 0;
 }
 function bmNextSlot(round){
-  const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===round);
+  const ms = koMatchesOf().filter(m=>m.round===round);
   return ms.length ? Math.max(...ms.map(m=>m.slot))+1 : 0;
 }
-function bmUsedTeams(cur){   // 他の枠に入っているチーム（curは除く）
+function bmUsedTeams(cur){   // 同じトーナメント内の他の枠に入っているチーム（curは除く）
   const used = new Set();
-  state.matches.filter(m=>m.stage==="ko").forEach(m=>{ if(m.home_team) used.add(m.home_team); if(m.away_team) used.add(m.away_team); });
+  koMatchesOf(null, true).forEach(m=>{ if(m.home_team) used.add(m.home_team); if(m.away_team) used.add(m.away_team); });
   if(cur) used.delete(cur);
   return used;
+}
+/* 予選リーグからの勝ち上がり枠（G:組順位／B:ワイルドカード）を選択肢に足す */
+function qualifierOpts(){
+  const out = [];
+  if(state.t.format!=="league_ko") return out;
+  const maxRank = Math.max(maxRankOf(), 2);
+  blocksOf(state.t).forEach(b=>{
+    const adv = advanceOf(b.id);
+    for(let r=1; r<=maxRank; r++){
+      out.push({ v:`G:${b.id}#${r}`, l:`${b.name}${r}位${adv && r>adv ? "（進出枠外）" : ""}` });
+    }
+  });
+  wildcardsOf(state.t).forEach(w=>{
+    const rank = num(w.rank);
+    for(let n=1; n<=num(w.count); n++) out.push({ v:`B:${rank}#${n}`, l:`各組${rank}位のうち成績${n}番目` });
+  });
+  return out;
 }
 /* --- ① 1回戦を組む --- */
 function r1Opts(cur){
   const cfg = cfgOf(state.t);
   const opts = [{v:"", l:"（なし・不戦勝）"}];
   if(state.t.format==="league_ko"){
-    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+    opts.push(...qualifierOpts());
   }
   const used = bmUsedTeams(cur);
   state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{ if(!used.has(t.id)) opts.push({v:t.id, l:t.name}); });
@@ -4923,7 +5274,7 @@ function r1Sel(m, side){
 }
 function r1Render(){
   const body = document.getElementById("r1Body"); if(!body) return;
-  const ms = state.matches.filter(m=>m.stage==="ko" && m.round===1 && m.slot!==99).sort((a,b)=>a.slot-b.slot);
+  const ms = koMatchesOf().filter(m=>m.round===1).sort((a,b)=>a.slot-b.slot);
   body.innerHTML = (ms.length ? ms.map((m,i)=>`<div class="bmmatch">
       <div class="bmmhead"><span class="bmno">マッチ${i+1}</span>
         <button class="btn danger sm" onclick="bmDelMatch('${m.id}')">削除</button></div>
@@ -4948,11 +5299,11 @@ function laterOpts(selfId, cur){
   const cfg = cfgOf(state.t);
   const opts = [{v:"", l:"（なし・不戦勝）"}];
   if(state.t.format==="league_ko"){
-    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+    opts.push(...qualifierOpts());
   }
   const used = bmUsedTeams(cur);
   state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{ if(!used.has(t.id)) opts.push({v:t.id, l:`${t.name}（シード）`}); });
-  state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId)
+  koMatchesOf().filter(m=>m.id!==selfId)
     .sort((a,b)=> a.round-b.round || a.slot-b.slot)
     .forEach(m=> opts.push({v:`W:${m.id}`, l:`${m.round}回戦マッチ${bmMatchNo(m)}の勝者`}));
   return opts;
@@ -4968,7 +5319,7 @@ function laterRender(){
   const maxR = Math.max(bmMaxRound(), 2);
   let h = "";
   for(let r=2; r<=maxR; r++){
-    const ms = state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.round===r).sort((a,b)=>a.slot-b.slot);
+    const ms = koMatchesOf().filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
     h += `<div class="card" style="margin-bottom:8px">
       <div class="hint" style="margin:0 0 6px">${r}回戦（${ms.length}マッチ）</div>
       ${ms.map((m,i)=>`<div class="bmmatch">
@@ -4995,7 +5346,7 @@ function openLaterMaker(){
 }
 async function bmAddMatch(round){
   const slot = bmNextSlot(round);
-  const m = newMatch(state.t.id, { stage:"ko", round, slot, sort_order:round*100+slot });
+  const m = newMatch(state.t.id, { stage:"ko", grp:curBracketId(), round, slot, sort_order:round*100+slot });
   state.matches.push(m);
   try{ await DB.upsert("gn_matches", [stripMatch(m)]); }catch(e){ toast("追加できませんでした: "+(e.message||e)); }
   if(bmActive) bmActive(); else render();
@@ -5019,9 +5370,9 @@ function koSlotOptions(selfId, cur){
   const used = bmUsedTeams(cur);
   state.teams.slice().sort((a,b)=>a.sort_order-b.sort_order).forEach(t=>{ if(!used.has(t.id)||t.id===cur) opts.push({v:t.id, l:t.name}); });
   if(state.t.format==="league_ko"){
-    blocksOf(state.t).forEach(b=>{ for(let r=1;r<=cfg.advance;r++) opts.push({v:`G:${b.id}#${r}`, l:`${b.name}${r}位`}); });
+    opts.push(...qualifierOpts());
   }
-  state.matches.filter(m=>m.stage==="ko" && m.slot!==99 && m.id!==selfId)
+  koMatchesOf().filter(m=>m.id!==selfId)
     .sort((a,b)=> a.round-b.round || a.slot-b.slot)
     .forEach(m=>{
       opts.push({v:`W:${m.id}`, l:`${koRoundLabel(m)}マッチ${koMatchNo(m)}の勝者`});
@@ -5086,9 +5437,9 @@ async function koEditorDelete(id){
 /* 順位決定戦（3位決定戦など・敗者参照のコンソレーション）を1つ足す */
 async function koAddConsolation(){
   const rounds = koMaxRound();
-  const m = newMatch(state.t.id, { stage:"ko", round:rounds, slot:99, sort_order:rounds*100+99 });
+  const m = newMatch(state.t.id, { stage:"ko", grp:curBracketId(), round:rounds, slot:99, sort_order:rounds*100+99 });
   // 準決勝が2つあれば自動で敗者同士を入れておく
-  const sf = state.matches.filter(x=>x.stage==="ko" && x.slot!==99 && x.round===rounds-1).sort((a,b)=>a.slot-b.slot);
+  const sf = koMatchesOf().filter(x=>x.round===rounds-1).sort((a,b)=>a.slot-b.slot);
   if(sf.length>=2){ m.home_src="L:"+sf[0].id; m.away_src="L:"+sf[1].id; }
   state.matches.push(m);
   try{ await DB.upsert("gn_matches",[stripMatch(m)]); }catch(e){ toast("追加できませんでした: "+(e.message||e)); }
@@ -5100,6 +5451,22 @@ async function koAddRound(){ await bmAddMatch(Math.max(bmMaxRound(),1)+1); }
 function renameBlockInTournament(id, name){
   const blocks = blocksOf(state.t).map(b=> b.id===id ? {...b, name} : b);
   cfg_set("blocks", blocks);
+}
+/* 決勝トーナメントへの勝ち上がり（あとから変更） */
+function setBlockAdvance(id, val){
+  const by = Object.assign({}, cfgOf(state.t).advanceBy||{});
+  if(val==="" || val==null) delete by[id]; else by[id] = Math.max(0, +val||0);
+  cfg_set("advanceBy", by); render();
+}
+function addTWildcard(){
+  cfg_set("wildcards", (cfgOf(state.t).wildcards||[]).concat([{rank:3, count:1}])); render();
+}
+function setTWildcard(i, key, val){
+  const ws = (cfgOf(state.t).wildcards||[]).map((w,j)=> j===i ? {...w, [key]:Math.max(1,+val||1)} : w);
+  cfg_set("wildcards", ws); render();
+}
+function removeTWildcard(i){
+  cfg_set("wildcards", (cfgOf(state.t).wildcards||[]).filter((_,j)=>j!==i)); render();
 }
 /* リーグごとの昇格・降格・入れ替え戦の数を設定 */
 function setBlockPromo(id, key, val){
@@ -5139,7 +5506,7 @@ async function openTournament(id){
     const d = await DB.loadTournament(id);
     if(!d.t){ toast("大会が見つかりません"); return go("home"); }
     state.t = d.t; state.teams = d.teams; state.matches = d.matches;
-    state.tab = "schedule"; state.view = "t";
+    state.tab = "schedule"; state.view = "t"; state.bracket = null;   // 表示中の櫓は先頭に戻す
     location.hash = "t=" + id;
   }catch(e){ console.error(e); toast("読み込めませんでした"); }
   state.loading = false; render();
