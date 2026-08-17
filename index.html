@@ -866,18 +866,23 @@ const DB = {
         matches: d.matches.filter(x=>x.tournament_id===id),
       };
     }
-    const [rt, rteams, rmatches] = await Promise.all([
-      sb.from("gn_tournaments").select("*").eq("id",id).maybeSingle(),
-      sb.from("gn_teams").select("*").eq("tournament_id",id),
-      sb.from("gn_matches").select("*").eq("tournament_id",id),
-    ]);
+    const rt = await sb.from("gn_tournaments").select("*").eq("id",id).maybeSingle();
     if(rt.error) throw rt.error;
+    const t = rt.data;
+    // 自分の団体の大会を運営者として見ているときだけ生のgn_matches（公式記録の中身も含む）を読む。
+    // それ以外（ゲスト・他団体の大会を見ている運営者）は、非公開の公式記録を除いた公開用の窓口(gn_matches_public)を読む。
+    const isOwner = !!(state.user && t && t.org_id === state.user.id);
+    const [rteams, rmatches] = await Promise.all([
+      sb.from("gn_teams").select("*").eq("tournament_id",id),
+      sb.from(isOwner ? "gn_matches" : "gn_matches_public").select("*").eq("tournament_id",id),
+    ]);
     if(rteams.error) throw rteams.error;
     if(rmatches.error) throw rmatches.error;
-    return { t:rt.data, teams:rteams.data||[], matches:rmatches.data||[] };
+    return { t, teams:rteams.data||[], matches:rmatches.data||[] };
   },
 
-  /* 公式記録の公開リンク：試合idだけで匿名に読む（大会・チームは所属大会を丸ごと読んで補う＝トーナメント枠の勝者参照も解決できるように） */
+  /* 公式記録の公開リンク：試合idだけで匿名に読む（大会・チームは所属大会を丸ごと読んで補う＝トーナメント枠の勝者参照も解決できるように）
+     このリンクは常にゲスト向けの機能なので、公開用の窓口(gn_matches_public)だけを読む＝非公開の公式記録は最初から届かない */
   async loadMatchTarget(matchId){
     if(!sb){
       const d = local.read();
@@ -886,7 +891,7 @@ const DB = {
       const { t, teams, matches } = await this.loadTournament(m.tournament_id);
       return { m, t, teams, matches };
     }
-    const rm = await sb.from("gn_matches").select("*").eq("id",matchId).maybeSingle();
+    const rm = await sb.from("gn_matches_public").select("*").eq("id",matchId).maybeSingle();
     if(rm.error) throw rm.error;
     const m = rm.data;
     if(!m) return { m:null, t:null, teams:[], matches:[] };
