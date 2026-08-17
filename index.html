@@ -384,13 +384,13 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .ofcard[open]>summary{margin-bottom:8px;}
 
 /* ===== タブ ===== */
-.tabs{position:sticky;top:0;z-index:40;background:var(--paper);
+.tabs,.team-switch{position:sticky;top:0;z-index:40;background:var(--paper);
   display:flex;gap:4px;overflow-x:auto;padding:8px 12px;border-bottom:1px solid var(--line);
   scrollbar-width:none;}
-.tabs::-webkit-scrollbar{display:none;}
-.tabs button{padding:8px 14px;border-radius:999px;font-size:13.5px;font-weight:700;
+.tabs::-webkit-scrollbar,.team-switch::-webkit-scrollbar{display:none;}
+.tabs button,.team-switch button{padding:8px 14px;border-radius:999px;font-size:13.5px;font-weight:700;
   color:var(--sub);background:#fff;border:1.5px solid var(--line);white-space:nowrap;}
-.tabs button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(33,72,199,.3);}
+.tabs button.on,.team-switch button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(33,72,199,.3);}
 
 /* ===== 大会画面：PC用の左サイドバー（980px以上だけ表示・それ未満は今までどおり上部タブ） =====
    980px以上では「上の青いバーは画面いっぱいの幅・その下に左サイドバー＋右コンテンツ」のアプリらしい骨格にする。
@@ -455,6 +455,11 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .tblwrap{overflow-x:auto;background:#fff;border:1.5px solid var(--line);
   border-radius:14px;box-shadow:var(--shadow);margin-bottom:14px;}
 table{border-collapse:collapse;width:100%;font-size:13px;}
+/* 選手一覧（番号/氏名/前所属/学年/位置）の表＝列幅を<th>で固定し、氏名/前所属に確実に幅を残す
+   （入力欄はvalueの長さで表の列幅が広がらないため、幅を保証しないと長い名前が見えなくなる） */
+.rostertbl{table-layout:fixed;}
+.rostertbl td{overflow:hidden;}
+.rostertbl select.in{padding-right:2px;}
 th,td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
 th{background:#f8fafc;font-size:11.5px;color:var(--sub);font-weight:700;}
 tr:last-child td{border-bottom:none;}
@@ -1219,6 +1224,20 @@ function minuteText(minute, period, m){
   if(len && n>len) return `${len}+${n-len}`;
   return String(n);
 }
+/* 公式記録用の通し時間：後半・延長は前半（・延長前半）の長さぶんを足して「45分ハーフの後半10分＝55分」のように表示する。
+   足すのは大会設定のハーフ長（ノミナルな長さ）だけで、前半の実際のアディショナルタイムは足さない。
+   その代わり、いま入力されている時間帯自身がハーフ長を超えるとき（＝そのハーフのアディショナルタイム）は
+   「90+2」のように＋表記を保つ。前半（1H）はオフセット0なので今までの表示と変わらない。 */
+function matchMinuteText(minute, period, m){
+  if(minute==null || minute==="") return "";
+  const h1 = matchHalfMin(m,"1H");
+  const offsets = { "1H":0, "2H":h1, "1ET":h1*2, "2ET":h1*2+matchHalfMin(m,"1ET") };
+  const off = offsets[period] ?? 0;
+  const len = matchHalfMin(m, period);
+  const n = num(minute);
+  if(len && n>len) return `${off+len}+${n-len}`;
+  return String(off+n);
+}
 function setMatchHalfMin(key, v){
   const m = curMatch(); if(!m) return;
   m.lineups = m.lineups || {}; m.lineups._meta = m.lineups._meta || {};
@@ -1710,6 +1729,10 @@ function render(){
     clubentry:viewClubEntry, clubentrylinks:viewClubEntryLinks,
   }[state.view] || viewHome;
   const y = window.scrollY;
+  // PC用サイドバー表示（980px以上）では画面全体ではなく.tmainの中がスクロールする＝
+  // その場合はwindow.scrollYが常に0のままなので、.tmain自身のスクロール位置も別途保持する
+  const tmainOld = document.querySelector(".tmain");
+  const ty = tmainOld ? tmainOld.scrollTop : 0;
   const changed = state.view!==_lastView || (state.view==="t" && state.tab!==_lastTab);
   $("#app").innerHTML = v();
   // トーナメント表があれば櫓レイアウト＋接続線を描く（DOM確定後）
@@ -1717,7 +1740,9 @@ function render(){
     requestAnimationFrame(()=>{ layoutBracket(); drawLinks(); });
   }
   // 画面（やタブ）が変わったときだけ先頭へ。同じ画面の描き直しは位置を保つ
-  if(changed) window.scrollTo(0,0); else window.scrollTo(0,y);
+  const tmainNew = document.querySelector(".tmain");
+  if(changed){ window.scrollTo(0,0); if(tmainNew) tmainNew.scrollTop = 0; }
+  else{ window.scrollTo(0,y); if(tmainNew) tmainNew.scrollTop = ty; }
   _lastView = state.view; _lastTab = state.tab;
 }
 window.addEventListener("resize", ()=>{ if(document.getElementById("koCanvas")){ layoutBracket(); drawLinks(); } });
@@ -3239,9 +3264,13 @@ function viewMatch(){
           </div>
         </div>
       </div>
+      <div class="btnrow noprint" style="margin-top:10px">
+        <button class="btn sec sm" style="width:auto;margin:0 auto" onclick="saveMatch(true)">💾 ここまでを保存（この画面のまま）</button>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:2px">得点の＋－は画面には反映されますが、この保存を押すまでほかの人には伝わりません。</p>
       <div class="seg" style="margin-top:14px">
         ${[["todo","未実施"],["live","試合中"],["done","🏁 終了"]].map(([k,l])=>
-          `<button class="${m.status===k?"on":""}" onclick="${k==="done"?"setMatchDone()":`setField('status','${k}')`}">${esc(l)}</button>`).join("")}
+          `<button class="${m.status===k?"on":""}" onclick="${k==="done"?"setMatchDone()":`setStatus('${k}')`}">${esc(l)}</button>`).join("")}
       </div>
       ${sp.scorers ? `
         <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
@@ -3351,11 +3380,18 @@ function viewMatch(){
   </div></div></div>`;
 }
 /* 「試合を終了する」は取り消しにくい操作なので確認する（誤タップ防止） */
-function setMatchDone(){
+async function setMatchDone(){
   const m = curMatch(); if(!m) return;
   if(m.status==="done") return;
   if(!confirm("この試合を「終了」にします。以降は内容を変更できなくなります（後から「修正する」で直せます）。よろしいですか？")) return;
-  setField('status','done');
+  await setStatus('done');
+}
+/* 試合の状態（未実施/試合中/終了）はボタンを押した瞬間に保存する＝他の端末にもすぐ「0-0・試合中」等が伝わる
+   （得点の＋－のような細かい操作と違い、状態の切り替えは頻度が低い意図的な操作なので毎回保存して問題ない） */
+async function setStatus(k){
+  const m = curMatch(); if(!m) return;
+  m.status = k; render();
+  await saveMatch(true);
 }
 
 function curMatch(){ return state.matches.find(x=>x.id===state.matchId); }
@@ -3834,22 +3870,22 @@ function viewClub(){
   const row = m=>{
     const isG = m.status==="graduated";
     return `<tr style="${isG?"opacity:.5":""}">
-      <td style="width:52px"><input class="in" style="padding:7px;text-align:center" type="number" inputmode="numeric"
+      <td><input class="in" style="padding:7px;text-align:center" type="number" inputmode="numeric"
         value="${m.no??""}" onchange="editMember('${m.id}','no',this.value===''?null:+this.value)"></td>
-      <td style="text-align:left;min-width:96px"><input class="in" style="padding:7px" value="${esc(m.name)}"
+      <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(m.name)}" title="${esc(m.name)}"
         onchange="editMember('${m.id}','name',this.value)"></td>
-      <td style="text-align:left;min-width:96px"><input class="in" style="padding:7px" value="${esc(m.prev_team||'')}"
+      <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(m.prev_team||'')}" title="${esc(m.prev_team||'')}"
         placeholder="前所属" onchange="editMember('${m.id}','prev_team',this.value||null)"></td>
-      ${cat.max?`<td style="width:64px"><select class="in" style="padding:7px" onchange="editMember('${m.id}','grade',+this.value)">
+      ${cat.max?`<td><select class="in" style="padding:7px" onchange="editMember('${m.id}','grade',+this.value)">
         <option value="0">-</option>
         ${Array.from({length:cat.max},(_,i)=>i+1).map(g=>
           `<option value="${g}" ${m.grade===g?"selected":""}>${g}${cat.suffix}</option>`).join("")}
       </select></td>`:""}
-      <td style="width:66px"><select class="in" style="padding:7px" onchange="editMember('${m.id}','pos',this.value||null)">
+      <td><select class="in" style="padding:7px" onchange="editMember('${m.id}','pos',this.value||null)">
         <option value="">-</option>
         ${POSITIONS.map(p=>`<option value="${p}" ${m.pos===p?"selected":""}>${p}</option>`).join("")}
       </select></td>
-      <td style="width:52px;white-space:nowrap">
+      <td style="white-space:nowrap">
         <button class="del" style="color:${isG?"var(--accent)":"var(--bad)"};font-size:11px;font-weight:700;padding:4px 3px"
         onclick="${isG?`unGraduate('${m.id}')`:`removeMember('${m.id}')`}">${isG?"復帰":"削除"}</button></td>
     </tr>`;
@@ -3879,8 +3915,8 @@ function viewClub(){
     </div>
 
     <div class="block-label">選手（${membersOf(c.id).length}名）</div>
-    ${ms.length ? `<div class="tblwrap"><table>
-      <thead><tr><th>番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?"<th>学年</th>":""}<th>位置</th><th></th></tr></thead>
+    ${ms.length ? `<div class="tblwrap"><table class="rostertbl">
+      <thead><tr><th style="width:8%">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:13%">学年</th>`:""}<th style="width:13%">位置</th><th style="width:8%"></th></tr></thead>
       <tbody>${ms.map(row).join("")}</tbody></table></div>`
     : `<div class="empty">まだ選手がいません。</div>`}
 
@@ -4354,7 +4390,7 @@ function viewLineup(){
   + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"go('t')",
       act:`<button class="act" onclick="saveLineup()">保存</button>` })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
-    <div class="tabs">
+    <div class="team-switch">
       <button class="${side==="H"?"on":""}" onclick="state.lineupSide='H';render()">${esc(H.label||"ホーム")}</button>
       <button class="${side==="A"?"on":""}" onclick="state.lineupSide='A';render()">${esc(A.label||"アウェイ")}</button>
     </div>
@@ -4499,7 +4535,7 @@ function draftOfficial(m){
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
       const c = s.cards[ci];
       if(!c.name){
-        c.time = e.minute!=null?minuteText(e.minute,e.period,m)+"分":""; c.kind = {yellow:"警",red:"退",green:"緑"}[e.type]||"";
+        c.time = e.minute!=null?matchMinuteText(e.minute,e.period,m)+"分":""; c.kind = {yellow:"警",red:"退",green:"緑"}[e.type]||"";
         c.no = (nm.match(/^(\d+)\s/)||[])[1]||""; c.name = nm.replace(/^\d+\s/,"");
       }
       ci++;
@@ -4515,7 +4551,7 @@ function draftOfficial(m){
       const inNm    = inFull.replace(/^\d+\s/,"");
       const outRow  = outNm && s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===outNm);
       const inRow   = inNm  && s.lineup.find(r=> r.name.replace(/\s*\(C\)\s*$/,"")===inNm);
-      if(outRow) outRow.subTime = e.period==="HT" ? "HT" : e.minute!=null ? minuteText(e.minute,e.period,m)+"分" : outRow.subTime;
+      if(outRow) outRow.subTime = e.period==="HT" ? "HT" : e.minute!=null ? matchMinuteText(e.minute,e.period,m)+"分" : outRow.subTime;
       if(inRow && outNo) inRow.subNo = outNo;
     });
     const keys = ["1H","2H","1ET","2ET"];               // 前半/後半/延長前/延長後 → scores[0..3]
@@ -4553,7 +4589,7 @@ function draftOfficial(m){
       const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
       const prev = o.goals[i] || emptyGoalRow();
       return {
-        time:   e.minute!=null ? minuteText(e.minute,e.period,m)+"分" : (prev.time||""),
+        time:   e.minute!=null ? matchMinuteText(e.minute,e.period,m)+"分" : (prev.time||""),
         team:   (e.type==="og" ? (e.team==="H"?A.label:H.label) : R.label) || "",
         no:     (nm.match(/^(\d+)\s/)||[])[1] || (nm?"":prev.no||""),
         scorer: nm ? (nm.replace(/^\d+\s/,"")+suffix) : (prev.scorer||suffix),
@@ -5683,13 +5719,13 @@ function viewEntry(){
       ${note?`<div class="callout" style="margin-top:10px">📋 本部より：${esc(note)}</div>`:""}
     </div>
     <div class="card">
-      <div class="tblwrap"><table>
-        <thead><tr><th style="width:56px">番号</th><th style="text-align:left">氏名</th><th style="width:60px">学年</th><th style="width:74px">位置</th><th style="width:44px"></th></tr></thead>
+      <div class="tblwrap"><table class="rostertbl">
+        <thead><tr><th style="width:12%">番号</th><th style="text-align:left">氏名</th><th style="width:16%">学年</th><th style="width:18%">位置</th><th style="width:12%"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.no??""}" oninput="entrySetPlayer(${i},'no',this.value)"></td>
-          <td><input class="in" value="${esc(p.name||"")}" oninput="entrySetPlayer(${i},'name',this.value)" placeholder="氏名"></td>
+          <td style="text-align:left"><input class="in" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="entrySetPlayer(${i},'name',this.value)" placeholder="氏名"></td>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.grade??""}" oninput="entrySetPlayer(${i},'grade',this.value)"></td>
-          <td><select class="in" onchange="entrySetPlayer(${i},'pos',this.value)">${POS.map(o=>`<option ${o===(p.pos||"")?"selected":""}>${o||"-"}</option>`).join("")}</select></td>
+          <td><select class="in" style="padding:7px" onchange="entrySetPlayer(${i},'pos',this.value)">${POS.map(o=>`<option ${o===(p.pos||"")?"selected":""}>${o||"-"}</option>`).join("")}</select></td>
           <td><button class="linkbtn" style="color:var(--bad)" onclick="entryRemovePlayer(${i})">削除</button></td>
         </tr>`).join("")}</tbody>
       </table></div>
@@ -5847,12 +5883,12 @@ function viewClubEntry(){
       </div>
     </div>
     <div class="card">
-      <div class="tblwrap"><table>
-        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th><th style="width:54px">学年</th><th style="width:70px">位置</th><th style="width:40px"></th></tr></thead>
+      <div class="tblwrap"><table class="rostertbl">
+        <thead><tr><th style="width:8%">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th><th style="width:13%">学年</th><th style="width:13%">位置</th><th style="width:8%"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.no??""}" oninput="cePlayer(${i},'no',this.value)"></td>
-          <td><input class="in" style="padding:7px" value="${esc(p.name||"")}" oninput="cePlayer(${i},'name',this.value)" placeholder="氏名"></td>
-          <td><input class="in" style="padding:7px" value="${esc(p.prev_team||"")}" oninput="cePlayer(${i},'prev_team',this.value)" placeholder="前所属"></td>
+          <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="cePlayer(${i},'name',this.value)" placeholder="氏名"></td>
+          <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(p.prev_team||"")}" title="${esc(p.prev_team||"")}" oninput="cePlayer(${i},'prev_team',this.value)" placeholder="前所属"></td>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.grade??""}" oninput="cePlayer(${i},'grade',this.value)"></td>
           <td><select class="in" style="padding:7px" onchange="cePlayer(${i},'pos',this.value)">${POS.map(o=>`<option ${o===(p.pos||"")?"selected":""}>${o||"-"}</option>`).join("")}</select></td>
           <td><button class="linkbtn" style="color:var(--bad)" onclick="ceRemove(${i})">削除</button></td>
