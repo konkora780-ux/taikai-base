@@ -1775,8 +1775,11 @@ function viewHome(){
   // 開催中＝試合がまだ全部終わっていない大会（集計前・試合0件はいったん開催中扱い）
   const isOpenT = t=>{ const b = hs && hs.byT[t.id]; if(!b) return true; return b.total===0 || b.done<b.total; };
   const mineOpen = mine.filter(isOpenT);
+  const mineDone = mine.filter(t=>!isOpenT(t));   // 自分の団体の終了済み大会（従来はどこにも出ていなかった）
   const qaTarget = mineOpen[0] || mine[0];
   const qaGo = qaTarget ? `openTournament('${qaTarget.id}')` : "go('new')";
+  const showQA = mineOpen.length <= 1;   // 開催中が2つ以上あると「どの大会か」曖昧になるので隠す
+  const showDone = !!state.homeShowDone;
 
   const cardOf = t=>{
     const s = SPORTS[t.sport]?.label || "";
@@ -1871,18 +1874,23 @@ function viewHome(){
           </div>
           <div class="panel">
             <div class="block-label-row"><span class="block-label" style="margin:0">⚡ クイックアクセス</span></div>
-            <div class="qa-grid">
+            ${showQA ? `<div class="qa-grid">
               <button class="qa-tile c-blue" onclick="go('new')"><span class="ic">${HI.trophy}</span><b>大会を作成</b><small>新しい大会を作成します</small></button>
               <button class="qa-tile c-green" onclick="${qaGo}"><span class="ic">${HI.manage}</span><b>試合を管理</b><small>対戦表やスケジュール管理</small></button>
               <button class="qa-tile c-gold" onclick="${qaGo}"><span class="ic">${HI.edit}</span><b>結果を入力</b><small>試合結果を入力・編集</small></button>
               <button class="qa-tile c-purple" onclick="${qaGo}"><span class="ic">${HI.doc}</span><b>公式記録</b><small>結果表や記録を出力</small></button>
-            </div>
+            </div>` : `<button class="qa-tile c-blue" style="width:100%" onclick="go('new')"><span class="ic">${HI.trophy}</span><b>大会を作成</b><small>新しい大会を作成します</small></button>
+            <p class="hint" style="margin-top:10px">開催中の大会が複数あるため、試合の管理・結果入力・公式記録は各大会の「大会を見る」から操作してください。</p>`}
             <button class="btn ghost sm" style="width:100%;margin-top:12px" onclick="go('roster')">📋 チーム・選手の台帳（${orgYear()}年度）</button>
           </div>
         </div>` : ""}
-      <div class="block-label" id="tlist">${state.user?"ほかの大会":"開催中の大会"}</div>
+      ${mineDone.length ? `<div class="block-label-row"><span class="block-label">🏁 終了した大会</span>
+          ${mineDone.length>4?`<button class="link-more" onclick="state.homeShowDone=!state.homeShowDone;render()">${showDone?"閉じる":"すべて見る"} ›</button>`:""}
+        </div>
+        <div class="pick-grid">${(showDone?mineDone:mineDone.slice(0,4)).map(cardOf).join("")}</div>` : ""}
+      <div class="block-label" id="tlist">${state.user?"ほかの団体の公開大会":"開催中の大会"}</div>
       ${others.length ? `<div class="pick-grid">${others.map(cardOf).join("")}</div>`
-        : `<div class="empty">${state.loading?"読み込み中…":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
+        : `<div class="empty">${state.loading?"読み込み中…":state.user?"ほかの団体が作った大会はまだありません。":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
     </div>
 
     <div class="feat-band"><div class="feat-band-in">
