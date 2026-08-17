@@ -917,6 +917,42 @@ const DB = {
     return { org: ro.error ? null : ro.data, clubs: rc.data||[], members: rm.data||[] };
   },
 
+  /* --- 全データのバックアップ（この団体の全部をまとめて書き出す） --- */
+  async exportBackup(orgId){
+    if(!sb){
+      const d = local.read();
+      return { exported_at:new Date().toISOString(), org:d.orgs.find(o=>o.id===orgId)||null,
+        tournaments:d.t.filter(x=>x.org_id===orgId), teams:d.teams.filter(x=>x.org_id===orgId),
+        matches:d.matches.filter(x=>x.org_id===orgId), clubs:d.clubs.filter(x=>x.org_id===orgId),
+        members:d.members.filter(x=>x.org_id===orgId), entry:d.entry.filter(x=>x.org_id===orgId),
+        club_entry:d.clubEntry.filter(x=>x.org_id===orgId) };
+    }
+    const [ro, rt, rc, rm, re, rce] = await Promise.all([
+      sb.from("gn_orgs").select("*").eq("id",orgId).maybeSingle(),
+      sb.from("gn_tournaments").select("*").eq("org_id",orgId),
+      sb.from("gn_clubs").select("*").eq("org_id",orgId),
+      sb.from("gn_members").select("*").eq("org_id",orgId),
+      sb.from("gn_entry").select("*").eq("org_id",orgId),
+      sb.from("gn_club_entry").select("*").eq("org_id",orgId),
+    ]);
+    if(rt.error) throw rt.error;
+    if(rc.error) throw rc.error;
+    if(rm.error) throw rm.error;
+    if(re.error) throw re.error;
+    if(rce.error) throw rce.error;
+    const tournaments = rt.data||[];
+    const ids = tournaments.map(t=>t.id);
+    const [rteams, rmatches] = await Promise.all([
+      ids.length ? sb.from("gn_teams").select("*").in("tournament_id",ids) : Promise.resolve({data:[]}),
+      ids.length ? sb.from("gn_matches").select("*").in("tournament_id",ids) : Promise.resolve({data:[]}),
+    ]);
+    if(rteams.error) throw rteams.error;
+    if(rmatches.error) throw rmatches.error;
+    return { exported_at:new Date().toISOString(), org: ro.error?null:ro.data,
+      tournaments, teams:rteams.data||[], matches:rmatches.data||[],
+      clubs:rc.data||[], members:rm.data||[], entry:re.data||[], club_entry:rce.data||[] };
+  },
+
   async upsert(table, rows){
     const arr = Array.isArray(rows) ? rows : [rows];
     if(!arr.length) return;
@@ -3827,6 +3863,25 @@ const membersOf  = (clubId, withGrads) => state.members
     .sort((a,b)=> (a.no??999)-(b.no??999) || (a.sort_order||0)-(b.sort_order||0)
                 || String(a.name).localeCompare(String(b.name),"ja"));
 
+/* 全データのバックアップ（JSONで書き出し・団体の管理者が手元に保存する用） */
+async function doBackupExport(){
+  if(!state.user) return;
+  toast("バックアップを準備しています…");
+  try{
+    const data = await DB.exportBackup(state.user.id);
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type:"application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `大会ベース_バックアップ_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("バックアップをダウンロードしました");
+  }catch(e){
+    toast("バックアップに失敗しました："+(e.message||e));
+  }
+}
+
 function viewRoster(){
   const year = orgYear();
   return topbar({ title:"チーム・選手の台帳", sub:`${year}年度`, back:"go('home')" })
@@ -3855,6 +3910,8 @@ function viewRoster(){
       <button class="btn sec sm" style="flex:1" onclick="openClubEntryLinks()">📨 記入リンクを配る</button>
     </div>
     <p class="hint">各チームに「記入リンク」を配ると、チームがログイン不要でチーム名・選手を登録できます（初年度の登録に便利）。</p>
+    <button class="btn ghost sm" style="width:100%;margin-top:14px" onclick="doBackupExport()">🗄 全データをバックアップ（ダウンロード）</button>
+    <p class="hint">大会・チーム・選手・試合結果など、この団体の全データを1つのファイルに書き出します。月に1回など決まったタイミングでダウンロードし、パソコンやクラウドストレージに保存しておくことをおすすめします。</p>
   </div>`;
 }
 /* チーム名をまとめて作る（記入リンクを配る前の枠づくり） */
