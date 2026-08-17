@@ -222,6 +222,8 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .feat-item .ic{width:34px;height:34px;border-radius:9px;background:rgba(226,185,59,.18);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .feat-item .ic img{width:20px;height:20px;object-fit:contain;display:block;}
+.home-legal-foot{text-align:center;padding:16px 12px 28px;}
+.home-legal-foot a{color:var(--sub);font-size:12.5px;text-decoration:underline;}
 .feat-item b{display:block;font-size:13.5px;font-weight:800;margin-bottom:3px;}
 .feat-item small{display:block;font-size:11px;opacity:.78;font-weight:500;line-height:1.5;}
 
@@ -1773,6 +1775,7 @@ function render(){
     roster:viewRoster, club:viewClub, official:viewOfficial, officialPublic:viewOfficialPublic, lineup:viewLineup, sched:viewSchedule,
     entry:viewEntry, entrylinks:viewEntryLinks,
     clubentry:viewClubEntry, clubentrylinks:viewClubEntryLinks,
+    terms:viewTerms,
   }[state.view] || viewHome;
   const y = window.scrollY;
   // PC用サイドバー表示（980px以上）では画面全体ではなく.tmainの中がスクロールする＝
@@ -1988,6 +1991,7 @@ function viewHome(){
       <div class="feat-item"><span class="ic"><img src="${FEAT_IC.chart}" alt=""></span><div><b>多彩な集計機能</b><small>順位表・得点ランキングなど多彩な集計が可能</small></div></div>
       <div class="feat-item"><span class="ic"><img src="${FEAT_IC.cloud}" alt=""></span><div><b>公式記録を出力</b><small>公式戦に必要な記録を簡単に出力</small></div></div>
     </div></div>
+    <div class="home-legal-foot"><a href="javascript:void(0)" onclick="go('terms')">利用規約・プライバシーポリシー</a></div>
   </div>`;
 }
 
@@ -2000,6 +2004,73 @@ function scrollToPublicTournaments(){
     const top = window.scrollY + target.getBoundingClientRect().top - safeGap;
     window.scrollTo({top:Math.max(0,top),behavior:reduceMotion?"auto":"smooth"});
   });
+}
+
+/* ---------- 利用規約・プライバシーポリシー ---------- */
+function viewTerms(){
+  return topbar({ title:"利用規約・プライバシーポリシー", back:"go('home')" })
+  + `<div class="screen">
+    <p class="hint">最終改定日：2026年8月17日／運営：大会ベース運営事務局</p>
+
+    <div class="block-label">利用規約</div>
+    <div class="card">
+      <p><b>第1条（本規約について）</b><br>
+      この利用規約（以下「本規約」）は、大会ベース運営事務局（以下「運営」）が提供するサッカー・フットサル等の大会運営支援サービス「大会ベース」（以下「本サービス」）の利用条件を定めるものです。本サービスを利用する団体・個人（以下「利用者」）は、本規約に同意のうえご利用ください。</p>
+
+      <p><b>第2条（サービスの内容）</b><br>
+      本サービスは、大会の組み合わせ・試合結果・順位表・公式記録などを作成・公開するための無料または有償のツールです。現在は開発・改善を継続中の「モニター版」として提供しており、機能や画面は予告なく変更されることがあります。</p>
+
+      <p><b>第3条（アカウントの管理）</b><br>
+      団体コードおよび合言葉（パスワード）は利用者ご自身の責任で管理してください。第三者への漏えいにより生じた損害について、運営は責任を負いません。心当たりのない利用があった場合は、すみやかに運営までご連絡ください。</p>
+
+      <p><b>第4条（禁止事項）</b><br>
+      次の行為を禁止します。①法令または公序良俗に違反する行為　②他の利用者・第三者の権利を侵害する行為　③本サービスの運営を妨げる行為（不正アクセス・過度な自動アクセス等）　④虚偽の情報を登録する行為。</p>
+
+      <p><b>第5条（免責事項）</b><br>
+      本サービスはモニター版として現状有姿で提供され、動作の完全性・継続性・データの滅失防止を保証するものではありません。通信環境やサーバーの不具合等により、記録の一部が失われたり、サービスが一時的に利用できなくなる可能性があります。<b>大会当日に使う公式記録など重要なデータは、台帳画面の「全データをバックアップ」機能などを使い、利用者ご自身でも定期的に控えを保管してください。</b>本サービスの利用により生じた損害について、運営は故意または重大な過失がある場合を除き、責任を負いません。</p>
+
+      <p><b>第6条（サービスの変更・中止）</b><br>
+      運営は、利用者への事前の通知をもって、本サービスの内容変更・提供の一時停止・終了を行うことがあります。やむを得ない事情がある場合は、事前の通知なく行うことがあります。</p>
+
+      <p><b>第7条（モニター版の料金）</b><br>
+      モニター利用の料金・期間は、利用開始前に個別にご案内し、双方の合意のうえで確定します。詳しくは別途お渡しする「モニター利用合意書」をご確認ください。</p>
+
+      <p><b>第8条（規約の変更）</b><br>
+      運営は、必要と判断した場合、本規約を変更することがあります。変更後の規約は本サービス上に掲示した時点で効力を生じます。</p>
+
+      <p><b>第9条（準拠法・管轄）</b><br>
+      本規約の解釈にあたっては日本法を準拠法とします。本サービスに関して紛争が生じた場合、運営の所在地を管轄する裁判所を第一審の専属的合意管轄とします。</p>
+    </div>
+
+    <div class="block-label" style="margin-top:20px">プライバシーポリシー</div>
+    <div class="card">
+      <p><b>1. 取り扱う情報</b><br>
+      本サービスでは、大会運営のために次の情報をお預かりします。<br>
+      ・ログイン情報（団体コード・合言葉）<br>
+      ・チーム情報（チーム名・区分・校章画像 等）<br>
+      ・選手情報（氏名・学年・背番号・ポジション・前所属 等。<b>未成年の情報を含みます</b>）<br>
+      ・大会運営情報（試合日程・結果・得点・警告退場・出場記録・公式記録の記載内容 等）<br>
+      ・お問い合わせ内容（お問い合わせフォームにご入力いただいた氏名・団体名・連絡先・本文）</p>
+
+      <p><b>2. 利用目的</b><br>
+      お預かりした情報は、大会の運営・記録の作成・順位表や結果の公開・お問い合わせへの対応のためにのみ利用します。目的外の利用（広告配信のための第三者提供等）は行いません。</p>
+
+      <p><b>3. 公開範囲</b><br>
+      日程・結果・順位表など大会の性質上公開が前提の情報は、本サービス上で一般に公開されます。公式記録・メンバー表など個人情報を含む項目は、大会の作成者が「非公開」に設定できます。</p>
+
+      <p><b>4. 保存先・第三者提供</b><br>
+      お預かりした情報は、データベースサービス「Supabase」（本サービスの運営を支えるクラウドインフラ事業者）のサーバーに保存されます。法令に基づく場合を除き、上記以外の第三者に情報を提供することはありません。</p>
+
+      <p><b>5. 保存期間・削除</b><br>
+      情報は、利用者による削除操作または運営への削除依頼があるまで保存されます。台帳・大会データの削除を希望される場合は、お問い合わせ先までご連絡ください。合理的な期間内に対応します。</p>
+
+      <p><b>6. 安全管理</b><br>
+      非公開に設定した情報が第三者に読み取られないよう、アクセス制御（団体ごとの権限分離）等の対策を行っています。ただし、通信環境等に起因する事故を完全に防ぐことを保証するものではありません。</p>
+
+      <p><b>7. お問い合わせ先</b><br>
+      本サービスに関するお問い合わせ・個人情報の削除依頼は、お問い合わせフォームよりご連絡ください。（フォームのリンクは準備中です）</p>
+    </div>
+  </div>`;
 }
 
 /* ---------- ログイン ---------- */
