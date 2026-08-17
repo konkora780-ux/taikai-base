@@ -955,6 +955,40 @@ const DB = {
       clubs:rc.data||[], members:rm.data||[], entry:re.data||[], club_entry:rce.data||[] };
   },
 
+  /* --- バックアップからの復元（exportBackupで書き出したJSONを読み込む） ---
+     安全のため、ファイルの中身に関わらずorg_idは必ず「今ログインしている団体」に付け替える
+     （他団体のバックアップを間違って読み込んでも、自分の団体のデータとして復元される＝混ざらない）。
+     idが一致する行は上書き、無ければ新規作成（upsert）。テーブルの参照関係の順に実行する。 */
+  async importBackup(data, orgId){
+    if(!data || typeof data!=="object") throw new Error("ファイルの形式が正しくありません");
+    const fix = rows => (Array.isArray(rows)?rows:[]).map(r=>({ ...r, org_id:orgId }));
+    const clubs=fix(data.clubs), members=fix(data.members), tournaments=fix(data.tournaments),
+          teams=fix(data.teams), matches=fix(data.matches), entry=fix(data.entry), clubEntryRows=fix(data.club_entry);
+    const counts = { tournaments:tournaments.length, teams:teams.length, matches:matches.length,
+      clubs:clubs.length, members:members.length, entry:entry.length, club_entry:clubEntryRows.length };
+    if(!sb){
+      const d = local.read();
+      const put = (key, rows) => rows.forEach(r=>{
+        const i = d[key].findIndex(x=>x.id===r.id);
+        if(i>=0) d[key][i] = {...d[key][i], ...r}; else d[key].push(r);
+      });
+      put("clubs",clubs); put("members",members); put("t",tournaments); put("teams",teams);
+      put("matches",matches); put("entry",entry); put("clubEntry",clubEntryRows);
+      local.write(d);
+      return counts;
+    }
+    // 参照される側（台帳→大会→エントリー→試合→記入コード）の順に upsert する
+    for(const [table, rows] of [
+      ["gn_clubs",clubs], ["gn_members",members], ["gn_tournaments",tournaments],
+      ["gn_teams",teams], ["gn_matches",matches], ["gn_entry",entry], ["gn_club_entry",clubEntryRows],
+    ]){
+      if(!rows.length) continue;
+      const { error } = await sb.from(table).upsert(rows);
+      if(error) throw new Error(`${table}: ${error.message}`);
+    }
+    return counts;
+  },
+
   async upsert(table, rows){
     const arr = Array.isArray(rows) ? rows : [rows];
     if(!arr.length) return;
@@ -2076,7 +2110,8 @@ function viewTerms(){
       お預かりした情報は、大会の運営・記録の作成・順位表や結果の公開・お問い合わせへの対応のためにのみ利用します。目的外の利用（広告配信のための第三者提供等）は行いません。</p>
 
       <p><b>3. 公開範囲</b><br>
-      日程・結果・順位表など大会の性質上公開が前提の情報は、本サービス上で一般に公開されます。公式記録・メンバー表など個人情報を含む項目は、大会の作成者が「非公開」に設定できます。</p>
+      日程・結果・順位表・出場選手のメンバー表（背番号・氏名・学年等を含みます）は、大会の性質上、本サービス上で常に一般に公開されます。これらは大会ベースが意図して公開している情報です（他の大会運営サービスと同様の仕様です）。<br>
+      公式記録（審判名・天候・詳しい経過メモなど、上記より詳細な内容を含む記録用紙）については、大会の作成者が「公開する」操作をした試合の分だけ公開され、それ以外は非公開のままです。</p>
 
       <p><b>4. 保存先・第三者提供</b><br>
       お預かりした情報は、データベースサービス「Supabase」（本サービスの運営を支えるクラウドインフラ事業者）のサーバーに保存されます。法令に基づく場合を除き、上記以外の第三者に情報を提供することはありません。</p>
@@ -3973,6 +4008,35 @@ async function doBackupExport(){
   }
 }
 
+/* バックアップからの復元（ファイルを選ぶ→内容を確認→復元） */
+function doBackupImport(){
+  if(!state.user) return;
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = "application/json";
+  input.onchange = async ()=>{
+    const f = input.files && input.files[0]; if(!f) return;
+    if(f.size > 30*1024*1024) return toast("ファイルが大きすぎます");
+    let data;
+    try{ data = JSON.parse(await f.text()); }
+    catch(e){ return toast("JSONファイルとして読み込めませんでした"); }
+    const c = { t:(data.tournaments||[]).length, tm:(data.teams||[]).length, mt:(data.matches||[]).length,
+      cl:(data.clubs||[]).length, mb:(data.members||[]).length };
+    const ok = confirm(
+      `このファイルの内容で復元します。\n\n大会 ${c.t}件・チーム ${c.tm}件・試合 ${c.mt}件\n台帳チーム ${c.cl}件・台帳選手 ${c.mb}件\n\n`+
+      `今ログインしている団体（${state.user.code}）のデータとして復元されます。\n`+
+      `IDが一致するデータは上書きされます。よろしいですか？`);
+    if(!ok) return;
+    toast("復元しています…");
+    try{
+      await DB.importBackup(data, state.user.id);
+      await Promise.all([reloadRoster(), reloadList()]);
+      toast("復元しました");
+      render();
+    }catch(e){ toast("復元できませんでした: "+(e.message||e)); }
+  };
+  input.click();
+}
+
 function viewRoster(){
   const year = orgYear();
   return topbar({ title:"チーム・選手の台帳", sub:`${year}年度`, back:"go('home')" })
@@ -4002,7 +4066,9 @@ function viewRoster(){
     </div>
     <p class="hint">各チームに「記入リンク」を配ると、チームがログイン不要でチーム名・選手を登録できます（初年度の登録に便利）。</p>
     <button class="btn ghost sm" style="width:100%;margin-top:14px" onclick="doBackupExport()">🗄 全データをバックアップ（ダウンロード）</button>
-    <p class="hint">大会・チーム・選手・試合結果など、この団体の全データを1つのファイルに書き出します。月に1回など決まったタイミングでダウンロードし、パソコンやクラウドストレージに保存しておくことをおすすめします。</p>
+    <p class="hint">大会・チーム・選手・試合結果など、この団体の全データを1つのファイルに書き出します。月に1回など決まったタイミングでダウンロードし、パソコンやクラウドストレージに保存しておくことをおすすめします。<b>選手の氏名・記入コードなど個人情報や秘密情報を含むファイルです。厳重に保管し、他人に渡さないでください。</b></p>
+    <button class="btn ghost sm" style="width:100%;margin-top:6px" onclick="doBackupImport()">♻️ バックアップから復元する</button>
+    <p class="hint">上のバックアップファイルを選ぶと、その内容でデータを復元します。<b>今あるデータの一部が上書きされる場合があります</b>（データが消えてしまったときの回復用です。普段は使いません）。</p>
   </div>`;
 }
 /* チーム名をまとめて作る（記入リンクを配る前の枠づくり） */
