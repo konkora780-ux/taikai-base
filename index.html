@@ -92,8 +92,13 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);
   font-size:16px;font-weight:600;transition:transform .08s,border-color .15s;}
 .pick:active{transform:scale(.985);border-color:var(--accent);}
-.pick .meta{font-size:12px;color:var(--sub);font-weight:500;margin-top:2px;}
+.pick .meta{font-size:12px;color:var(--sub);font-weight:500;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pick .chev{color:#c2cbd6;font-size:20px;flex-shrink:0;transition:transform .15s;}
+.pick.pick-done{background:var(--paper);}
+.pick .pick-title{display:flex;align-items:center;gap:6px;min-width:0;}
+.pick .pick-title>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pick .badge{padding:2px 8px;font-size:10.5px;}
 .team-acc{margin-bottom:10px;}
 .team-acc>summary{list-style:none;cursor:pointer;margin-bottom:0;}
 .team-acc>summary::-webkit-details-marker{display:none;}
@@ -1806,13 +1811,16 @@ function viewHome(){
   const showQA = mineOpen.length <= 1;   // 開催中が2つ以上あると「どの大会か」曖昧になるので隠す
   const showDone = !!state.homeShowDone;
 
-  const cardOf = t=>{
+  const cardOf = (t, opts)=>{
+    opts = opts || {};
     const s = SPORTS[t.sport]?.label || "";
     const f = FORMATS[t.format]?.label || "";
     const tags = [CATEGORIES[t.settings?.gradeCat]?.label, SCOPES[t.settings?.scope]?.label].filter(Boolean).join("・");
-    return `<button class="pick" onclick="openTournament('${t.id}')">
-      <span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name)}</span>
-      <span class="meta">${tags?esc(tags)+"・":""}${esc(s)}・${esc(f)}${t.settings?.host?"・"+esc(t.settings.host):""}</span></span>
+    return `<button class="pick ${opts.done?"pick-done":""}" onclick="openTournament('${t.id}')">
+      <span style="min-width:0">
+        <span class="pick-title">${opts.done?`<span class="badge done">終了</span>`:""}<span>${esc(t.name)}</span></span>
+        <span class="meta">${tags?esc(tags)+"・":""}${esc(s)}・${esc(f)}${t.settings?.host?"・"+esc(t.settings.host):""}</span>
+      </span>
       <span class="chev">›</span></button>`;
   };
   const statCard = (ic,cls,label,value,unit)=> `<div class="stat-card">
@@ -1912,7 +1920,7 @@ function viewHome(){
       ${mineDone.length ? `<div class="block-label-row"><span class="block-label">🏁 終了した大会</span>
           ${mineDone.length>4?`<button class="link-more" onclick="state.homeShowDone=!state.homeShowDone;render()">${showDone?"閉じる":"すべて見る"} ›</button>`:""}
         </div>
-        <div class="pick-grid">${(showDone?mineDone:mineDone.slice(0,4)).map(cardOf).join("")}</div>` : ""}
+        <div class="pick-grid">${(showDone?mineDone:mineDone.slice(0,4)).map(t=>cardOf(t,{done:true})).join("")}</div>` : ""}
       <div class="block-label" id="tlist">${state.user?"ほかの団体の公開大会":"開催中の大会"}</div>
       ${others.length ? `<div class="pick-grid">${others.map(cardOf).join("")}</div>`
         : `<div class="empty">${state.loading?"読み込み中…":state.user?"ほかの団体が作った大会はまだありません。":"まだ大会がありません。<br>運営ログインして「大会をつくる」から始めてください。"}</div>`}
@@ -4585,7 +4593,7 @@ function draftOfficial(m){
     o.goals = goalsE.slice(0,28).map((e,i)=>{   // 1〜14点=1枚目 / 15〜28点=2枚目に続ける
       const R = e.team==="H"?H:A;
       const nm = e.playerId ? playerName(R.id, e.playerId) : "";
-      const anm = e.assistId ? playerName(R.id, e.assistId) : "";   // 背番号も残す（例：「8 中澄恵大」）
+      const anm = e.assistId ? playerName(R.id, e.assistId) : "";   // アシスト欄は幅が狭いので背番号だけにする
       const suffix = e.type==="og" ? "(OG)" : e.type==="pk" ? "(PK)" : "";
       const prev = o.goals[i] || emptyGoalRow();
       return {
@@ -4593,7 +4601,7 @@ function draftOfficial(m){
         team:   (e.type==="og" ? (e.team==="H"?A.label:H.label) : R.label) || "",
         no:     (nm.match(/^(\d+)\s/)||[])[1] || (nm?"":prev.no||""),
         scorer: nm ? (nm.replace(/^\d+\s/,"")+suffix) : (prev.scorer||suffix),
-        assist: e.assistId!=null ? anm : (prev.assist||""),
+        assist: e.assistId!=null ? ((anm.match(/^(\d+)/)||[])[1] || "") : (prev.assist||""),
         seq:    (prev.seq && prev.seq.length) ? prev.seq : Array(10).fill(""),
       };
     });
