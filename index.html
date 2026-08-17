@@ -1738,6 +1738,10 @@ function render(){
   // その場合はwindow.scrollYが常に0のままなので、.tmain自身のスクロール位置も別途保持する
   const tmainOld = document.querySelector(".tmain");
   const ty = tmainOld ? tmainOld.scrollTop : 0;
+  // 大会内タブ（大会概要〜出場記録）はスマホ幅だと横スクロールする帯。押すたびに先頭へ戻ると
+  // 押した場所ごと見失うので、こちらは画面の切り替えに関係なく常に横位置を保つ
+  const tabsOld = document.querySelector(".tabs");
+  const tx = tabsOld ? tabsOld.scrollLeft : 0;
   const changed = state.view!==_lastView || (state.view==="t" && state.tab!==_lastTab);
   $("#app").innerHTML = v();
   // トーナメント表があれば櫓レイアウト＋接続線を描く（DOM確定後）
@@ -1748,6 +1752,8 @@ function render(){
   const tmainNew = document.querySelector(".tmain");
   if(changed){ window.scrollTo(0,0); if(tmainNew) tmainNew.scrollTop = 0; }
   else{ window.scrollTo(0,y); if(tmainNew) tmainNew.scrollTop = ty; }
+  const tabsNew = document.querySelector(".tabs");
+  if(tabsNew) tabsNew.scrollLeft = tx;
   _lastView = state.view; _lastTab = state.tab;
 }
 window.addEventListener("resize", ()=>{ if(document.getElementById("koCanvas")){ layoutBracket(); drawLinks(); } });
