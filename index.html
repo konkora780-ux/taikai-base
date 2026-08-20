@@ -1217,9 +1217,26 @@ const DB = {
 };
 
 /* 記入コード（紛らわしい文字を避けた6桁） */
+/* 記入コード（6桁）の生成。児童生徒の名簿を取得・提出できる認証コードのため、
+   Math.random()ではなくcrypto.getRandomValues()を使う。
+   剰余だけで文字を選ぶと分布に偏りが出る（256を文字数29で割り切れないため）ので、
+   余りが出る範囲の乱数は捨てて取り直す（rejection sampling）。
+   暗号学的乱数が使えない環境では、弱い乱数へ黙って後退せずエラーにする
+   （呼び出し元のensureEntries/ensureClubEntriesは既にtry/catchでtoast表示する設計）。 */
 function entryCode(){
   const s = "ABCDEFGHJKLMNPRSTUWXYZ2345679";
-  let r = ""; for(let i=0;i<6;i++) r += s[Math.floor(Math.random()*s.length)];
+  const n = s.length;
+  if(!(window.crypto && crypto.getRandomValues)){
+    throw new Error("このブラウザは安全な記入コードの生成に対応していません。ブラウザを最新に更新するか、別のブラウザでお試しください。");
+  }
+  const limit = Math.floor(256/n)*n;   // これ以上の値は切り捨てて取り直す＝剰余バイアスを避ける
+  const buf = new Uint8Array(1);
+  let r = "";
+  while(r.length < 6){
+    crypto.getRandomValues(buf);
+    if(buf[0] >= limit) continue;
+    r += s[buf[0] % n];
+  }
   return r;
 }
 
