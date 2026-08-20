@@ -464,9 +464,10 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 table{border-collapse:collapse;width:100%;font-size:13px;}
 /* 選手一覧（番号/氏名/前所属/学年/位置）の表＝列幅を<th>で固定し、氏名/前所属に確実に幅を残す
    （入力欄はvalueの長さで表の列幅が広がらないため、幅を保証しないと長い名前が見えなくなる） */
-.rostertbl{table-layout:fixed;}
+.rostertbl{table-layout:fixed;min-width:600px;}
 .rostertbl td{overflow:hidden;}
 .rostertbl select.in{padding-right:2px;}
+.rostertbl input.rt-no{padding:7px 2px;}
 th,td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
 th{background:#f8fafc;font-size:11.5px;color:var(--sub);font-weight:700;}
 tr:last-child td{border-bottom:none;}
@@ -579,7 +580,8 @@ td.pt{font-weight:800;}
 .sheet-a4{position:relative;width:595.28pt;height:842pt;background:#fff;
   transform-origin:0 0;box-shadow:0 2px 12px rgba(20,30,50,.18);
   font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;color:#000;}
-.sheet-a4 .ln{position:absolute;background:#000;display:block;}
+.sheet-a4 .ln{position:absolute;background:#000;display:block;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact;color-adjust:exact;}
 .sheet-a4 .lb{position:absolute;white-space:nowrap;line-height:1;}
 .sheet-a4 .lbc{position:absolute;white-space:nowrap;line-height:1;transform:translateX(-50%);text-align:center;}
 .sheet-a4 .tot{position:absolute;text-align:center;font-size:16pt;font-weight:700;line-height:1;}
@@ -755,6 +757,28 @@ const FORMATS = {
 const GROUP_NAMES = "ABCDEFGH".split("");
 const CARD_ICON = { yellow:"🟨", red:"🟥", green:"🟩" };
 const CARD_LABEL = { yellow:"警告", red:"退場", green:"グリーン" };
+/* JFA準拠の警告・退場コード表（本人提供）。理由を選ぶと自由記述欄に自動で入る（あとで書き換え可） */
+const CARD_REASONS = {
+  yellow: [
+    { code:"C1", label:"反スポーツ的行為", note:"シミュレーション、意図的なハンドによる有利取得、有望な攻撃の阻止なども含む" },
+    { code:"C2", label:"ラフプレー", note:"無謀なタックルなど相手への危険を伴うプレー" },
+    { code:"C3", label:"異議" },
+    { code:"C4", label:"繰り返しの違反" },
+    { code:"C5", label:"遅延行為" },
+    { code:"C6", label:"距離不足" },
+    { code:"C7", label:"無許可で入場" },
+    { code:"C8", label:"無許可で退場" },
+  ],
+  red: [
+    { code:"S1", label:"著しく不正なプレー" },
+    { code:"S2", label:"乱暴な行為" },
+    { code:"S3", label:"つば吐き" },
+    { code:"S4", label:"得点または決定的得点機会の阻止（ハンド）" },
+    { code:"S5", label:"決定的得点機会の阻止（反則）" },
+    { code:"S6", label:"侮辱的・攻撃的・下品な発言または行動" },
+    { code:"S7", label:"警告2回による退場" },
+  ],
+};
 /* 得点・交代の時間帯 */
 const PERIODS    = { "1H":"前半", "2H":"後半", "1ET":"延長前", "2ET":"延長後", "HT":"HT" };
 const PERIOD_REG = ["1H","2H"];      // ふつうの試合
@@ -832,6 +856,7 @@ const state = {
   official:null,    // 編集中の公式記録
   sheetZoom:0.8,
   bracket:null,     // 表示中のトーナメント（1位T・2位T…を複数持てる）
+  scheduleCollapsed:{},   // 日程タブの節・回戦ごとの開閉状態（キー=見出し文字列）
 };
 const canEdit = ()=> !!(state.user && state.t && state.t.org_id === state.user.id);
 const orgYear = ()=> state.org?.year ?? fiscalYear();
@@ -1509,12 +1534,15 @@ function roundRobin(ids){
 }
 
 /* --- リーグ戦の対戦カードを作る --- */
-function buildLeagueMatches(tid, teams, groups){
+function buildLeagueMatches(tid, teams, groups, doubleRound){
   const out = [];
   groups.forEach(g=>{
     const ids = teams.filter(t=>t.grp===g).sort((a,b)=>a.sort_order-b.sort_order).map(t=>t.id);
+    const leg1 = roundRobin(ids);
+    // ホーム&アウェイ：同じ組み合わせで2巡目をホーム/アウェイ入れ替えて続ける（節番号は通しで続ける）
+    const allRounds = doubleRound ? leg1.concat(leg1.map(pairs=>pairs.map(([h,a])=>[a,h]))) : leg1;
     let n = 0;
-    roundRobin(ids).forEach((pairs, ri)=>{
+    allRounds.forEach((pairs, ri)=>{
       pairs.forEach(([h,a])=>{
         out.push(newMatch(tid,{ stage:"league", grp:g, round:ri+1, slot:n,
                                 home_team:h, away_team:a, sort_order:out.length }));
@@ -1751,17 +1779,27 @@ function standings(grp){
   });
   rows.forEach(r=> r.gd = r.gf - r.ga);
   rows.sort((a,b)=>
-      b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || h2h(a,b,played) || a.name.localeCompare(b.name,"ja"));
+      b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || h2h(a,b,played,cfg) || a.name.localeCompare(b.name,"ja"));
   return rows;
 }
 /* 直接対決（勝った方を上に） */
-function h2h(a,b,played){
-  const m = played.find(x=>
+/* 直接対決。ホーム&アウェイ（同一カード2試合）のときは両方まとめて比べる（勝ち点→得失点差の順） */
+function h2h(a,b,played,cfg){
+  const ms = played.filter(x=>
     (x.home_team===a.id && x.away_team===b.id) || (x.home_team===b.id && x.away_team===a.id));
-  if(!m) return 0;
-  const w = m.home_score>m.away_score ? m.home_team : m.home_score<m.away_score ? m.away_team : null;
-  if(!w) return 0;
-  return w===a.id ? -1 : 1;
+  if(!ms.length) return 0;
+  let aPts=0, bPts=0, aGf=0, aGa=0;
+  ms.forEach(m=>{
+    const aHome = m.home_team===a.id;
+    const as = aHome ? m.home_score : m.away_score, bs = aHome ? m.away_score : m.home_score;
+    aGf += as; aGa += bs;
+    if(as>bs){ aPts += cfg.win; bPts += cfg.lose; }
+    else if(as<bs){ bPts += cfg.win; aPts += cfg.lose; }
+    else { aPts += cfg.draw; bPts += cfg.draw; }
+  });
+  if(aPts!==bPts) return aPts>bPts ? -1 : 1;
+  if(aGf-aGa!==0) return (aGf-aGa)>0 ? -1 : 1;
+  return 0;
 }
 
 /* --- 得点ランキング --- */
@@ -2399,7 +2437,13 @@ function viewNew(){
           <input class="in" value="${esc(nm)}" oninput="renameBlock(${i},this.value)" placeholder="例）1部 / 1部A">
           <button class="btn ghost sm" style="flex:0 0 auto;width:auto" onclick="removeBlock(${i})">削除</button>
         </div>`).join("")}
-        <button class="btn sec sm" onclick="addBlock()">＋ ブロックを追加</button>` : ""}
+        <button class="btn sec sm" onclick="addBlock()">＋ ブロックを追加</button>
+        <label class="f">対戦方式</label>
+        <div class="seg">
+          <button class="${!draft.doubleRound?"on":""}" onclick="draft.doubleRound=false;render()">1回総当たり</button>
+          <button class="${draft.doubleRound?"on":""}" onclick="draft.doubleRound=true;render()">ホーム&アウェイ（2回総当たり）</button>
+        </div>
+        <p class="hint">ホーム&アウェイは同じ相手と2回対戦します（8チームなら1チーム14試合）。</p>` : ""}
 
       ${draft.format==="league_ko" ? `
         <label class="f">決勝トーナメントへ進む数（全ブロック共通）</label>
@@ -2536,7 +2580,7 @@ async function createTournament(){
                overview:{...draft.overview},
                date:draft.dateStart, dateStart:draft.dateStart, dateEnd:draft.dateEnd,
                blocks, advance:draft.advance, advanceBy, wildcards, wcRule:draft.wcRule||"total",
-               brackets, koSize, thirdPlace:draft.thirdPlace,
+               brackets, koSize, thirdPlace:draft.thirdPlace, doubleRound:!!draft.doubleRound,
                venues:[], duration:20 },
     created_at:new Date().toISOString(),
   };
@@ -2556,7 +2600,7 @@ async function createTournament(){
 
   // 対戦カード
   let matches = [];
-  if(f.hasLeague) matches = matches.concat(buildLeagueMatches(tid, teams, blockIds));
+  if(f.hasLeague) matches = matches.concat(buildLeagueMatches(tid, teams, blockIds, !!draft.doubleRound));
   if(f.hasKO){
     const items = draft.format==="ko"
         ? []                                              // トーナメントのみ：空櫓スタート（作成後に各枠へ配置）
@@ -2664,21 +2708,37 @@ function matchesInOrder(){
 }
 
 /* --- 日程・結果 --- */
+/* 節・回戦ごとにグループ化して表示。グループごとに＋／－でたたんだり開いたりできる */
 function tabSchedule(){
   const ms = matchesInOrder();
   if(!ms.length) return `<div class="empty">試合がありません。</div>`;
-  let out = "", lastKey = null;
-  if(canEdit()) out += `<div class="btnrow noprint" style="margin-bottom:10px">
-    <button class="btn sec sm" style="flex:1" onclick="go('sched')">🗓 日程・会場をまとめて入力</button></div>`;
+  const multiKo = bracketsOf(state.t).length > 1;   // 櫓が複数あるときは「2位T 準決勝」のように出す
+  const groups = [];
+  const idxOf = {};
   ms.forEach(m=>{
     const bn = blockName(state.t, m.grp);
-    const multiKo = bracketsOf(state.t).length > 1;   // 櫓が複数あるときは「2位T 準決勝」のように出す
-    const key = m.stage==="league" ? (bn ? `${bn} リーグ` : "リーグ戦")
+    const key = m.stage==="league" ? (bn ? `${bn} 第${m.round}節` : `第${m.round}節`)
               : (multiKo ? `${bracketName(state.t, bracketIdOf(m))} ${koRoundLabel(m)}` : koRoundLabel(m));
-    if(key!==lastKey){ out += `<div class="block-label">${esc(key)}</div>`; lastKey = key; }
-    out += matchCard(m);
+    if(!(key in idxOf)){ idxOf[key] = groups.length; groups.push({ key, matches:[] }); }
+    groups[idxOf[key]].matches.push(m);
+  });
+  let out = "";
+  if(canEdit()) out += `<div class="btnrow noprint" style="margin-bottom:10px">
+    <button class="btn sec sm" style="flex:1" onclick="go('sched')">🗓 日程・会場をまとめて入力</button></div>`;
+  groups.forEach(g=>{
+    const collapsed = !!(state.scheduleCollapsed||{})[g.key];
+    out += `<div class="block-label-row">
+      <span class="block-label" style="margin:0">${esc(g.key)}</span>
+      <button class="link-more noprint" onclick="toggleScheduleGroup('${esc(g.key).replace(/'/g,"\\'")}')">${collapsed?"＋ 開く":"− たたむ"}</button>
+    </div>`;
+    if(!collapsed) g.matches.forEach(m=> out += matchCard(m));
   });
   return out;
+}
+function toggleScheduleGroup(key){
+  state.scheduleCollapsed = state.scheduleCollapsed || {};
+  state.scheduleCollapsed[key] = !state.scheduleCollapsed[key];
+  render();
 }
 
 function koRoundNames(){ return (cfgOf(state.t).overview||{}).roundNames || {}; }
@@ -2938,10 +2998,14 @@ function tabMatrix(){
     const g = b ? b.id : null;
     const ts = state.teams.filter(t=>!g||t.grp===g).sort((a,b)=>a.sort_order-b.sort_order);
     if(ts.length<2) return "";
+    const double = !!cfg.doubleRound;
     const cell = (a,b)=>{
       if(a.id===b.id) return `<td class="self">—</td>`;
-      const m = state.matches.find(x=> x.stage==="league" &&
-        ((x.home_team===a.id&&x.away_team===b.id)||(x.home_team===b.id&&x.away_team===a.id)));
+      // ホーム&アウェイのときは同じ相手と2試合あるので、この枠＝「行のチームの試合」だけを表示する
+      const m = double
+        ? state.matches.find(x=> x.stage==="league" && x.home_team===a.id && x.away_team===b.id)
+        : state.matches.find(x=> x.stage==="league" &&
+            ((x.home_team===a.id&&x.away_team===b.id)||(x.home_team===b.id&&x.away_team===a.id)));
       if(!m || !isDone(m)) return `<td>-</td>`;
       const own  = m.home_team===a.id ? m.home_score : m.away_score;
       const opp  = m.home_team===a.id ? m.away_score : m.home_score;
@@ -2952,7 +3016,8 @@ function tabMatrix(){
     <div class="tblwrap"><table class="mtx">
       <thead><tr><th style="text-align:left">　</th>${ts.map((t,i)=>`<th>${i+1}</th>`).join("")}</tr></thead>
       <tbody>${ts.map((a,i)=>`<tr><td class="nm">${i+1}. ${esc(a.name)}</td>${ts.map(b=>cell(a,b)).join("")}</tr>`).join("")}</tbody>
-    </table></div>`;
+    </table></div>
+    ${double?`<p class="hint">ホーム&アウェイ：各マスは「行のチームがホームで戦った試合」の結果です。</p>`:""}`;
   }).join("") || `<div class="empty">チームが足りません。</div>`;
 }
 
@@ -3288,10 +3353,10 @@ function tabCards(){
   const rows = cardRanking();
   if(!rows.length) return `<div class="empty">まだ警告・退場の記録がありません。</div>`;
   return `<div class="tblwrap"><table>
-    <thead><tr><th style="text-align:left">選手</th><th style="text-align:left">チーム</th><th>🟨</th><th>🟥</th><th>🟩</th></tr></thead>
+    <thead><tr><th style="text-align:left">選手</th><th style="text-align:left">チーム</th><th>🟨</th><th>🟥</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
       <td class="nm">${esc(r.name)}</td><td class="nm">${esc(r.team)}</td>
-      <td>${r.yellow||""}</td><td>${r.red||""}</td><td>${r.green||""}</td></tr>`).join("")}</tbody>
+      <td>${r.yellow||""}</td><td>${r.red||""}</td></tr>`).join("")}</tbody>
   </table></div>
   <p class="hint">累積警告の確認にお使いください。</p>`;
 }
@@ -3416,7 +3481,8 @@ function viewMatch(){
     }else{
       ic = ev.type==="goal" ? "⚽" : ev.type==="pk" ? "🅿️" : ev.type==="og" ? "🔁" : CARD_ICON[ev.type]||"・";
       const nm = ev.playerId ? playerName(tid, ev.playerId) : "（選手なし）";
-      tx = `${esc(nm)} <small style="color:var(--sub)">${esc(tn)}</small>`;
+      const rc = ev.reasonCode ? ` <small style="color:var(--sub)">[${esc(ev.reasonCode)}]</small>` : "";
+      tx = `${esc(nm)}${rc} <small style="color:var(--sub)">${esc(tn)}</small>`;
     }
     return `<div class="evrow">
       <button class="evmain" onclick="editEvent(${i})">
@@ -3637,6 +3703,20 @@ function toggleET(on){
   setMatchET(m, on); render();
 }
 
+/* 警告・退場コード表（参考用に「カードを追加」シートの下に表示） */
+function cardReasonLegendHTML(){
+  const block = (title, list) => `<div style="margin-top:6px">
+    <b style="font-size:12.5px">${esc(title)}</b>
+    ${list.map(r=>`<div style="font-size:12px;color:var(--sub);margin-top:2px">
+      <b style="color:var(--ink)">${r.code}</b> ${esc(r.label)}${r.note?`<br><span style="font-size:11px">${esc(r.note)}</span>`:""}
+    </div>`).join("")}
+  </div>`;
+  return `<div class="hint" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line)">
+    <b style="font-size:12.5px;color:var(--ink)">警告・退場コード表（参考）</b>
+    ${block("警告（イエローカード）", CARD_REASONS.yellow)}
+    ${block("退場（レッドカード）", CARD_REASONS.red)}
+  </div>`;
+}
 /* --- 得点者・カードの追加／編集シート --- */
 function openEventSheet(kind, editIdx){
   const m = curMatch(); if(!m) return;
@@ -3646,12 +3726,14 @@ function openEventSheet(kind, editIdx){
   const sp = sportOf(state.t);
   const types = kind==="goal"
     ? [["goal","得点"],["pk","PK"],["og","オウンゴール"]]
-    : [["yellow","🟨 警告"],["red","🟥 退場"],["green","🟩 グリーン"]];
+    : [["yellow","🟨 警告"],["red","🟥 退場"]];
   const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
   const hasAssist = kind==="goal";   // アシストは得点者と同じように毎回選べる（大会設定でのON/OFFは廃止）
+  const hasReason = kind==="card";
   let team = editing ? orig.team : "H";
   let type = editing ? orig.type : types[0][0];
   let period = editing ? (orig.period || periods[0]) : periods[0];
+  let reasonCode = editing ? (orig.reasonCode || "") : "";
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
@@ -3677,11 +3759,17 @@ function openEventSheet(kind, editIdx){
     </div>
     <label class="f">分（こまかい時間・入れなくてOK）</label>
     <input class="in" id="ev-min" type="number" inputmode="numeric" placeholder="例）23" value="${editing&&orig.minute!=null?orig.minute:""}">
+    ${hasReason ? `
+    <label class="f">理由（コードを選ぶと下の欄に自動で入ります・任意）</label>
+    <select class="in" id="ev-reason-code"></select>
+    <input class="in" id="ev-reason-text" style="margin-top:6px" placeholder="理由（自由に書き換えできます）" value="${editing&&orig.reason?esc(orig.reason):""}">
+    ` : ""}
     <div class="btnrow">
       ${editing?`<button class="btn danger" onclick="this.closest('.modal').remove();delEvent(${editIdx})">削除</button>`:""}
       <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
       <button class="btn" id="ev-ok">${editing?"保存":"追加"}</button>
     </div>
+    ${hasReason ? cardReasonLegendHTML() : ""}
   </div>`;
   document.body.appendChild(el);
 
@@ -3706,8 +3794,23 @@ function openEventSheet(kind, editIdx){
     const wrap = $("#ev-assist-wrap"); if(!wrap) return;
     wrap.style.display = type==="goal" ? "" : "none";   // PK・オウンゴールにはアシストなし
   };
+  const fillReasons = (applyOrig)=>{
+    const box = $("#ev-reason-code"); if(!box) return;
+    const list = CARD_REASONS[type] || [];
+    box.innerHTML = `<option value="">（コードを選ばない・自由に書く）</option>` + list.map(r=>
+      `<option value="${r.code}">${r.code}　${esc(r.label)}</option>`).join("");
+    box.value = (applyOrig && editing) ? (orig.reasonCode || "") : "";
+  };
   fillPlayers(true);
   if(hasAssist){ syncAssistVisibility(); $("#ev-player").onchange = ()=>fillAssist(false); }
+  if(hasReason){
+    fillReasons(true);
+    $("#ev-reason-code").onchange = ()=>{
+      reasonCode = $("#ev-reason-code").value;
+      const found = (CARD_REASONS[type]||[]).find(r=>r.code===reasonCode);
+      if(found) $("#ev-reason-text").value = found.label;
+    };
+  }
   el.querySelectorAll("#ev-team button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-team button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); team = b.dataset.v; fillPlayers(false);
@@ -3716,6 +3819,7 @@ function openEventSheet(kind, editIdx){
     el.querySelectorAll("#ev-type button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); type = b.dataset.v;
     if(hasAssist) syncAssistVisibility();
+    if(hasReason){ reasonCode=""; $("#ev-reason-text").value=""; fillReasons(false); }
   });
   el.querySelectorAll("#ev-period button").forEach(b=> b.onclick = ()=>{
     el.querySelectorAll("#ev-period button").forEach(x=>x.classList.remove("on"));
@@ -3725,6 +3829,8 @@ function openEventSheet(kind, editIdx){
     const pid = $("#ev-player").value || null;
     const assistId = (hasAssist && type==="goal") ? ($("#ev-assist").value || null) : null;
     const minute = $("#ev-min").value ? num($("#ev-min").value) : null;
+    const reason = hasReason ? ($("#ev-reason-text").value.trim() || null) : null;
+    const rCode = hasReason ? (reasonCode || null) : null;
     m.events = m.events || [];
     const isScoring = t => t==="goal"||t==="pk"||t==="og";
     if(editing){
@@ -3732,14 +3838,14 @@ function openEventSheet(kind, editIdx){
         const oldSide = scoringSideOf(orig)==="H" ? "home" : "away";
         m[oldSide+"_score"] = Math.max(0, (m[oldSide+"_score"]??0) - 1);
       }
-      m.events[editIdx] = { type, team, playerId:pid, assistId, minute, period };
+      m.events[editIdx] = { type, team, playerId:pid, assistId, minute, period, reasonCode:rCode, reason };
       if(isScoring(type)){
         m.home_score = m.home_score ?? 0; m.away_score = m.away_score ?? 0;
         const newSide = scoringSideOf({type,team})==="H" ? "home" : "away";
         m[newSide+"_score"]++;
       }
     } else {
-      m.events.push({ type, team, playerId:pid, assistId, minute, period });
+      m.events.push({ type, team, playerId:pid, assistId, minute, period, reasonCode:rCode, reason });
       if(isScoring(type)){
         m.home_score = m.home_score ?? 0; m.away_score = m.away_score ?? 0;
         const newSide = scoringSideOf({type,team})==="H" ? "home" : "away";
@@ -3946,7 +4052,7 @@ async function rebuildLeague(){
   if(!confirm("リーグの対戦カードを、いまのチーム・ブロックで作り直します。\n入力済みの結果は消えます。よろしいですか？")) return;
   const blockIds = blocksOf(state.t).map(b=>b.id);
   const oldLeague = state.matches.filter(m=>m.stage==="league");
-  const fresh = buildLeagueMatches(state.t.id, state.teams, blockIds);
+  const fresh = buildLeagueMatches(state.t.id, state.teams, blockIds, !!cfgOf(state.t).doubleRound);
   fresh.forEach(m=> m.org_id = state.user.id);
   try{
     // 変更したチーム名やブロックを先に保存
@@ -4112,7 +4218,7 @@ function viewClub(){
   const row = m=>{
     const isG = m.status==="graduated";
     return `<tr style="${isG?"opacity:.5":""}">
-      <td><input class="in" style="padding:7px;text-align:center" type="number" inputmode="numeric"
+      <td><input class="in rt-no" style="text-align:center" type="number" inputmode="numeric"
         value="${m.no??""}" onchange="editMember('${m.id}','no',this.value===''?null:+this.value)"></td>
       <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(m.name)}" title="${esc(m.name)}"
         onchange="editMember('${m.id}','name',this.value)"></td>
@@ -4158,7 +4264,7 @@ function viewClub(){
 
     <div class="block-label">選手（${membersOf(c.id).length}名）</div>
     ${ms.length ? `<div class="tblwrap"><table class="rostertbl">
-      <thead><tr><th style="width:8%">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:13%">学年</th>`:""}<th style="width:13%">位置</th><th style="width:8%"></th></tr></thead>
+      <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:64px">学年</th>`:""}<th style="width:60px">位置</th><th style="width:48px"></th></tr></thead>
       <tbody>${ms.map(row).join("")}</tbody></table></div>`
     : `<div class="empty">まだ選手がいません。</div>`}
 
@@ -4418,10 +4524,10 @@ function openPickClubSheet(teamId){
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
     <h3>台帳から選手を入れる</h3>
-    <p class="hint" style="margin-bottom:8px">「${esc(t.name)}」のエントリーとして、台帳のチームの在籍選手をそのまま入れます。背番号はこの大会だけ書き換えられます。</p>
+    <p class="hint" style="margin-bottom:8px">「${esc(t.name)}」のエントリーとして、台帳のチームから選手を選んで入れます。背番号はこの大会だけ書き換えられます。</p>
     ${state.clubs.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja")).map(c=>{
       const n = membersOf(c.id).length;
-      return `<button class="pick" onclick="pickClub('${teamId}','${c.id}');this.closest('.modal').remove()">
+      return `<button class="pick" onclick="this.closest('.modal').remove();openClubRosterPicker('${teamId}','${c.id}')">
         <span style="min-width:0"><span style="display:block">${esc(c.name)}</span>
         <span class="meta">${esc(CATEGORIES[c.category]?.label||"")}・${n}名</span></span>
         <span class="chev">›</span></button>`;
@@ -4430,16 +4536,88 @@ function openPickClubSheet(teamId){
   </div>`;
   document.body.appendChild(el);
 }
-function pickClub(teamId, clubId){
+/* 台帳のチーム在籍選手（多いときは150名等）から、この大会に登録する選手だけを選ぶ。
+   大会設定の「登録人数の上限」があればそこまで、無ければ全員が初期選択（従来どおり）。
+   同じ選手を別チーム（別カテゴリー等）にも重複して登録できる＝ここでは止めない・見えるようにするだけ。 */
+function openClubRosterPicker(teamId, clubId){
   const t = state.teams.find(x=>x.id===teamId); if(!t) return;
-  const c = clubById(clubId);
-  t.club_id = clubId;
-  t.players = membersOf(clubId).map(m=>({
-    id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade }));
-  if(!t.name || /^チーム/.test(t.name)) t.name = c.name;
-  t._dirty = true;
-  toast(`${c.name} の ${t.players.length}名を入れました`);
-  render();
+  const c = clubById(clubId); if(!c) return;
+  const limit = Math.max(0, num(cfgOf(state.t).registerLimit)||0);   // 0=無制限
+  const members = membersOf(clubId).slice().sort((a,b)=>(a.no??999)-(b.no??999)||String(a.name).localeCompare(String(b.name),"ja"));
+  if(!members.length) return toast("このチームには在籍選手がいません");
+  const already = new Set((t.players||[]).filter(p=>p.memberId).map(p=>p.memberId));
+  const hadAny = (t.players||[]).length>0 && t.club_id===clubId;
+  const usedElsewhere = new Map();   // memberId -> [team names]（この大会の他チームでの登録状況）
+  state.teams.forEach(x=>{
+    if(x.id===teamId) return;
+    (x.players||[]).forEach(p=>{ if(p.memberId){
+      if(!usedElsewhere.has(p.memberId)) usedElsewhere.set(p.memberId, []);
+      usedElsewhere.get(p.memberId).push(x.name);
+    }});
+  });
+  const selected = new Set(hadAny ? [...already] : (limit>0 ? [] : members.map(m=>m.id)));
+  const el = document.createElement("div");
+  el.className = "modal";
+  el.innerHTML = `<div class="sheet">
+    <h3>${esc(c.name)} から選手を選ぶ</h3>
+    <input class="in" id="crp-filter" placeholder="🔍 名前で絞り込み" style="margin-bottom:8px">
+    <p class="hint" id="crp-count" style="margin-bottom:8px"></p>
+    <div id="crp-list" style="max-height:50vh;overflow-y:auto"></div>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn ghost sm" id="crp-all">全員選択</button>
+      <button class="btn ghost sm" id="crp-none">全員解除</button>
+    </div>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="crp-ok">この${limit>0?`${limit}`:""}名で決定</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  const countEl = $("#crp-count");
+  const syncCount = ()=>{ countEl.textContent = limit>0 ? `選択中：${selected.size} / 上限${limit}名` : `選択中：${selected.size}名`; };
+  const rowHTML = m=>{
+    const others = usedElsewhere.get(m.id);
+    return `<label class="lurow" style="cursor:pointer" data-name="${esc(m.name)}">
+      <input type="checkbox" class="crp-chk" data-id="${m.id}" ${selected.has(m.id)?"checked":""} style="width:18px;height:18px;flex:0 0 auto">
+      <span class="lunm">${m.no?`<b>${esc(String(m.no))}</b> `:""}${esc(m.name)}${m.grade?` <small>${esc(String(m.grade))}年</small>`:""}</span>
+      ${others?.length?`<span class="pill" style="flex:0 0 auto">他: ${esc(others.join("・"))}</span>`:""}
+    </label>`;
+  };
+  const renderList = ()=>{ $("#crp-list").innerHTML = members.map(rowHTML).join(""); bindRows(); syncCount(); };
+  const bindRows = ()=>{
+    el.querySelectorAll(".crp-chk").forEach(cb=> cb.onchange = ()=>{
+      const id = cb.dataset.id;
+      if(cb.checked){
+        if(limit>0 && selected.size>=limit){ cb.checked=false; toast(`上限${limit}名までです`); return; }
+        selected.add(id);
+      } else selected.delete(id);
+      syncCount();
+    });
+  };
+  renderList();
+  $("#crp-filter").oninput = ()=>{
+    const q = $("#crp-filter").value.trim();
+    el.querySelectorAll("#crp-list > label").forEach(row=>{
+      row.style.display = !q || row.dataset.name.includes(q) ? "" : "none";
+    });
+  };
+  $("#crp-all").onclick = ()=>{
+    members.forEach(m=>{ if(limit===0 || selected.size<limit) selected.add(m.id); });
+    if(limit>0 && members.length>limit) toast(`上限${limit}名までです`);
+    renderList();
+  };
+  $("#crp-none").onclick = ()=>{ selected.clear(); renderList(); };
+  $("#crp-ok").onclick = ()=>{
+    if(!selected.size) return toast("1人も選ばれていません");
+    t.club_id = clubId;
+    t.players = members.filter(m=>selected.has(m.id)).map(m=>({
+      id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade }));
+    if(!t.name || /^チーム/.test(t.name)) t.name = c.name;
+    t._dirty = true;
+    el.remove();
+    toast(`${c.name} から ${t.players.length}名を入れました`);
+    render();
+  };
 }
 
 /* ==========================================================================
@@ -4779,6 +4957,7 @@ function draftOfficial(m){
       if(!c.name){
         c.time = e.minute!=null?matchMinuteText(e.minute,e.period,m)+"分":""; c.kind = {yellow:"警",red:"退",green:"緑"}[e.type]||"";
         c.no = (nm.match(/^(\d+)\s/)||[])[1]||""; c.name = nm.replace(/^\d+\s/,"");
+        if(e.reason) c.reason = e.reasonCode ? `${e.reasonCode} ${e.reason}` : e.reason;
       }
       ci++;
     });
@@ -5428,6 +5607,21 @@ function viewSettings(){
       </div>
     </div>
     <div class="card">
+      <label class="f">登録人数の上限（任意）</label>
+      <input class="in" type="number" min="0" placeholder="空欄なら無制限" value="${cfg.registerLimit||""}"
+        onchange="cfg_set('registerLimit',this.value===''?null:Math.max(0,+this.value))">
+      <p class="hint">台帳から選手を入れるとき、この人数までしか選べなくなります（例：登録30名までのレギュレーション）。台帳の在籍選手が多いチームでも、大会ごとに必要な人数だけ選べます。</p>
+    </div>
+    ${FORMATS[t.format]?.hasLeague ? `
+    <div class="card">
+      <label class="f">対戦方式</label>
+      <div class="seg">
+        <button class="${!cfg.doubleRound?"on":""}" onclick="cfg_set('doubleRound',false);render()">1回総当たり</button>
+        <button class="${cfg.doubleRound?"on":""}" onclick="cfg_set('doubleRound',true);render()">ホーム&アウェイ（2回総当たり）</button>
+      </div>
+      <p class="hint">変更後は「チーム」画面の「🔄 リーグの対戦カードを作り直す」を押してください（入力済みの結果は消えます）。</p>
+    </div>` : ""}
+    <div class="card">
       <label class="f" style="margin-top:0">大会概要（「大会概要」タブに表示されます）</label>
       <label class="f">試合時間（前後半）</label>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -5965,9 +6159,9 @@ function viewEntry(){
     </div>
     <div class="card">
       <div class="tblwrap"><table class="rostertbl">
-        <thead><tr><th style="width:12%">番号</th><th style="text-align:left">氏名</th><th style="width:16%">学年</th><th style="width:18%">位置</th><th style="width:12%"></th></tr></thead>
+        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="width:64px">学年</th><th style="width:60px">位置</th><th style="width:48px"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
-          <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.no??""}" oninput="entrySetPlayer(${i},'no',this.value)"></td>
+          <td><input class="in rt-no" style="text-align:center" type="number" value="${p.no??""}" oninput="entrySetPlayer(${i},'no',this.value)"></td>
           <td style="text-align:left"><input class="in" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="entrySetPlayer(${i},'name',this.value)" placeholder="氏名"></td>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.grade??""}" oninput="entrySetPlayer(${i},'grade',this.value)"></td>
           <td><select class="in" style="padding:7px" onchange="entrySetPlayer(${i},'pos',this.value)">${POS.map(o=>`<option ${o===(p.pos||"")?"selected":""}>${o||"-"}</option>`).join("")}</select></td>
@@ -6161,9 +6355,9 @@ function viewClubEntry(){
     </div>
     <div class="card">
       <div class="tblwrap"><table class="rostertbl">
-        <thead><tr><th style="width:8%">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th><th style="width:13%">学年</th><th style="width:13%">位置</th><th style="width:8%"></th></tr></thead>
+        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th><th style="width:64px">学年</th><th style="width:60px">位置</th><th style="width:48px"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
-          <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.no??""}" oninput="cePlayer(${i},'no',this.value)"></td>
+          <td><input class="in rt-no" style="text-align:center" type="number" value="${p.no??""}" oninput="cePlayer(${i},'no',this.value)"></td>
           <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="cePlayer(${i},'name',this.value)" placeholder="氏名"></td>
           <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(p.prev_team||"")}" title="${esc(p.prev_team||"")}" oninput="cePlayer(${i},'prev_team',this.value)" placeholder="前所属"></td>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.grade??""}" oninput="cePlayer(${i},'grade',this.value)"></td>
