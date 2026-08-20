@@ -598,6 +598,9 @@ td.pt{font-weight:800;}
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
 .sheet-a4 .fxw.l{text-align:left;}
+/* contenteditableのdiv版＝inputやtextareaと違い縦方向が自動で中央そろえにならないのでflexで中央そろえにする（fx-roと同じ考え方） */
+.sheet-a4 .fxedit{display:flex;align-items:center;justify-content:center;box-sizing:border-box;}
+.sheet-a4 .fxedit.l{justify-content:flex-start;}
 /* 一般公開の閲覧専用セル：inputと違い縦方向は自動で中央そろえにならないのでflexで中央そろえにする */
 .sheet-a4 .fx-ro{position:absolute;padding:0 1pt;box-sizing:border-box;color:#000;font-family:inherit;
   letter-spacing:-0.2pt;line-height:1.15;
@@ -2347,11 +2350,17 @@ function openPickClubsForNew(){
     state.clubs.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja")).forEach(c=>{
       const cnt = pick[c.id]; if(!cnt) return;
       if(cnt<=1) picks.push({ id:c.id, name:c.name });
-      else for(let i=0;i<cnt;i++) picks.push({ id:c.id, name: i===0 ? c.name : c.name+" "+String.fromCharCode(65+i) }); // 1つめは無印、2つめ以降B,C,D…
+      // 同じチームを複数（A・B・C…）に分けるときは、150人などの台帳から手分けして選ぶ必要があるので
+      // 自動では選手を入れない（split:true）＝大会作成後に各チームで台帳から選び直してもらう
+      else for(let i=0;i<cnt;i++) picks.push({ id:c.id, name: i===0 ? c.name : c.name+" "+String.fromCharCode(65+i), split:cnt>1 }); // 1つめは無印、2つめ以降B,C,D…
     });
     if(!picks.length){ draft.picked=[]; el.remove(); render(); return; }
+    const hasSplit = picks.some(p=>p.split);
     // J：台帳の背番号（チーム内番号）で入ることを確認
-    if(!confirm("台帳のチーム内背番号で入れます。\n大会用に背番号を変えるときは、大会をつくった後に各チームの選手で直せます。\nよろしいですか？")) return;
+    const msg = hasSplit
+      ? "台帳のチーム内背番号で入れます。\n同じチームをA・B・Cなど複数に分けた分は、選手が自動では入りません（大会作成後、各チームで「台帳から入れる」を使って台帳から選んでください）。\nよろしいですか？"
+      : "台帳のチーム内背番号で入れます。\n大会用に背番号を変えるときは、大会をつくった後に各チームの選手で直せます。\nよろしいですか？";
+    if(!confirm(msg)) return;
     draft.picked = picks;
     const extra = draft.teams.split("\n").map(s=>s.trim())
       .filter(s=> s && !picks.some(p=>p.name===s));    // 手打ちしたチームは残す
@@ -2599,7 +2608,8 @@ async function createTournament(){
       id:uid(), tournament_id:tid, org_id:state.user.id, name,
       grp: blocks.length ? (blocks[Math.min(bIdx, blocks.length-1)]?.id || blocks[0].id) : null,
       seed:i+1, sort_order:i, club_id: club?.id || null, crest: clubRec?.crest || null,
-      players: club ? membersOf(club.id).map(m=>({
+      // 同じ台帳から複数チーム(A/B/C…)に分けたときは自動で選手を入れない（台帳から選んで手分けしてもらう）
+      players: (club && !club.split) ? membersOf(club.id).map(m=>({
         id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade })) : [],
     };
   });
@@ -2623,11 +2633,14 @@ async function createTournament(){
     await DB.upsert("gn_matches", matches);
   }catch(e){ console.error(e); return toast("保存できませんでした: "+(e.message||e)); }
 
+  const needsPick = teams.filter(x=>x.club_id && !x.players.length).length;
+
   Object.assign(draft, { name:"", host:"", dateStart:"", dateEnd:"", teams:"", picked:[], assign:{}, blocks:["1部"],
                          advanceByIdx:{}, wildcards:[], wcRule:"total", bracketNames:[],
                          gradeCat:"", scope:"", promote:0, relegate:0, overview:{...OVERVIEW_DEFAULT} });
   await reloadList();
   openTournament(tid);
+  if(needsPick) toast(`${needsPick}チームぶん、まだ選手が入っていません。「チーム・選手」から「台帳から入れる」で選んでください`);
 }
 
 /* ---------- 大会画面 ---------- */
@@ -4630,7 +4643,10 @@ function openClubRosterPicker(teamId, clubId){
       usedElsewhere.get(p.memberId).push(x.name);
     }});
   });
-  const selected = new Set(hadAny ? [...already] : (limit>0 ? [] : members.map(m=>m.id)));
+  // 同じ台帳から別チーム（花巻東B等）が既に選手を選んでいるときは、そちらは0人から選び始める
+  // （そうしないと全員初期選択のままだと同じ150人を丸ごと重複登録してしまいやすいため）
+  const siblingHasPicked = state.teams.some(x=>x.id!==teamId && x.club_id===clubId && (x.players||[]).length>0);
+  const selected = new Set(hadAny ? [...already] : ((limit>0 || siblingHasPicked) ? [] : members.map(m=>m.id)));
   const el = document.createElement("div");
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
@@ -5162,9 +5178,10 @@ function box(path, x1, x2, yTop, yBot, o){
     return `<div class="${cls}" data-p="${path}"
       style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</div>`;
   }
-  if(o.wrap){   // 折り返し可能な枠（チーム名など）＝textarea
-    return `<textarea class="fx fxw${o.align==="l"?" l":""}" data-p="${path}"
-      style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</textarea>`;
+  if(o.wrap){   // 折り返し可能な枠（チーム名など）＝縦方向も中央そろえにしたいのでcontenteditableのdiv
+              // （textareaは中の文字を縦中央にできないため。IME変換・複数行貼り付けはEnterで改行させない）
+    return `<div class="fx fxw fxedit${o.align==="l"?" l":""}" data-p="${path}" contenteditable="true"
+      style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}">${esc(pget(state.official,path)??"")}</div>`;
   }
   const tap = o.tap ? ` data-tapk="${o.tap.k}"${o.tap.side?` data-side="${o.tap.side}"`:""}${o.tap.idx!=null?` data-idx="${o.tap.idx}"`:""}${o.tap.ci!=null?` data-ci="${o.tap.ci}"`:""}${o.tap.half?` data-half="${o.tap.half}"`:""} readonly` : "";
   const cls = "fx" + (o.align==="l"?" l":"") + (o.tap?" pickable":"");
@@ -6566,7 +6583,8 @@ setInterval(async ()=>{
 /* --- 公式記録の入力を、再描画しても取りこぼさないよう #app に委譲 --- */
 $("#app").addEventListener("input", e=>{
   const el = e.target.closest(".fx"); if(!el || !el.dataset.p || !state.official) return;
-  pset(state.official, el.dataset.p, el.value);
+  const v = el.value !== undefined ? el.value : el.textContent;   // contenteditable(.fxedit)はvalueが無い
+  pset(state.official, el.dataset.p, v);
   if(/^(H|A)\.scores\./.test(el.dataset.p)) refreshTotals();
   const tm = el.dataset.p.match(/^(H|A)\.tot\.(\w+)\.(0|1|3|4)$/);   // 前半/後半/延前/延後→計を自動計算（I10/I11）
   if(tm){ recomputeTotal(tm[1], tm[2]); }
@@ -6576,6 +6594,12 @@ $("#app").addEventListener("input", e=>{
   // PK経過欄を手で直したら、チーム脇の〇の数を数え直す
   const pm = el.dataset.p.match(/^(H|A)\.pks\.\d+$/);
   if(pm){ const sp=document.getElementById("pkmaru-"+pm[1]); if(sp) sp.textContent = pkMaruCount(pm[1]); }
+});
+/* チーム名(.fxedit)はEnterで改行させない（折り返しはCSS任せ・手動改行は防ぐ）。押したらフォーカスを外して確定 */
+$("#app").addEventListener("keydown", e=>{
+  if(e.key!=="Enter") return;
+  const el = e.target.closest(".fxedit"); if(!el) return;
+  e.preventDefault(); el.blur();
 });
 $("#app").addEventListener("click", e=>{
   const el = e.target.closest(".pickable"); if(!el) return;
