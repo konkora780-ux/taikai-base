@@ -464,7 +464,7 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 table{border-collapse:collapse;width:100%;font-size:13px;}
 /* 選手一覧（番号/氏名/前所属/学年/位置）の表＝列幅を<th>で固定し、氏名/前所属に確実に幅を残す
    （入力欄はvalueの長さで表の列幅が広がらないため、幅を保証しないと長い名前が見えなくなる） */
-.rostertbl{table-layout:fixed;min-width:640px;}
+.rostertbl{table-layout:fixed;min-width:590px;}   /* .screenの実質幅(640-padding28)に収まる値。これを超えると横スクロールで右端の「削除」列が隠れてしまう */
 .rostertbl td{overflow:hidden;padding:6px 3px;}
 .rostertbl select.in{padding:6px 14px 6px 4px;}
 .rostertbl input.in{padding:7px 4px;}
@@ -862,6 +862,7 @@ const state = {
   bracket:null,     // 表示中のトーナメント（1位T・2位T…を複数持てる）
   scheduleCollapsed:{},   // 日程タブの節・回戦ごとの開閉状態（キー=見出し文字列）
   blockFilter:"",         // 日程・ランキング系タブで選んでいるブロック（カテゴリー）。空="すべて"
+  unlockTeams:false,      // 選手登録の締切を過ぎたあと「編集する」で一時的にロック解除したか
 };
 const canEdit = ()=> !!(state.user && state.t && state.t.org_id === state.user.id);
 const orgYear = ()=> state.org?.year ?? fiscalYear();
@@ -4046,11 +4047,16 @@ function viewTeams(){
     (a.grp||"").localeCompare(b.grp||"") || a.sort_order-b.sort_order);
   const blocks = blocksOf(state.t);
   const f = FORMATS[state.t.format];
+  const cfg = cfgOf(state.t);
+  const deadline = cfg.rosterDeadline;
+  const locked = !!(deadline && localDate(new Date().toISOString()) > deadline && !state.unlockTeams);
   return `<div class="tourwrap">`
   + topbar({ title:"チーム・選手", sub:state.t.name, back:"go('t')" })
   + `<div class="twrap">${tournamentSidebar("team")}<div class="tmain">
     <div class="screen">
     <p class="lead">この大会にエントリーするチームと選手です。台帳から入れると、背番号ごとそのまま入ります（この大会だけ番号を書き換えることもできます）。</p>
+    ${locked?`<div class="lockmsg">🔒 選手登録の締切（${esc(fmtDate(deadline))}）を過ぎています。内容は変更できません。直すときは下の「✏ 編集する」を押してください。</div>`:""}
+    <fieldset class="ovlock"${locked?" disabled":""}>
     ${(()=>{ let out="", lastGrp=undefined;
       return out + ts.map(t=>{
         let head = "";
@@ -4080,7 +4086,10 @@ function viewTeams(){
     </div>
     ${f.hasLeague?`<div class="btnrow"><button class="btn ghost sm" onclick="rebuildLeague()">🔄 リーグの対戦カードを作り直す</button></div>
       <p class="hint">チームやブロックを変えたら、対戦カードを作り直してください（入力済みの結果は消えます）。</p>`:""}
-    <button class="btn" style="margin-top:6px" onclick="saveTeams()">保存する</button>
+    </fieldset>
+    ${locked
+      ? `<button class="btn" style="margin-top:6px" onclick="state.unlockTeams=true;render()">✏ 編集する</button>`
+      : `<button class="btn" style="margin-top:6px" onclick="saveTeams()">保存する</button>`}
     </div>
   </div></div></div>`;
 }
@@ -4248,9 +4257,11 @@ function viewRoster(){
       const n = membersOf(c.id).length;
       const g = state.members.filter(m=>m.club_id===c.id && m.status==="graduated").length;
       return `<button class="pick" onclick="openClub('${c.id}')">
-        ${c.crest?`<img src="${c.crest}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:6px;background:#fff;flex:0 0 auto;margin-right:4px">`:""}
-        <span style="min-width:0"><span style="display:block">${esc(c.name)}</span>
-        <span class="meta">${esc(CATEGORIES[c.category]?.label||"")}・在籍 ${n}名${g?`（卒業 ${g}名）`:""}</span></span>
+        <span style="min-width:0;display:flex;align-items:center;gap:8px;flex:1">
+          ${c.crest?`<img src="${c.crest}" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:6px;background:#fff;flex:0 0 auto">`:""}
+          <span style="min-width:0"><span style="display:block">${esc(c.name)}</span>
+          <span class="meta">${esc(CATEGORIES[c.category]?.label||"")}・在籍 ${n}名${g?`（卒業 ${g}名）`:""}</span></span>
+        </span>
         <span class="chev">›</span></button>`;
     }).join("") || `<div class="empty">まだチームがありません。</div>`}
     <button class="btn" onclick="addClub()">＋ チームを追加</button>
@@ -5726,6 +5737,12 @@ function viewSettings(){
         onchange="cfg_set('registerLimit',this.value===''?null:Math.max(0,+this.value))">
       <p class="hint">台帳から選手を入れるとき、この人数までしか選べなくなります（例：登録30名までのレギュレーション）。台帳の在籍選手が多いチームでも、大会ごとに必要な人数だけ選べます。</p>
     </div>
+    <div class="card">
+      <label class="f">選手登録の締切（任意）</label>
+      <input class="in" type="date" value="${esc(cfg.rosterDeadline||"")}"
+        onchange="cfg_set('rosterDeadline',this.value||null)">
+      <p class="hint">この日を過ぎると、「チーム・選手」画面でチーム・選手の登録内容を編集できなくなります（誤操作防止用。運営はロック後もその場で「編集する」を押せば直せます）。空欄なら締切なし。</p>
+    </div>
     ${FORMATS[t.format]?.hasLeague ? `
     <div class="card">
       <label class="f">対戦方式</label>
@@ -6101,6 +6118,7 @@ async function openTournament(id){
     if(!d.t){ toast("大会が見つかりません"); return go("home"); }
     state.t = d.t; state.teams = d.teams; state.matches = d.matches;
     state.tab = "schedule"; state.view = "t"; state.bracket = null;   // 表示中の櫓は先頭に戻す
+    state.unlockTeams = false;   // 選手登録の締切ロック解除は大会を開き直したらリセット
     initScheduleCollapse();   // 全部たたむ＋今日にいちばん近い節だけ開く＋そのブロックを選ぶ
     location.hash = "t=" + id;
   }catch(e){ console.error(e); toast("読み込めませんでした"); }
