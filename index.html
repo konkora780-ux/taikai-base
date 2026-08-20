@@ -1102,7 +1102,7 @@ const DB = {
       const t = team ? (d.t.find(x=>x.id===team.tournament_id)||null) : null;
       return { team, t };
     }
-    const rteam = await sb.from("gn_teams").select("id,tournament_id,name,grp,players").eq("id",teamId).maybeSingle();
+    const rteam = await sb.from("gn_teams").select("id,tournament_id,name,grp,players,club_id").eq("id",teamId).maybeSingle();
     if(rteam.error) throw rteam.error;
     const team = rteam.data;
     let t = null;
@@ -1192,6 +1192,24 @@ const DB = {
       return { name:c.name, category:c.category, crest:c.crest||null, players };
     }
     const { data, error } = await sb.rpc("get_club_roster", { p_club:clubId, p_code:code });
+    if(error) throw error;
+    return data || null;
+  },
+  // 大会の記入リンク：そのチームの記入コードで、紐づく台帳（クラブ）の在籍選手を読む（150人などから選ぶための下ごしらえ）
+  async loadTeamClubRoster(teamId, code){
+    if(!sb){
+      const d = local.read();
+      const e = d.entry.find(x=>x.team_id===teamId && x.code===code);
+      if(!e) return null;
+      const team = d.teams.find(x=>x.id===teamId);
+      if(!team || !team.club_id) return null;
+      const c = d.clubs.find(x=>x.id===team.club_id);
+      const players = d.members.filter(m=>m.club_id===team.club_id && m.status==="active")
+        .sort((a,b)=>(a.no??999)-(b.no??999)||(a.sort_order||0)-(b.sort_order||0))
+        .map(m=>({ id:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade, prev_team:m.prev_team }));
+      return { club_name:c?.name||"", crest:c?.crest||null, players };
+    }
+    const { data, error } = await sb.rpc("get_team_club_roster", { p_team:teamId, p_code:code });
     if(error) throw error;
     return data || null;
   },
@@ -6260,6 +6278,75 @@ function openEntryBulk(){
     el.remove(); render(); toast(`${rows.length}名を取り込みました`);
   };
 }
+/* 台帳から選ぶ（花巻東B・花巻東Cのように、同じ台帳から複数チームを出すときに使う）
+   記入コードで台帳の在籍選手を取得→チェックボックスで選んだ分だけ、今の名簿と入れ替える */
+async function openEntryClubPicker(){
+  const e = state.entry;
+  const code = (document.getElementById("entrycode")?.value||"").trim().toUpperCase();
+  if(!code) return toast("先に記入コードを入れてください");
+  toast("台帳を読み込んでいます…");
+  let data;
+  try{ data = await DB.loadTeamClubRoster(e.team.id, code); }
+  catch(err){ return toast("読み込めませんでした: "+(err.message||err)); }
+  if(!data) return toast("コードが違うか、提出できる期限を過ぎている可能性があります");
+  const members = (data.players||[]).slice().sort((a,b)=>(a.no??999)-(b.no??999)||String(a.name).localeCompare(String(b.name),"ja"));
+  if(!members.length) return toast("台帳に選手が登録されていません");
+  const limit = Math.max(0, num(cfgOf(e.t).registerLimit)||0);
+  const selected = new Set();   // 台帳から選ぶときは毎回0人から選び直す（今の名簿を上書きするため）
+  const el = document.createElement("div");
+  el.className = "modal";
+  el.innerHTML = `<div class="sheet">
+    <h3>${data.club_name?esc(data.club_name)+" の台帳から選ぶ":"台帳から選ぶ"}</h3>
+    <p class="hint" style="margin-bottom:8px">選んだ選手で、今の名簿と入れ替えます。</p>
+    <input class="in" id="ecp-filter" placeholder="🔍 名前で絞り込み" style="margin-bottom:8px">
+    <p class="hint" id="ecp-count" style="margin-bottom:8px"></p>
+    <div id="ecp-list" style="max-height:50vh;overflow-y:auto"></div>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn ghost sm" id="ecp-all">全員選択</button>
+      <button class="btn ghost sm" id="ecp-none">全員解除</button>
+    </div>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="ecp-ok">この${limit>0?`${limit}`:""}名で入れ替える</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  const countEl = $("#ecp-count");
+  const syncCount = ()=>{ countEl.textContent = limit>0 ? `選択中：${selected.size} / 上限${limit}名` : `選択中：${selected.size}名`; };
+  const rowHTML = m=>`<label class="lurow" style="cursor:pointer" data-name="${esc(m.name)}">
+      <input type="checkbox" class="ecp-chk" data-id="${m.id}" style="width:18px;height:18px;flex:0 0 auto">
+      <span class="lunm">${m.no?`<b>${esc(String(m.no))}</b> `:""}${esc(m.name)}${m.grade?` <small>${esc(String(m.grade))}年</small>`:""}</span>
+    </label>`;
+  const bindRows = ()=>{
+    el.querySelectorAll(".ecp-chk").forEach(cb=> cb.onchange = ()=>{
+      const id = cb.dataset.id;
+      if(cb.checked){
+        if(limit>0 && selected.size>=limit){ cb.checked=false; toast(`上限${limit}名までです`); return; }
+        selected.add(id);
+      } else selected.delete(id);
+      syncCount();
+    });
+  };
+  const renderList = ()=>{ $("#ecp-list").innerHTML = members.map(rowHTML).join(""); bindRows(); syncCount(); };
+  renderList();
+  $("#ecp-filter").oninput = ()=>{
+    const q = $("#ecp-filter").value.trim();
+    el.querySelectorAll("#ecp-list > label").forEach(row=>{ row.style.display = !q || row.dataset.name.includes(q) ? "" : "none"; });
+  };
+  $("#ecp-all").onclick = ()=>{
+    members.forEach(m=>{ if(limit===0 || selected.size<limit) selected.add(m.id); });
+    if(limit>0 && members.length>limit) toast(`上限${limit}名までです`);
+    renderList();
+  };
+  $("#ecp-none").onclick = ()=>{ selected.clear(); renderList(); };
+  $("#ecp-ok").onclick = ()=>{
+    if(!selected.size) return toast("1人も選ばれていません");
+    state.entry.players = members.filter(m=>selected.has(m.id)).map(m=>({
+      id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade }));
+    el.remove(); render();
+    toast(`${state.entry.players.length}名を入れました。最後に「この内容で提出する」を押してください`);
+  };
+}
 async function submitEntry(){
   const e = state.entry;
   const code = (document.getElementById("entrycode")?.value||"").trim().toUpperCase();
@@ -6305,6 +6392,9 @@ function viewEntry(){
         <button class="btn ghost" style="flex:1" onclick="entryAddPlayer()">＋ 選手を追加</button>
         <button class="btn ghost" style="flex:1" onclick="openEntryBulk()">📋 まとめて貼り付け</button>
       </div>
+      ${e.team.club_id ? `<div class="btnrow" style="margin-top:8px">
+        <button class="btn sec" style="flex:1" onclick="openEntryClubPicker()">📋 台帳から選ぶ（下の記入コードを先に入れてください）</button>
+      </div>` : ""}
       ${dupWarn}
     </div>
     <div class="card">
