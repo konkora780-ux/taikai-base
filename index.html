@@ -464,9 +464,10 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 table{border-collapse:collapse;width:100%;font-size:13px;}
 /* 選手一覧（番号/氏名/前所属/学年/位置）の表＝列幅を<th>で固定し、氏名/前所属に確実に幅を残す
    （入力欄はvalueの長さで表の列幅が広がらないため、幅を保証しないと長い名前が見えなくなる） */
-.rostertbl{table-layout:fixed;min-width:600px;}
-.rostertbl td{overflow:hidden;}
-.rostertbl select.in{padding-right:2px;}
+.rostertbl{table-layout:fixed;min-width:640px;}
+.rostertbl td{overflow:hidden;padding:6px 3px;}
+.rostertbl select.in{padding:6px 14px 6px 4px;}
+.rostertbl input.in{padding:7px 4px;}
 .rostertbl input.rt-no{padding:7px 2px;}
 th,td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
 th{background:#f8fafc;font-size:11.5px;color:var(--sub);font-weight:700;}
@@ -857,6 +858,7 @@ const state = {
   sheetZoom:0.8,
   bracket:null,     // 表示中のトーナメント（1位T・2位T…を複数持てる）
   scheduleCollapsed:{},   // 日程タブの節・回戦ごとの開閉状態（キー=見出し文字列）
+  blockFilter:"",         // 日程・ランキング系タブで選んでいるブロック（カテゴリー）。空="すべて"
 };
 const canEdit = ()=> !!(state.user && state.t && state.t.org_id === state.user.id);
 const orgYear = ()=> state.org?.year ?? fiscalYear();
@@ -1803,9 +1805,10 @@ function h2h(a,b,played,cfg){
 }
 
 /* --- 得点ランキング --- */
-function scorerRanking(){
+function scorerRanking(blockId){
   const map = new Map();
   state.matches.forEach(m=>{
+    if(blockId && m.grp!==blockId) return;
     if(!isDone(m)) return;
     (m.events||[]).forEach(ev=>{
       if(ev.type!=="goal" && ev.type!=="pk") return;   // オウンゴールは個人記録に含めない
@@ -1822,9 +1825,10 @@ function scorerRanking(){
 }
 
 /* --- アシストランキング（大会設定でON/OFFできる） --- */
-function assistRanking(){
+function assistRanking(blockId){
   const map = new Map();
   state.matches.forEach(m=>{
+    if(blockId && m.grp!==blockId) return;
     if(!isDone(m)) return;
     (m.events||[]).forEach(ev=>{
       if(ev.type!=="goal" || !ev.assistId) return;   // アシストはふつうの得点だけ（PK・オウンゴールは対象外）
@@ -1840,9 +1844,10 @@ function assistRanking(){
 }
 
 /* --- 懲罰集計 --- */
-function cardRanking(){
+function cardRanking(blockId){
   const map = new Map();
   state.matches.forEach(m=>{
+    if(blockId && m.grp!==blockId) return;
     (m.events||[]).forEach(ev=>{
       if(!CARD_ICON[ev.type] || !ev.playerId) return;
       const teamId = ev.team==="H" ? sideId(m,"H") : sideId(m,"A");
@@ -2342,7 +2347,7 @@ function openPickClubsForNew(){
     state.clubs.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"ja")).forEach(c=>{
       const cnt = pick[c.id]; if(!cnt) return;
       if(cnt<=1) picks.push({ id:c.id, name:c.name });
-      else for(let i=0;i<cnt;i++) picks.push({ id:c.id, name: c.name+" "+String.fromCharCode(65+i) }); // A,B,C,D
+      else for(let i=0;i<cnt;i++) picks.push({ id:c.id, name: i===0 ? c.name : c.name+" "+String.fromCharCode(65+i) }); // 1つめは無印、2つめ以降B,C,D…
     });
     if(!picks.length){ draft.picked=[]; el.remove(); render(); return; }
     // J：台帳の背番号（チーム内番号）で入ることを確認
@@ -2588,11 +2593,12 @@ async function createTournament(){
   // チーム。リーグは指定ブロックへ手動振り分け（未指定は先頭）。台帳のは選手も入れる
   const teams = names.map((name,i)=>{
     const club = draft.picked.find(p=>p.name===name);
+    const clubRec = club ? clubById(club.id) : null;
     const bIdx = blocks.length ? (draft.assign[name] ?? 0) : null;
     return {
       id:uid(), tournament_id:tid, org_id:state.user.id, name,
       grp: blocks.length ? (blocks[Math.min(bIdx, blocks.length-1)]?.id || blocks[0].id) : null,
-      seed:i+1, sort_order:i, club_id: club?.id || null,
+      seed:i+1, sort_order:i, club_id: club?.id || null, crest: clubRec?.crest || null,
       players: club ? membersOf(club.id).map(m=>({
         id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade })) : [],
     };
@@ -2707,28 +2713,87 @@ function matchesInOrder(){
   });
 }
 
+/* --- ブロック（カテゴリー）切り替え。複数リーグ/複数ブロックがあるときだけ出す。空文字="すべて" ---
+   得点/アシスト/警告退場/出場記録/日程タブで共通して使う（state.blockFilterを共有）。 */
+function blockSwitcher(){
+  const blocks = blocksOf(state.t);
+  if(blocks.length<=1) return "";
+  const cur = curBlockFilter();
+  const tabs = [`<button class="${cur===""?"on":""}" onclick="state.blockFilter='';render()">すべて</button>`]
+    .concat(blocks.map(b=>`<button class="${b.id===cur?"on":""}" onclick="state.blockFilter='${b.id}';render()">${esc(b.name)}</button>`));
+  return `<div class="seg noprint" style="margin-bottom:10px;flex-wrap:wrap">${tabs.join("")}</div>`;
+}
+function curBlockFilter(){
+  const blocks = blocksOf(state.t);
+  if(blocks.length<=1) return "";
+  return (state.blockFilter && blocks.some(b=>b.id===state.blockFilter)) ? state.blockFilter : "";
+}
+
 /* --- 日程・結果 --- */
-/* 節・回戦ごとにグループ化して表示。グループごとに＋／－でたたんだり開いたりできる */
-function tabSchedule(){
-  const ms = matchesInOrder();
-  if(!ms.length) return `<div class="empty">試合がありません。</div>`;
+/* 節・回戦ごとにグループ化する（tabSchedule表示にも、開くべき節を決める初期化にも使う共通ロジック） */
+function scheduleGroups(ms){
   const multiKo = bracketsOf(state.t).length > 1;   // 櫓が複数あるときは「2位T 準決勝」のように出す
   const groups = [];
   const idxOf = {};
   ms.forEach(m=>{
     const bn = blockName(state.t, m.grp);
-    const key = m.stage==="league" ? (bn ? `${bn} 第${m.round}節` : `第${m.round}節`)
+    const isLeague = m.stage==="league";
+    const key = isLeague ? (bn ? `${bn} 第${m.round}節` : `第${m.round}節`)
               : (multiKo ? `${bracketName(state.t, bracketIdOf(m))} ${koRoundLabel(m)}` : koRoundLabel(m));
-    if(!(key in idxOf)){ idxOf[key] = groups.length; groups.push({ key, matches:[] }); }
+    if(!(key in idxOf)){ idxOf[key] = groups.length; groups.push({ key, matches:[], blockId: isLeague?m.grp:null }); }
     groups[idxOf[key]].matches.push(m);
   });
-  let out = "";
+  groups.forEach(g=>{
+    g.dateRange = null;
+    if(g.matches.length && g.matches.every(m=>m.kickoff)){
+      const days = g.matches.map(m=>localDate(m.kickoff)).sort();
+      g.dateRange = [days[0], days[days.length-1]];
+    }
+  });
+  return groups;
+}
+function scheduleDateLabel(g){
+  if(!g.dateRange) return "";
+  const [d0,d1] = g.dateRange;
+  return d0===d1 ? fmtDate(d0) : `${fmtDate(d0)}〜${fmtDate(d1)}`;
+}
+/* 大会を開いたときに呼ぶ：全部たたんだ状態にしたうえで、今日にいちばん近い節/回戦だけ開き、
+   その節が属するブロックを選んだ状態にする（複数リーグがあっても該当カテゴリーへ自動で行ける）。
+   日付が1つも入っていない大会は開けるものが無いので、全部たたんだままにする。 */
+function initScheduleCollapse(){
+  state.scheduleCollapsed = {};
+  state.blockFilter = "";
+  const groups = scheduleGroups(matchesInOrder());
+  const today = localDate(new Date().toISOString());
+  const dayNum = s => Math.round(new Date(s+"T00:00:00")/86400000);
+  let best = null, bestDiff = Infinity;
+  groups.forEach(g=>{
+    if(!g.dateRange) return;
+    const [d0,d1] = g.dateRange;
+    const diff = (today>=d0 && today<=d1) ? 0 : Math.min(Math.abs(dayNum(today)-dayNum(d0)), Math.abs(dayNum(today)-dayNum(d1)));
+    if(diff < bestDiff){ bestDiff = diff; best = g; }
+  });
+  if(best){
+    state.scheduleCollapsed[best.key] = false;
+    if(best.blockId) state.blockFilter = best.blockId;
+  }
+}
+/* 節・回戦ごとにグループ化して表示。グループごとに＋／－でたたんだり開いたりできる（初期状態はたたんである） */
+function tabSchedule(){
+  const ms = matchesInOrder();
+  if(!ms.length) return `<div class="empty">試合がありません。</div>`;
+  const bf = curBlockFilter();
+  const shown = bf==="" ? ms : ms.filter(m=> m.stage!=="league" || m.grp===bf);
+  let out = blockSwitcher();
+  if(!shown.length) return out + `<div class="empty">このカテゴリーの試合はまだありません。</div>`;
+  const groups = scheduleGroups(shown);
   if(canEdit()) out += `<div class="btnrow noprint" style="margin-bottom:10px">
     <button class="btn sec sm" style="flex:1" onclick="go('sched')">🗓 日程・会場をまとめて入力</button></div>`;
   groups.forEach(g=>{
-    const collapsed = !!(state.scheduleCollapsed||{})[g.key];
+    const collapsed = (state.scheduleCollapsed||{})[g.key] !== false;   // 初期値はたたんである（trueがデフォルト）
+    const dLabel = scheduleDateLabel(g);
     out += `<div class="block-label-row">
-      <span class="block-label" style="margin:0">${esc(g.key)}</span>
+      <span class="block-label" style="margin:0">${esc(g.key)}${dLabel?`　<span style="font-weight:500;color:var(--sub);font-size:12px">${esc(dLabel)}</span>`:""}</span>
       <button class="link-more noprint" onclick="toggleScheduleGroup('${esc(g.key).replace(/'/g,"\\'")}')">${collapsed?"＋ 開く":"− たたむ"}</button>
     </div>`;
     if(!collapsed) g.matches.forEach(m=> out += matchCard(m));
@@ -2737,7 +2802,8 @@ function tabSchedule(){
 }
 function toggleScheduleGroup(key){
   state.scheduleCollapsed = state.scheduleCollapsed || {};
-  state.scheduleCollapsed[key] = !state.scheduleCollapsed[key];
+  const wasCollapsed = state.scheduleCollapsed[key] !== false;
+  state.scheduleCollapsed[key] = !wasCollapsed ? true : false;
   render();
 }
 
@@ -3320,10 +3386,11 @@ function openSeedSheet(){
 
 /* --- 得点ランキング --- */
 function tabScorers(){
-  const rows = scorerRanking();
-  if(!rows.length) return `<div class="empty">まだ得点の記録がありません。<br>試合を開いて得点者を入れると集計されます。</div>`;
+  const sw = blockSwitcher();
+  const rows = scorerRanking(curBlockFilter());
+  if(!rows.length) return sw + `<div class="empty">まだ得点の記録がありません。<br>試合を開いて得点者を入れると集計されます。</div>`;
   let rank = 0, prev = null;
-  return rows.map((r,i)=>{
+  return sw + rows.map((r,i)=>{
     if(r.n!==prev){ rank = i+1; prev = r.n; }
     return `<div class="rank ${rank===1?"top":""}">
       <span class="no">${rank}</span>
@@ -3335,10 +3402,11 @@ function tabScorers(){
 
 /* --- アシストランキング --- */
 function tabAssists(){
-  const rows = assistRanking();
-  if(!rows.length) return `<div class="empty">まだアシストの記録がありません。<br>「得点を追加」でアシストを選ぶと集計されます。</div>`;
+  const sw = blockSwitcher();
+  const rows = assistRanking(curBlockFilter());
+  if(!rows.length) return sw + `<div class="empty">まだアシストの記録がありません。<br>「得点を追加」でアシストを選ぶと集計されます。</div>`;
   let rank = 0, prev = null;
-  return rows.map((r,i)=>{
+  return sw + rows.map((r,i)=>{
     if(r.n!==prev){ rank = i+1; prev = r.n; }
     return `<div class="rank ${rank===1?"top":""}">
       <span class="no">${rank}</span>
@@ -3350,9 +3418,10 @@ function tabAssists(){
 
 /* --- 警告・退場 --- */
 function tabCards(){
-  const rows = cardRanking();
-  if(!rows.length) return `<div class="empty">まだ警告・退場の記録がありません。</div>`;
-  return `<div class="tblwrap"><table>
+  const sw = blockSwitcher();
+  const rows = cardRanking(curBlockFilter());
+  if(!rows.length) return sw + `<div class="empty">まだ警告・退場の記録がありません。</div>`;
+  return sw + `<div class="tblwrap"><table>
     <thead><tr><th style="text-align:left">選手</th><th style="text-align:left">チーム</th><th>🟨</th><th>🟥</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
       <td class="nm">${esc(r.name)}</td><td class="nm">${esc(r.team)}</td>
@@ -3363,8 +3432,10 @@ function tabCards(){
 
 /* --- 出場記録（選手ごとの 試合数・出場時間・得点。保護者・一般も閲覧可） --- */
 function tabAppearances(){
+  const sw = blockSwitcher();
+  const bf = curBlockFilter();
   const teamsOut = [];
-  state.teams.forEach(t=>{
+  state.teams.filter(t=> !bf || t.grp===bf).forEach(t=>{
     const stat = new Map();  // 選手名 -> {no, pid, games, goals}
     const ensure = (name, no, pid)=>{
       let s = stat.get(name);
@@ -3396,8 +3467,8 @@ function tabAppearances(){
     if(stat.size) teamsOut.push({ team:t.name, teamId:t.id,
       players:[...stat.entries()].map(([name,s])=>({name,...s})).sort((a,b)=>(a.no??999)-(b.no??999)) });
   });
-  if(!teamsOut.length) return `<div class="empty">まだ出場の記録がありません。<br>試合ごとにメンバー表を作ると、ここに出場した試合数がまとまります。</div>`;
-  return teamsOut.map(r=>`<details class="team-acc">
+  if(!teamsOut.length) return sw + `<div class="empty">まだ出場の記録がありません。<br>試合ごとにメンバー表を作ると、ここに出場した試合数がまとまります。</div>`;
+  return sw + teamsOut.map(r=>`<details class="team-acc">
     <summary class="pick"><span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.team)}</span>
       <span class="meta">${r.players.length}名</span></span><span class="chev">›</span></summary>
     <div class="tblwrap"><table>
@@ -3967,9 +4038,12 @@ function viewTeams(){
   + `<div class="twrap">${tournamentSidebar("team")}<div class="tmain">
     <div class="screen">
     <p class="lead">この大会にエントリーするチームと選手です。台帳から入れると、背番号ごとそのまま入ります（この大会だけ番号を書き換えることもできます）。</p>
-    ${ts.map(t=>{
-      const club = t.club_id ? clubById(t.club_id) : null;
-      return `<div class="card">
+    ${(()=>{ let out="", lastGrp=undefined;
+      return out + ts.map(t=>{
+        let head = "";
+        if(blocks.length>1 && t.grp!==lastGrp){ lastGrp=t.grp; head = `<div class="block-label">${esc(blockName(state.t,t.grp)||"（ブロック未設定）")}</div>`; }
+        const club = t.club_id ? clubById(t.club_id) : null;
+        return head + `<div class="card">
       <div class="row2">
         <input class="in" value="${esc(t.name)}" onchange="editTeam('${t.id}','name',this.value)">
         ${blocks.length>0 && f.hasLeague ? `<select class="in" style="max-width:120px" onchange="editTeam('${t.id}','grp',this.value)">
@@ -3985,7 +4059,8 @@ function viewTeams(){
         placeholder="10 山田太郎 6 FW">${esc((t.players||[]).map(p=>
           [p.no??"", p.name, p.grade??"", p.pos??""].filter(x=>x!=="" && x!=null).join(" ")).join("\n"))}</textarea>
       <p class="hint">1行に1人。「背番号 名前 学年 ポジション」の順（無いものは省略できます）。</p>
-    </div>`;}).join("")}
+    </div>`;}).join("");
+    })()}
     <div class="btnrow">
       <button class="btn sec sm" style="flex:1" onclick="addTeamToTournament()">＋ チームを追加</button>
       ${state.clubs.length?`<button class="btn sec sm" style="flex:1" onclick="openPickClubsForTournament()">📋 台帳から追加</button>`:""}
@@ -4008,7 +4083,7 @@ function addTeamToTournament(name, clubId){
   const club = clubId ? clubById(clubId) : null;
   const t = { id:uid(), tournament_id:state.t.id, org_id:state.user.id, name:nm.trim(),
     grp: blocks.length ? blocks[0].id : null,
-    seed: state.teams.length+1, sort_order: state.teams.length, club_id: clubId||null,
+    seed: state.teams.length+1, sort_order: state.teams.length, club_id: clubId||null, crest: club?.crest||null,
     players: club ? membersOf(clubId).map(m=>({ id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade })) : [],
     _dirty:true };
   state.teams.push(t);
@@ -4264,7 +4339,7 @@ function viewClub(){
 
     <div class="block-label">選手（${membersOf(c.id).length}名）</div>
     ${ms.length ? `<div class="tblwrap"><table class="rostertbl">
-      <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:64px">学年</th>`:""}<th style="width:60px">位置</th><th style="width:48px"></th></tr></thead>
+      <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:76px">学年</th>`:""}<th style="width:70px">位置</th><th style="width:48px"></th></tr></thead>
       <tbody>${ms.map(row).join("")}</tbody></table></div>`
     : `<div class="empty">まだ選手がいません。</div>`}
 
@@ -4610,6 +4685,7 @@ function openClubRosterPicker(teamId, clubId){
   $("#crp-ok").onclick = ()=>{
     if(!selected.size) return toast("1人も選ばれていません");
     t.club_id = clubId;
+    t.crest = c.crest || null;
     t.players = members.filter(m=>selected.has(m.id)).map(m=>({
       id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade }));
     if(!t.name || /^チーム/.test(t.name)) t.name = c.name;
@@ -5987,6 +6063,7 @@ async function openTournament(id){
     if(!d.t){ toast("大会が見つかりません"); return go("home"); }
     state.t = d.t; state.teams = d.teams; state.matches = d.matches;
     state.tab = "schedule"; state.view = "t"; state.bracket = null;   // 表示中の櫓は先頭に戻す
+    initScheduleCollapse();   // 全部たたむ＋今日にいちばん近い節だけ開く＋そのブロックを選ぶ
     location.hash = "t=" + id;
   }catch(e){ console.error(e); toast("読み込めませんでした"); }
   state.loading = false; render();
@@ -6159,7 +6236,7 @@ function viewEntry(){
     </div>
     <div class="card">
       <div class="tblwrap"><table class="rostertbl">
-        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="width:64px">学年</th><th style="width:60px">位置</th><th style="width:48px"></th></tr></thead>
+        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="width:76px">学年</th><th style="width:70px">位置</th><th style="width:48px"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
           <td><input class="in rt-no" style="text-align:center" type="number" value="${p.no??""}" oninput="entrySetPlayer(${i},'no',this.value)"></td>
           <td style="text-align:left"><input class="in" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="entrySetPlayer(${i},'name',this.value)" placeholder="氏名"></td>
@@ -6355,7 +6432,7 @@ function viewClubEntry(){
     </div>
     <div class="card">
       <div class="tblwrap"><table class="rostertbl">
-        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th><th style="width:64px">学年</th><th style="width:60px">位置</th><th style="width:48px"></th></tr></thead>
+        <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th><th style="width:76px">学年</th><th style="width:70px">位置</th><th style="width:48px"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
           <td><input class="in rt-no" style="text-align:center" type="number" value="${p.no??""}" oninput="cePlayer(${i},'no',this.value)"></td>
           <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="cePlayer(${i},'name',this.value)" placeholder="氏名"></td>
