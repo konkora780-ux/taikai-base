@@ -4153,8 +4153,8 @@ async function saveTeams(silent){
   if(!dirty.length){ if(!silent){ toast("変更はありません"); go("t"); } return; }
   try{
     await DB.upsert("gn_teams", dirty.map(t=>{
-      const { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id } = t;
-      return { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id };
+      const { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest } = t;
+      return { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest:crest||null };
     }));
     dirty.forEach(t=>delete t._dirty);
     if(!silent){ toast("保存しました"); go("t"); }
@@ -5173,11 +5173,32 @@ function box(path, x1, x2, yTop, yBot, o){
     value="${esc(pget(state.official,path)??"")}"${o.ph?` placeholder="${esc(o.ph)}"`:""}>`;
 }
 
+/* チームのエンブレム（校章）。大会エントリー時にコピーした`t.crest`を優先し、無ければ台帳から拾う（運営ログイン時のみ有効な後方互換） */
+function crestFor(teamId){
+  const t = state.teams.find(x=>x.id===teamId);
+  if(!t) return null;
+  if(t.crest) return t.crest;
+  const c = t.club_id ? clubById(t.club_id) : null;
+  return c?.crest || null;
+}
 function sheetFields(){
   const F = [];
   const o = state.official;
-  const et = matchETPlayed(curMatchAny()||{});   // 延長をやった試合か（e1=延前/e2=延後 のシュート列を使う）
+  const mCur = curMatchAny()||{};
+  const et = matchETPlayed(mCur);   // 延長をやった試合か（e1=延前/e2=延後 のシュート列を使う）
   const shotTap = (side,i,half)=> et ? {size:7, tap:{k:"shot",side,idx:i,half}} : {size:7};
+  const hCrest = mCur.id ? crestFor(resolveSlot(mCur,"H").id) : null;
+  const aCrest = mCur.id ? crestFor(resolveSlot(mCur,"A").id) : null;
+  /* チーム名欄＝エンブレムがあれば左に小さく表示し、チーム名はエンブレム分を除いた残りの幅で表示する */
+  const nameBox = (path, x1,x2,yTop,yBot,crest)=>{
+    if(crest){
+      const cw = 15, cy = (yTop+yBot)/2;
+      F.push(`<img src="${esc(crest)}" style="position:absolute;left:${pt(x1+3)};top:${pt(SHEET.H-cy-cw/2)};width:${pt(cw)};height:${pt(cw)};object-fit:contain;pointer-events:none">`);
+      F.push(box(path, x1+cw+4, x2, yTop, yBot, {size:9, wrap:true}));
+    } else {
+      F.push(box(path, x1, x2, yTop, yBot, {size:9, wrap:true}));
+    }
+  };
   // 見出し・基本情報
   F.push(box("title", 28.4, 568.1, 770, 757, {align:"l", size:8}));
   F.push(box("datetime", 95.8, 197, 760, 747.4, {align:"l"}));
@@ -5191,10 +5212,10 @@ function sheetFields(){
   F.push(box("crowd",176.8,244.2, 722.1,709.5, {align:"l"}));
   F.push(box("pitch",284.7,568.1, 722.1,709.5, {align:"l"}));
 
-  // スコア
-  F.push(box("H.name", 28.4,180.1, 709.5,690, {size:9, wrap:true}));   // 折り返しで長いチーム名も全部入る
+  // スコア（チーム名欄はエンブレムがあれば左に添えて表示）
+  nameBox("H.name", 28.4,180.1, 709.5,690, hCrest);
   F.push(box("H.pref", 28.4,180.1, 690,676,  {size:7}));
-  F.push(box("A.name", 416.3,568.1, 709.5,690, {size:9, wrap:true}));
+  nameBox("A.name", 416.3,568.1, 709.5,690, aCrest);
   F.push(box("A.pref", 416.3,568.1, 690,676,  {size:7}));
   F.push(`<span class="tot" style="left:${pt(180.1)};top:${pt(SHEET.H-694)};width:${pt(50.6)}">${esc(sideTotal("H"))}</span>`);
   F.push(`<span class="tot" style="left:${pt(365.7)};top:${pt(SHEET.H-694)};width:${pt(50.6)}">${esc(sideTotal("A"))}</span>`);
