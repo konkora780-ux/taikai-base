@@ -464,7 +464,8 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 table{border-collapse:collapse;width:100%;font-size:13px;}
 /* 選手一覧（番号/氏名/前所属/学年/位置）の表＝列幅を<th>で固定し、氏名/前所属に確実に幅を残す
    （入力欄はvalueの長さで表の列幅が広がらないため、幅を保証しないと長い名前が見えなくなる） */
-.rostertbl{table-layout:fixed;min-width:590px;}   /* .screenの実質幅(640-padding28)に収まる値。これを超えると横スクロールで右端の「削除」列が隠れてしまう */
+.rostertbl{table-layout:fixed;min-width:560px;}   /* .card内（記入リンクの名簿）に置かれる場合、.screenの実質幅からさらに.cardのpadding分(左右16px×2+枠線)が引かれ実質578px程度しか無いため、
+  それに収まる値にしてある。これを超えると横スクロールで右端の「削除」列が隠れてしまう */
 .rostertbl td{overflow:hidden;padding:6px 3px;}
 .rostertbl select.in{padding:6px 14px 6px 4px;}
 .rostertbl input.in{padding:7px 4px;}
@@ -4680,6 +4681,11 @@ function openClubRosterPicker(teamId, clubId){
   el.className = "modal";
   el.innerHTML = `<div class="sheet">
     <h3>${esc(c.name)} から選手を選ぶ</h3>
+    <label class="f" style="margin-top:0">背番号</label>
+    <div class="seg" id="crp-nomode">
+      <button class="on" data-v="keep">台帳の番号を引き継ぐ</button>
+      <button data-v="renumber">1番から振り直す</button>
+    </div>
     <input class="in" id="crp-filter" placeholder="🔍 名前で絞り込み" style="margin-bottom:8px">
     <p class="hint" id="crp-count" style="margin-bottom:8px"></p>
     <div id="crp-list" style="max-height:50vh;overflow-y:auto"></div>
@@ -4693,6 +4699,11 @@ function openClubRosterPicker(teamId, clubId){
     </div>
   </div>`;
   document.body.appendChild(el);
+  let noMode = "keep";
+  el.querySelectorAll("#crp-nomode button").forEach(b=> b.onclick=()=>{
+    el.querySelectorAll("#crp-nomode button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); noMode = b.dataset.v;
+  });
   const countEl = $("#crp-count");
   const syncCount = ()=>{ countEl.textContent = limit>0 ? `選択中：${selected.size} / 上限${limit}名` : `選択中：${selected.size}名`; };
   const rowHTML = m=>{
@@ -4731,8 +4742,8 @@ function openClubRosterPicker(teamId, clubId){
     if(!selected.size) return toast("1人も選ばれていません");
     t.club_id = clubId;
     t.crest = c.crest || null;
-    t.players = members.filter(m=>selected.has(m.id)).map(m=>({
-      id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade }));
+    t.players = members.filter(m=>selected.has(m.id)).map((m,i)=>({
+      id:m.id, memberId:m.id, no: noMode==="renumber" ? i+1 : m.no, name:m.name, pos:m.pos, grade:m.grade }));
     if(!t.name || /^チーム/.test(t.name)) t.name = c.name;
     t._dirty = true;
     el.remove();
@@ -6298,6 +6309,11 @@ async function openEntryClubPicker(){
   el.innerHTML = `<div class="sheet">
     <h3>${data.club_name?esc(data.club_name)+" の台帳から選ぶ":"台帳から選ぶ"}</h3>
     <p class="hint" style="margin-bottom:8px">選んだ選手で、今の名簿と入れ替えます。</p>
+    <label class="f" style="margin-top:0">背番号</label>
+    <div class="seg" id="ecp-nomode">
+      <button class="on" data-v="keep">台帳の番号を引き継ぐ</button>
+      <button data-v="renumber">1番から振り直す</button>
+    </div>
     <input class="in" id="ecp-filter" placeholder="🔍 名前で絞り込み" style="margin-bottom:8px">
     <p class="hint" id="ecp-count" style="margin-bottom:8px"></p>
     <div id="ecp-list" style="max-height:50vh;overflow-y:auto"></div>
@@ -6311,6 +6327,11 @@ async function openEntryClubPicker(){
     </div>
   </div>`;
   document.body.appendChild(el);
+  let noMode = "keep";
+  el.querySelectorAll("#ecp-nomode button").forEach(b=> b.onclick=()=>{
+    el.querySelectorAll("#ecp-nomode button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); noMode = b.dataset.v;
+  });
   const countEl = $("#ecp-count");
   const syncCount = ()=>{ countEl.textContent = limit>0 ? `選択中：${selected.size} / 上限${limit}名` : `選択中：${selected.size}名`; };
   const rowHTML = m=>`<label class="lurow" style="cursor:pointer" data-name="${esc(m.name)}">
@@ -6341,8 +6362,8 @@ async function openEntryClubPicker(){
   $("#ecp-none").onclick = ()=>{ selected.clear(); renderList(); };
   $("#ecp-ok").onclick = ()=>{
     if(!selected.size) return toast("1人も選ばれていません");
-    state.entry.players = members.filter(m=>selected.has(m.id)).map(m=>({
-      id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade }));
+    state.entry.players = members.filter(m=>selected.has(m.id)).map((m,i)=>({
+      id:m.id, memberId:m.id, no: noMode==="renumber" ? i+1 : m.no, name:m.name, pos:m.pos, grade:m.grade }));
     el.remove(); render();
     toast(`${state.entry.players.length}名を入れました。最後に「この内容で提出する」を押してください`);
   };
@@ -6385,7 +6406,7 @@ function viewEntry(){
           <td style="text-align:left"><input class="in" value="${esc(p.name||"")}" title="${esc(p.name||"")}" oninput="entrySetPlayer(${i},'name',this.value)" placeholder="氏名"></td>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.grade??""}" oninput="entrySetPlayer(${i},'grade',this.value)"></td>
           <td><select class="in" style="padding:7px" onchange="entrySetPlayer(${i},'pos',this.value)">${POS.map(o=>`<option ${o===(p.pos||"")?"selected":""}>${o||"-"}</option>`).join("")}</select></td>
-          <td><button class="linkbtn" style="color:var(--bad)" onclick="entryRemovePlayer(${i})">削除</button></td>
+          <td><button class="linkbtn" style="color:var(--bad);font-size:11px;padding:4px 2px" onclick="entryRemovePlayer(${i})">削除</button></td>
         </tr>`).join("")}</tbody>
       </table></div>
       <div class="btnrow" style="margin-top:8px">
@@ -6585,7 +6606,7 @@ function viewClubEntry(){
           <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(p.prev_team||"")}" title="${esc(p.prev_team||"")}" oninput="cePlayer(${i},'prev_team',this.value)" placeholder="前所属"></td>
           <td><input class="in" style="text-align:center;padding:7px" type="number" value="${p.grade??""}" oninput="cePlayer(${i},'grade',this.value)"></td>
           <td><select class="in" style="padding:7px" onchange="cePlayer(${i},'pos',this.value)">${POS.map(o=>`<option ${o===(p.pos||"")?"selected":""}>${o||"-"}</option>`).join("")}</select></td>
-          <td><button class="linkbtn" style="color:var(--bad)" onclick="ceRemove(${i})">削除</button></td>
+          <td><button class="linkbtn" style="color:var(--bad);font-size:11px;padding:4px 2px" onclick="ceRemove(${i})">削除</button></td>
         </tr>`).join("")}</tbody>
       </table></div>
       <div class="btnrow" style="margin-top:8px">
