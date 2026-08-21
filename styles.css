@@ -5,6 +5,9 @@
   --okbg:#e6f4ec; --nabg:#eef1f5; --warnbg:#fdf5e3; --badbg:#fbe7e5;
   --brand:#0d1b3d; --accent:#2148c7; --accent2:#3b6fe0; --accentbg:#e7edfd;
   --gold:#e2b93b; --goldbg:#faf3dd; --purple:#8a5cf0; --amber:#e79c1f;
+  /* --gold/--bad は装飾用（背景・アイコン等）。地の色に文字として乗せる時は
+     コントラスト比不足（AA基準4.5:1未達）になるため、文字専用に濃い色を用意 */
+  --gold-text:#8e7015; --bad-text:#c13129;
   --grad:linear-gradient(135deg,#16266b 0%,#2148c7 55%,#3b6fe0 100%);
   --grad-gold:linear-gradient(135deg,#caa233,#f0d178);
   --shadow:0 1px 3px rgba(13,27,61,.07),0 6px 20px rgba(13,27,61,.09);
@@ -93,10 +96,10 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .team-acc .tblwrap{border-top:0;border-radius:0 0 14px 14px;margin-top:-1px;}
 
 .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;flex-shrink:0;white-space:nowrap;}
-.badge.live{background:var(--badbg);color:var(--bad);}
+.badge.live{background:var(--badbg);color:var(--bad-text);}
 .badge.done{background:var(--okbg);color:var(--ok);}
 .badge.todo{background:var(--nabg);color:var(--na);}
-.badge.soon{background:var(--warnbg);color:#a8700a;}
+.badge.soon{background:var(--warnbg);color:#956309;}
 
 /* ===== ボタン ===== */
 .btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
@@ -349,7 +352,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 label.f{display:block;font-size:12.5px;font-weight:700;color:var(--sub);margin:14px 2px 6px;}
 label.f:first-child{margin-top:0;}
 .in{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);}
-.in:focus{outline:none;border-color:var(--accent2);}
+.in:focus{outline:none;border-color:var(--accent2);box-shadow:0 0 0 3px rgba(59,111,224,.28);}
 textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .hint{font-size:12px;color:var(--sub);margin:6px 2px 0;line-height:1.5;}
 .seg{display:flex;gap:6px;flex-wrap:wrap;}
@@ -423,7 +426,7 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .mcard .mhead{display:flex;justify-content:space-between;align-items:center;
   padding:7px 13px;background:#f8fafc;border-bottom:1px solid var(--line);
   font-size:11.5px;color:var(--sub);font-weight:600;gap:8px;}
-.mcard .mno{color:var(--gold);font-weight:800;}
+.mcard .mno{color:var(--gold-text);font-weight:800;}
 .mcard .mnote{margin:0 13px 10px;padding:7px 10px;background:var(--warnbg);border:1px solid #f0dca8;
   border-radius:8px;font-size:12.5px;color:#8a6206;font-weight:600;line-height:1.5;}
 .mcard .mpub{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:0 13px 10px;}
@@ -507,7 +510,7 @@ td.pt{font-weight:800;}
 .rank{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px solid var(--line);
   border-radius:12px;padding:11px 14px;margin-bottom:7px;box-shadow:var(--shadow);}
 .rank .no{width:26px;font-size:15px;font-weight:800;color:var(--sub);text-align:center;flex-shrink:0;}
-.rank.top .no{color:var(--gold);}
+.rank.top .no{color:var(--gold-text);}
 .rank .who{flex:1;min-width:0;}
 .rank .who b{font-size:14.5px;}
 .rank .who small{display:block;font-size:11.5px;color:var(--sub);}
@@ -540,6 +543,7 @@ td.pt{font-weight:800;}
 /* ===== モーダル ===== */
 .modal{position:fixed;inset:0;z-index:100;background:rgba(15,22,35,.45);
   display:flex;align-items:flex-end;justify-content:center;}
+.modal:focus{outline:none;}
 .modal .sheet{background:#fff;width:100%;max-width:640px;border-radius:18px 18px 0 0;
   padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);max-height:88vh;overflow-y:auto;}
 .modal h3{margin:0 0 4px;font-size:17px;}
