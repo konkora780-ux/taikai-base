@@ -1052,10 +1052,12 @@ function draftOfficial(m){
       keys.forEach((k,i)=>{ s.scores[i] = String(parts[i]); });
     } else if(parts.reduce((a,b)=>a+b,0) > 0){           // 時間帯別に得点あり → 常にその内訳を反映（修正も追従・延長欄は空）
       keys.forEach((k,i)=>{ s.scores[i] = (i>=2) ? "" : String(parts[i]); });
-    } else {                                             // 時間帯内訳なし（合計だけ）→ 手動の内訳が合計と合っていれば残す
+    } else {                                             // 時間帯内訳なし（＝このチームは無得点）→ 前後半は0、延長は延長をやった試合だけ0
       const curSum = s.scores.reduce((a,v)=>a+num(v),0);
       const allEmpty = s.scores.every(v=>v==null||v==="");
-      if((allEmpty || curSum!==(total||0)) && total!=null){ s.scores = [String(total),"","",""]; }
+      if((allEmpty || curSum!==(total||0)) && total!=null){
+        keys.forEach((k,i)=>{ s.scores[i] = (i>=2 && !etPlayed) ? "" : "0"; });
+      }
     }
     // PK戦：系列があれば毎回14セルへ反映（修正も追従）＋〇の数をPK欄（チーム名の次）へ
     const pser = pkArr(m, side);
