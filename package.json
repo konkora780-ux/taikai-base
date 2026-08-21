@@ -1,0 +1,13 @@
+{
+  "name": "taikai-base-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "大会ベース の自動テスト（読み取り専用の公開画面から）",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}
