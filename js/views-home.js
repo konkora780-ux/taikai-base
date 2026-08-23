@@ -394,7 +394,7 @@ async function resolveStaffSession(u){
 }
 async function setStaffUser(orgId, role, u){
   const { data: org } = await sb.from("gn_orgs").select("name").eq("id", orgId).maybeSingle();
-  state.user = { id: orgId, code: org?.name || "団体", role, authUid: u.id, staffEmail: u.email };
+  state.user = { id: orgId, code: org?.name || u.email || "スタッフ", role, authUid: u.id, staffEmail: u.email };
 }
 async function chooseStaffOrg(i){
   const c = state.staffOrgChoices?.[i]; if(!c) return;
