@@ -19,6 +19,7 @@ function viewTeams(){
         if(blocks.length>1 && t.grp!==lastGrp){ lastGrp=t.grp; head = `<div class="block-label">${esc(blockName(state.t,t.grp)||"（ブロック未設定）")}</div>`; }
         const club = t.club_id ? clubById(t.club_id) : null;
         return head + `<div class="card">
+      ${t.withdrawn?`<div class="hint" style="color:var(--bad);font-weight:700;margin-bottom:6px">棄権${t.withdrawn_note?`：${esc(t.withdrawn_note)}`:""}</div>`:""}
       <div class="row2">
         <input class="in" value="${esc(t.name)}" onchange="editTeam('${t.id}','name',this.value)">
         ${blocks.length>0 && f.hasLeague ? `<select class="in" style="max-width:120px" onchange="editTeam('${t.id}','grp',this.value)">
@@ -42,6 +43,11 @@ function viewTeams(){
           <input class="in" value="${esc(t.pts_adjust_note||"")}" placeholder="例）規律違反による処分"
             onchange="editTeam('${t.id}','pts_adjust_note',this.value||null)"></div>
       </div>
+      <div class="btnrow" style="margin-top:10px">
+        ${t.withdrawn
+          ? `<button class="btn ghost sm" style="flex:1" onclick="cancelWithdraw('${t.id}')">棄権を取り消す（表示のみ・すでに変えた試合は戻りません）</button>`
+          : `<button class="btn ghost sm" style="flex:1;color:var(--bad)" onclick="openWithdrawSheet('${t.id}')">このチームを棄権にする</button>`}
+      </div>
     </div>`;}).join("");
     })()}
     <div class="btnrow">
@@ -60,6 +66,70 @@ function viewTeams(){
 function editTeam(id,k,v){
   const t = state.teams.find(x=>x.id===id); if(!t) return;
   t[k] = v; t._dirty = true;
+}
+
+/* --- 棄権 --- */
+function openWithdrawSheet(teamId){
+  const team = state.teams.find(x=>x.id===teamId); if(!team) return;
+  const remaining = state.matches.filter(m=>
+    (m.home_team===teamId || m.away_team===teamId) && m.status!=="done" && m.status!=="cancelled");
+  const el = document.createElement("div"); el.className="modal";
+  el.innerHTML = `<div class="sheet">
+    <h3>「${esc(team.name)}」を棄権にする</h3>
+    <p class="hint" style="margin-bottom:8px">まだ終了していない試合が ${remaining.length} 件あります。すでに終了した試合の記録はそのまま残ります。</p>
+    <label class="f">理由（任意）</label>
+    <input class="in" id="wd-note" placeholder="例）選手不足のため">
+    <label class="f" style="margin-top:10px">残りの試合をどうしますか</label>
+    <div class="seg" id="wd-mode">
+      <button class="on" data-v="walkover">相手の不戦勝にする</button>
+      <button data-v="cancel">中止にする（記録なし）</button>
+    </div>
+    <div id="wd-score-wrap" style="margin-top:8px">
+      <label class="f">相手に付ける点数</label>
+      <input class="in" id="wd-score" type="number" inputmode="numeric" value="3" style="max-width:100px">
+    </div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="wd-ok" style="background:var(--bad)">棄権にして確定</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  let mode = "walkover";
+  el.querySelectorAll("#wd-mode button").forEach(b=> b.onclick=()=>{
+    el.querySelectorAll("#wd-mode button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); mode = b.dataset.v;
+    $("#wd-score-wrap").style.display = mode==="walkover" ? "" : "none";
+  });
+  $("#wd-ok").onclick = async ()=>{
+    if(!confirm(`「${team.name}」を棄権にします。残り${remaining.length}試合を${mode==="walkover"?"相手の不戦勝":"中止"}にします。よろしいですか？`)) return;
+    const score = Math.max(0, num($("#wd-score").value) || 0);
+    const note = $("#wd-note").value.trim() || null;
+    remaining.forEach(m=>{
+      if(mode==="walkover"){
+        const teamIsHome = m.home_team===teamId;
+        m.status = "done";
+        m.result_type = teamIsHome ? "walkover_away" : "walkover_home";
+        m.result_note = note;
+        m.home_score = teamIsHome ? 0 : score;
+        m.away_score = teamIsHome ? score : 0;
+      }else{
+        m.status = "cancelled";
+        m.result_note = note;
+      }
+    });
+    team.withdrawn = true; team.withdrawn_note = note; team._dirty = true;
+    try{
+      if(remaining.length) await DB.upsert("gn_matches", remaining.map(stripMatch));
+      await saveTeams(true);
+      el.remove(); render(); toast("棄権として処理しました");
+    }catch(e){ toast("処理できませんでした: "+(e.message||e)); }
+  };
+}
+function cancelWithdraw(teamId){
+  const team = state.teams.find(x=>x.id===teamId); if(!team) return;
+  if(!confirm("棄権の表示を取り消します（すでに不戦勝・中止にした試合の中身は自動では戻りません。必要なら試合ごとに直してください）。よろしいですか？")) return;
+  team.withdrawn = false; team.withdrawn_note = null; team._dirty = true;
+  saveTeams(true).then(()=>{ render(); toast("取り消しました"); });
 }
 /* --- チームの追加・削除（H2） --- */
 function addTeamToTournament(name, clubId){
@@ -142,12 +212,13 @@ async function saveTeams(silent){
     await DB.upsert("gn_teams", dirty.map(t=>{
       const { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest,
               short_name,kana,rep_name,coach_name,coach2_name,uniform_color,intro,links,
-              pts_adjust,pts_adjust_note } = t;
+              pts_adjust,pts_adjust_note,withdrawn,withdrawn_note } = t;
       return { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest:crest||null,
                short_name:short_name||null, kana:kana||null, rep_name:rep_name||null,
                coach_name:coach_name||null, coach2_name:coach2_name||null,
                uniform_color:uniform_color||null, intro:intro||null, links:links||null,
-               pts_adjust:pts_adjust??null, pts_adjust_note:pts_adjust_note||null };
+               pts_adjust:pts_adjust??null, pts_adjust_note:pts_adjust_note||null,
+               withdrawn:!!withdrawn, withdrawn_note:withdrawn_note||null };
     }));
     dirty.forEach(t=>delete t._dirty);
     if(!silent){ toast("保存しました"); go("t"); }

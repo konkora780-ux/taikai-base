@@ -270,8 +270,9 @@ function tabTable(){
         if(wc) wcShown = true;
         const wcMark = wc ? `<span title="ワイルドカードで勝ち上がり" style="color:var(--accent);font-weight:800"> ◎${wc}</span>` : "";
         const adjNote = r.adj ? `<small style="color:var(--accent)"> (${r.adj>0?"+":""}${r.adj})</small>` : "";
+        const wd = teamById(r.id)?.withdrawn ? `<small style="color:var(--bad)"> 棄権</small>` : "";
         return `<tr class="${(adv&&i<adv)||wc?"adv":""}" style="${bg}">
-        <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}${wcMark}</td>
+        <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}${wcMark}${wd}</td>
         <td class="pt">${r.pts}${adjNote}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
         <td>${r.gf}</td><td>${r.ga}</td><td>${r.gd>0?"+":""}${r.gd}</td>
       </tr>`;}).join("")}</tbody>
