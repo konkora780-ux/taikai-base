@@ -11,6 +11,7 @@ function render(){
     home:viewHome, login:viewLogin, new:viewNew,
     t:viewTournament, match:viewMatch, teams:viewTeams, settings:viewSettings,
     roster:viewRoster, club:viewClub, official:viewOfficial, officialPublic:viewOfficialPublic, lineup:viewLineup, sched:viewSchedule,
+    teamPublic:viewTeamPublic,
     entry:viewEntry, entrylinks:viewEntryLinks,
     clubentry:viewClubEntry, clubentrylinks:viewClubEntryLinks,
     terms:viewTerms,
@@ -801,7 +802,8 @@ async function createTournament(){
     return {
       id:uid(), tournament_id:tid, org_id:state.user.id, name,
       grp: blocks.length ? (blocks[Math.min(bIdx, blocks.length-1)]?.id || blocks[0].id) : null,
-      seed:i+1, sort_order:i, club_id: club?.id || null, crest: clubRec?.crest || null,
+      seed:i+1, sort_order:i, club_id: club?.id || null,
+      ...clubProfileFields(clubRec),
       // 同じ台帳から複数チーム(A/B/C…)に分けたときは自動で選手を入れない（台帳から選んで手分けしてもらう）
       players: (club && !club.split) ? membersOf(club.id).map(m=>({
         id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade })) : [],
@@ -1035,6 +1037,52 @@ function koRoundLabel(m){
 }
 function shortName(m){ return koRoundLabel(m) + koMatchNo(m); }
 
+/* チーム名をタップで公開のチーム詳細ページへ（枠が空・未確定のときはリンクにしない） */
+function teamNameLink(R){
+  if(!R.id || R.label==="—") return `<span class="tname">${esc(R.label)}</span>`;
+  return `<span class="tname" style="cursor:pointer;text-decoration:underline dotted" onclick="event.stopPropagation();openTeamPublic('${R.id}')">${esc(R.label)}</span>`;
+}
+function openTeamPublic(id){
+  state.publicTeamId = id;
+  state.view = "teamPublic";
+  render();
+}
+function viewTeamPublic(){
+  const t = (state.teams||[]).find(x=>x.id===state.publicTeamId);
+  if(!t) return topbar({title:"チーム", back:"go('t')"}) + `<div class="empty">見つかりません。</div>`;
+  const players = (t.players||[]).slice().sort((a,b)=>(a.no??999)-(b.no??999));
+  const hasGrade = players.some(p=>p.grade);
+  const staffLines = [
+    t.rep_name?`代表者：${esc(t.rep_name)}`:"",
+    t.coach_name?`監督：${esc(t.coach_name)}`:"",
+    t.coach2_name?`コーチ：${esc(t.coach2_name)}`:"",
+    t.uniform_color?`ユニフォーム：${esc(t.uniform_color)}`:"",
+  ].filter(Boolean);
+  return `<div class="tourwrap">`
+  + topbar({ title:t.name, sub:state.t?.name||"", back:"go('t')" })
+  + `<div class="screen">
+    <div class="card" style="display:flex;gap:14px;align-items:center">
+      ${t.crest?`<img src="${t.crest}" alt="" style="width:64px;height:64px;object-fit:contain;border-radius:10px;background:#fff;border:1px solid var(--line);flex:0 0 auto">`:""}
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:18px">${esc(t.name)}</div>
+        ${t.short_name||t.kana?`<div class="hint" style="margin:2px 0 0">${[t.short_name,t.kana?`（${t.kana}）`:""].filter(Boolean).map(esc).join("")}</div>`:""}
+      </div>
+    </div>
+    ${staffLines.length?`<div class="card">${staffLines.map(l=>`<div>${l}</div>`).join("")}</div>`:""}
+    ${t.intro?`<div class="card"><div class="block-label" style="margin:0 0 6px">チーム紹介</div><div style="white-space:pre-wrap">${esc(t.intro)}</div></div>`:""}
+    ${t.links?`<div class="card"><div class="block-label" style="margin:0 0 6px">公式サイト・SNS</div><div style="white-space:pre-wrap">${esc(t.links)}</div></div>`:""}
+    <div class="block-label">選手（${players.length}名）</div>
+    ${players.length ? `<div class="tblwrap"><table class="rostertbl">
+      <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="width:70px">位置</th>${hasGrade?`<th style="width:70px">学年</th>`:""}</tr></thead>
+      <tbody>${players.map(p=>`<tr>
+        <td style="text-align:center">${p.no??""}</td>
+        <td style="text-align:left;padding:6px 3px">${esc(p.name||"")}</td>
+        <td style="text-align:center">${esc(p.pos||"")}</td>
+        ${hasGrade?`<td style="text-align:center">${p.grade?esc(String(p.grade))+"年":""}</td>`:""}
+      </tr>`).join("")}</tbody></table></div>`
+    : `<div class="empty">選手情報がありません。</div>`}
+  </div></div>`;
+}
 function matchCard(m){
   const sp = sportOf(state.t);
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
@@ -1059,9 +1107,9 @@ function matchCard(m){
       ${st}
     </div>
     <${canEdit()?`button class="mbody" onclick="openMatch('${m.id}')"`:`div class="mbody"`}>
-      <span class="side"><span class="tname">${esc(H.label)}</span></span>
+      <span class="side">${teamNameLink(H)}</span>
       <span class="sc ${isDone(m)||m.status==="live"?"":"pending"}">${sc}${pk}</span>
-      <span class="side away"><span class="tname">${esc(A.label)}</span></span>
+      <span class="side away">${teamNameLink(A)}</span>
     </${canEdit()?"button":"div"}>
     ${m.note?`<div class="mnote">📣 ${esc(m.note)}</div>`:""}
     ${scline}

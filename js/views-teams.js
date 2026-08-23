@@ -61,7 +61,8 @@ function addTeamToTournament(name, clubId){
   const club = clubId ? clubById(clubId) : null;
   const t = { id:uid(), tournament_id:state.t.id, org_id:state.user.id, name:nm.trim(),
     grp: blocks.length ? blocks[0].id : null,
-    seed: state.teams.length+1, sort_order: state.teams.length, club_id: clubId||null, crest: club?.crest||null,
+    seed: state.teams.length+1, sort_order: state.teams.length, club_id: clubId||null,
+    ...clubProfileFields(club),
     players: club ? membersOf(clubId).map(m=>({ id:m.id, memberId:m.id, no:m.no, name:m.name, pos:m.pos, grade:m.grade })) : [],
     _dirty:true };
   state.teams.push(t);
@@ -131,8 +132,12 @@ async function saveTeams(silent){
   if(!dirty.length){ if(!silent){ toast("変更はありません"); go("t"); } return; }
   try{
     await DB.upsert("gn_teams", dirty.map(t=>{
-      const { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest } = t;
-      return { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest:crest||null };
+      const { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest,
+              short_name,kana,rep_name,coach_name,coach2_name,uniform_color,intro,links } = t;
+      return { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest:crest||null,
+               short_name:short_name||null, kana:kana||null, rep_name:rep_name||null,
+               coach_name:coach_name||null, coach2_name:coach2_name||null,
+               uniform_color:uniform_color||null, intro:intro||null, links:links||null };
     }));
     dirty.forEach(t=>delete t._dirty);
     if(!silent){ toast("保存しました"); go("t"); }
@@ -850,7 +855,7 @@ function openClubRosterPicker(teamId, clubId){
   $("#crp-ok").onclick = ()=>{
     if(!selected.size) return toast("1人も選ばれていません");
     t.club_id = clubId;
-    t.crest = c.crest || null;
+    Object.assign(t, clubProfileFields(c));
     t.players = members.filter(m=>selected.has(m.id)).map((m,i)=>({
       id:m.id, memberId:m.id, no: noMode==="renumber" ? i+1 : m.no, name:m.name, pos:m.pos, grade:m.grade }));
     if(!t.name || /^チーム/.test(t.name)) t.name = c.name;

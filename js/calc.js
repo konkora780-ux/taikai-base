@@ -727,6 +727,14 @@ function computeSuspensions(){
   return out;
 }
 
+/* 台帳(クラブ)のプロフィール項目を、チーム作成時にコピーするための共通ヘルパー
+   （校章(crest)と同じ「コピー方式」。台帳を後から直しても、既に入っているチームには反映されない点も同じ） */
+function clubProfileFields(c){
+  return { crest:c?.crest||null, short_name:c?.short_name||null, kana:c?.kana||null,
+    rep_name:c?.rep_name||null, coach_name:c?.coach_name||null, coach2_name:c?.coach2_name||null,
+    uniform_color:c?.uniform_color||null, intro:c?.intro||null, links:c?.links||null };
+}
+
 /* --- 会場リストの候補(datalist)。<input list="venueList">と組で使う --- */
 function venueDatalistHTML(){
   return `<datalist id="venueList">${(state.venues||[])
