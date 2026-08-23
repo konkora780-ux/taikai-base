@@ -1,0 +1,316 @@
+<title>大会ベース 運営ガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F5EF; --paper-2:#EFEBE1; --ink:#15213A; --ink-soft:#33405C;
+  --navy:#0D1B3D; --navy-2:#163262; --gold:#6B4E0A; --gold-bright:#D9A93B;
+  --line:#CFC7AF; --card:#FFFFFF;
+  --ok:#0F7A56; --warn:#9C5F06; --bad:#A02E24;
+  --shadow:0 1px 2px rgba(13,27,61,.06), 0 8px 24px rgba(13,27,61,.07);
+  --font-d:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  --font-b:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+    --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+    --line:#25355A; --card:#101E38;
+    --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+  --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+  --line:#25355A; --card:#101E38;
+  --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-b);line-height:1.75;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-d);font-weight:900;text-wrap:balance;color:var(--navy);line-height:1.35;letter-spacing:-.01em}
+:root[data-theme="dark"] h1, :root[data-theme="dark"] h2, :root[data-theme="dark"] h3{color:#F5EFD9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) h1,:root:not([data-theme="light"]) h2,:root:not([data-theme="light"]) h3{color:#F5EFD9}}
+a{color:var(--navy-2)}
+:root[data-theme="dark"] a{color:var(--gold-bright)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) a{color:var(--gold-bright)}}
+
+.cover{background:linear-gradient(160deg,var(--navy),#152c58 60%,var(--navy));color:#F4F1E6;padding:64px 24px 56px;position:relative;overflow:hidden}
+.cover::after{content:"";position:absolute;inset:auto -10% -60% auto;width:60%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, rgba(184,144,30,.18), transparent 70%);pointer-events:none}
+.cover-inner{max-width:760px;margin:0 auto;position:relative}
+.mark{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.14em;color:var(--gold-bright);font-weight:700}
+.rule{width:56px;height:2px;background:var(--gold-bright);margin:18px 0 22px;border-radius:2px}
+.cover h1{font-size:clamp(32px,5vw,48px);margin:0 0 10px;color:#fff;font-weight:700}
+.role-pill{display:inline-block;margin-top:6px;padding:6px 14px;border:1px solid rgba(244,241,230,.35);border-radius:999px;
+  font-size:13px;letter-spacing:.06em;color:#F4F1E6}
+.cover p.lede{max-width:56ch;color:#D9DEEC;font-size:16px;margin-top:18px}
+
+.wrap{max-width:760px;margin:0 auto;padding:0 24px 100px}
+.layout{display:grid;grid-template-columns:1fr;gap:0}
+@media (min-width:980px){
+  .wrap{max-width:1080px}
+  .layout{grid-template-columns:240px 1fr;gap:48px;align-items:start}
+  nav.toc{position:sticky;top:28px}
+}
+nav.toc{margin-top:40px;font-size:14px}
+nav.toc .toc-h{font-weight:700;color:var(--ink-soft);letter-spacing:.08em;font-size:12px;margin-bottom:10px;text-transform:uppercase}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:tocnum}
+nav.toc li{counter-increment:tocnum;margin-bottom:2px}
+nav.toc a{display:flex;gap:8px;padding:7px 8px;border-radius:8px;color:var(--ink-soft);text-decoration:none;font-size:13.5px}
+nav.toc a::before{content:counter(tocnum,decimal-leading-zero);font-variant-numeric:tabular-nums;color:var(--gold);font-weight:700;flex:0 0 auto}
+nav.toc a:hover{background:var(--paper-2);color:var(--ink)}
+
+main{margin-top:40px}
+section{padding-top:8px;margin-bottom:56px;scroll-margin-top:24px}
+section h2{font-size:23px;display:flex;align-items:baseline;gap:12px;margin:0 0 6px}
+section h2 .num{font-family:var(--font-b);font-weight:900;color:var(--gold);font-size:15px;font-variant-numeric:tabular-nums}
+section > .sub{color:var(--ink-soft);font-size:14.5px;margin:0 0 20px}
+h3{font-size:17px;margin:28px 0 10px}
+p{margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);margin:16px 0}
+
+ol.steps{counter-reset:step;list-style:none;margin:18px 0;padding:0;display:flex;flex-direction:column;gap:2px}
+ol.steps li{counter-increment:step;position:relative;padding:12px 14px 12px 46px;border-radius:10px}
+ol.steps li:hover{background:var(--paper-2)}
+ol.steps li::before{content:counter(step);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:50%;
+  background:var(--navy);color:#F4F1E6;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums}
+:root[data-theme="dark"] ol.steps li::before{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) ol.steps li::before{background:var(--gold);color:#12203D}}
+
+.grid2{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:700px){.grid2{grid-template-columns:1fr 1fr}}
+
+.note{border-radius:12px;padding:14px 16px;font-size:14.5px;margin:16px 0;border:1px solid var(--line);
+  display:flex;gap:10px;background:var(--paper-2)}
+.note b.tag{flex:0 0 auto;font-size:11.5px;letter-spacing:.08em;font-weight:800;padding:2px 8px;border-radius:6px;height:fit-content}
+.note.tip b.tag{background:rgba(28,143,106,.15);color:var(--ok)}
+.note.warn b.tag{background:rgba(184,118,10,.15);color:var(--warn)}
+.note.bad b.tag{background:rgba(180,54,44,.15);color:var(--bad)}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:16px 0}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}
+th{background:var(--paper-2);font-weight:700;color:var(--ink-soft);font-size:12.5px;letter-spacing:.03em}
+tr:last-child td{border-bottom:none}
+
+.tabs-illust{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0}
+.tabs-illust span{font-size:12.5px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft)}
+.tabs-illust span.pub{border-color:color-mix(in srgb, var(--ok) 40%, var(--line));color:var(--ok)}
+.tabs-illust span.adm{border-color:color-mix(in srgb, var(--gold) 45%, var(--line));color:var(--gold)}
+
+.divider{border:none;border-top:1px solid var(--line);margin:56px 0}
+footer{max-width:760px;margin:0 auto;padding:40px 24px 80px;color:var(--ink-soft);font-size:13px}
+@media (min-width:980px){footer{max-width:1080px}}
+code{background:var(--paper-2);padding:1px 6px;border-radius:5px;font-size:.92em}
+kbd.btn{display:inline-block;background:var(--navy);color:#F4F1E6;padding:3px 10px;border-radius:7px;font-size:13px;font-weight:600}
+:root[data-theme="dark"] kbd.btn{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) kbd.btn{background:var(--gold);color:#12203D}}
+
+@media print{
+  body{background:#fff}
+  .cover{background:var(--navy) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cover::after{display:none}
+  nav.toc{display:none}
+  .layout{display:block}
+  main{margin-top:24px}
+  section{break-inside:avoid-page}
+  .card,.note,.tblwrap{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+
+<div class="cover">
+  <div class="cover-inner">
+    <span class="mark">🏆 大会ベース</span>
+    <div class="rule"></div>
+    <h1>運営ガイド</h1>
+    <span class="role-pill">団体代表・大会管理者の方へ</span>
+    <p class="lede">大会をつくってから、結果を入力し、順位表・公式記録が自動でできあがるまで。実際の画面の流れに沿って説明します。迷ったときはこのページに戻ってきてください。</p>
+  </div>
+</div>
+
+<div class="wrap layout">
+<nav class="toc">
+  <div class="toc-h">目次</div>
+  <ol>
+    <li><a href="#login">ログインする</a></li>
+    <li><a href="#make">大会をつくる</a></li>
+    <li><a href="#roster">チーム・選手を登録する</a></li>
+    <li><a href="#sched">日程・会場を決める</a></li>
+    <li><a href="#result">試合結果を入力する</a></li>
+    <li><a href="#special">特殊な試合結果</a></li>
+    <li><a href="#table">順位表・戦績表・トーナメント表</a></li>
+    <li><a href="#susp">出場停止の自動判定</a></li>
+    <li><a href="#official">公式記録を作る</a></li>
+    <li><a href="#notice">お知らせを出す</a></li>
+    <li><a href="#staff">スタッフを招待する</a></li>
+    <li><a href="#history">変更履歴を見る</a></li>
+    <li><a href="#backup">バックアップを取る</a></li>
+    <li><a href="#faq">よくある質問</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="login">
+  <h2><span class="num">01</span>ログインする</h2>
+  <p>大会をつくる・結果を入力する人だけログインします。見るだけの保護者・観覧者はログイン不要です。</p>
+  <ol class="steps">
+    <li>ホーム画面右上の<kbd class="btn">運営ログイン</kbd>を押す</li>
+    <li><b>団体コード</b>と<b>合言葉</b>を入力する（発行元は団体の管理者に確認してください）</li>
+    <li>同じコードでログインすれば、複数の担当者が同じ大会に入力できます</li>
+  </ol>
+  <div class="note tip"><b class="tag">TIP</b>スタッフを個別に招待している場合は、招待された本人は「招待されたスタッフの方はこちら」から別の方法でログインします。詳しくは「大会ベース スタッフガイド」をご覧ください。</div>
+</section>
+
+<section id="make">
+  <h2><span class="num">02</span>大会をつくる</h2>
+  <p>ホーム画面の<kbd class="btn">＋ 大会を作成</kbd>から始めます。</p>
+  <h3>決めること</h3>
+  <div class="tblwrap"><table>
+    <thead><tr><th>項目</th><th>内容</th></tr></thead>
+    <tbody>
+      <tr><td>形式</td><td>リーグ戦／トーナメント戦／予選リーグ＋決勝トーナメント</td></tr>
+      <tr><td>種目</td><td>サッカー／フットサルなど（種目により警告退場・PK戦の扱いが変わります）</td></tr>
+      <tr><td>チーム数・ブロック</td><td>部・組の数、ホーム＆アウェイの有無</td></tr>
+      <tr><td>参加チーム</td><td>その場で名前を入力するか、「台帳から選ぶ」で登録済みチームを呼び出す</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn"><b class="tag">注意</b>大会をつくった後に対戦カードだけ作り直したい場合は、「チーム・選手」画面の「🔄 リーグの対戦カードを作り直す」を使います。<b>入力済みの結果は消えます</b>ので、シーズン開始前に済ませておくのが安全です。</div>
+</section>
+
+<section id="roster">
+  <h2><span class="num">03</span>チーム・選手を登録する</h2>
+  <p>選手名簿は2つの入口があります。どちらも併用できます。</p>
+  <h3>① 台帳（年間を通じて使う名簿）</h3>
+  <p>ホーム画面の<kbd class="btn">📋 チーム・選手の台帳</kbd>から、毎年使うチーム・選手をまとめて管理します。大会をつくるとき「台帳から選ぶ」で呼び出せます。</p>
+  <ol class="steps">
+    <li>台帳画面で <kbd class="btn">＋ チームを追加</kbd> または <kbd class="btn">📋 チーム名をまとめて作る</kbd></li>
+    <li>各チームを開き、選手を<kbd class="btn">＋ 1人ずつ追加</kbd>、または<kbd class="btn">📋 まとめて貼り付け</kbd>でExcelから貼り付け（<code>番号・氏名・前所属・学年・位置</code>の順。うしろに<code>よみがな・身長・体重</code>を続けても読み取ります）</li>
+    <li>チームのプロフィール欄（略称・読み仮名・代表者・監督・コーチ・ユニフォームカラー・チーム紹介・公式サイト/SNS）は任意で入力できます。台帳での管理用で、大会にチームを入れたときにコピーされ、チーム名タップで開ける公開ページに表示されます</li>
+  </ol>
+  <div class="note tip"><b class="tag">TIP</b>台帳のチームには「記入リンク」を配って、チーム自身にログイン不要で選手を登録してもらうこともできます（年度初めの一括登録に便利）。詳しくは「大会ベース チーム登録ガイド」を参照してください。</div>
+  <h3>② その大会だけの名簿</h3>
+  <p>「チーム・選手」画面で、台帳を使わずその場でチーム名と選手を直接入力することもできます。台帳から入れたチームも、この画面で番号などをその大会だけ書き換え可能です。</p>
+</section>
+
+<section id="sched">
+  <h2><span class="num">04</span>日程・会場を決める</h2>
+  <ol class="steps">
+    <li>「日程・結果」タブ → <kbd class="btn">🗓 日程・会場をまとめて入力</kbd></li>
+    <li>各試合の日付・時刻・会場を入力（会場は台帳の「会場リスト」から選べます。自由入力も可）</li>
+    <li><kbd class="btn">🔢 試合番号をふり直す</kbd>で通し番号を付ける</li>
+  </ol>
+  <h3>会場リストを準備する</h3>
+  <p>台帳画面の「会場」欄で、名称・住所・電話番号・地図リンクを登録しておくと、日程入力の候補に出るほか、実際に使われた会場だけが大会の公開画面「会場アクセス」タブに自動で表示されます。</p>
+</section>
+
+<section id="result">
+  <h2><span class="num">05</span>試合結果を入力する</h2>
+  <ol class="steps">
+    <li>試合カードをタップして「結果を入れる」画面を開く</li>
+    <li>スコアを＋－で調整し、<kbd class="btn">💾 ここまでを保存</kbd>で途中経過を保存（試合中の速報に）</li>
+    <li>「⚽ 得点」「🟨 警告・退場」「🔄 選手交代」でイベントを記録（得点者・アシスト・時間帯を選べます）</li>
+    <li>試合が終わったら状態を<kbd class="btn">🏁 終了</kbd>にする（確認ダイアログが出ます。以後は内容がロックされ、直すときは「✏ 修正する」を押します）</li>
+  </ol>
+  <div class="note tip"><b class="tag">TIP</b>結果入力画面から「👥 メンバー表」「📄 公式記録」にワンタップで移動できます。試合前にメンバー表だけ先に作っておくのもおすすめです。</div>
+</section>
+
+<section id="special">
+  <h2><span class="num">06</span>特殊な試合結果</h2>
+  <p>結果入力画面の状態セグに「延期」「中止」が、終了時には「決着の種類」が選べます。</p>
+  <div class="tblwrap"><table>
+    <thead><tr><th>状況</th><th>操作</th><th>順位表への影響</th></tr></thead>
+    <tbody>
+      <tr><td>延期</td><td>状態を「延期」に</td><td>集計に含まれない（未実施と同じ扱い）</td></tr>
+      <tr><td>試合中止</td><td>状態を「中止」に。理由メモを残せます</td><td>集計に含まれない</td></tr>
+      <tr><td>不戦勝・不戦敗</td><td>終了にしてスコアを入力 →「決着の種類」で不戦勝を選ぶ</td><td>入力したスコアどおりに集計（通常の試合と同じ計算）</td></tr>
+      <tr><td>没収試合</td><td>同上。「没収試合」を選ぶ</td><td>同上</td></tr>
+      <tr><td>認定スコア</td><td>同上。「運営判断による認定スコア」を選ぶ</td><td>同上</td></tr>
+      <tr><td>チームの棄権</td><td>「チーム・選手」画面の該当チームで「このチームを棄権にする」</td><td>残り試合をまとめて相手の不戦勝／中止に変換。順位表に「棄権」バッジ表示</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn"><b class="tag">注意</b>不戦勝・没収・認定スコアを選んでも、点数はスコア欄に自分で入力する必要があります（大会の規定に合わせてください）。「決着の種類」はあくまでラベルで、点数の自動入力はしません。</div>
+</section>
+
+<section id="table">
+  <h2><span class="num">07</span>順位表・戦績表・トーナメント表</h2>
+  <p>結果を入力すると自動で更新されます。同点のときは <b>得失点差 → 総得点 → 直接対決</b> の順で並びます。</p>
+  <h3>勝点の加算・減算</h3>
+  <p>「チーム・選手」画面の各チームに「勝点の加算・減算」欄があります。規律違反などの処分に使い、理由も記録できます。</p>
+  <h3>順位の手動並べ替え</h3>
+  <p>順位表の各ブロック下にある<kbd class="btn">✏ 順位を手動で並べ替える</kbd>から、▲▼で順番を入れ替えられます。同じ勝点・得失点差が並んだときの抽選結果や、特別な事情での補正に使います。通常は自動計算のままで問題ありません。</p>
+  <h3>トーナメント表</h3>
+  <p>枠の右上の「✎」で、チーム／予選順位／勝者・敗者／自由文字（例：「抽選」）を直接指定できます。「＋回戦」「＋順位決定戦」で表を組み替えることもできます。</p>
+</section>
+
+<section id="susp">
+  <h2><span class="num">08</span>出場停止の自動判定</h2>
+  <p>大会設定の「出場停止の自動判定」を「使う」にすると、警告の累積枚数・退場の出場停止試合数を大会ごとに設定できます。</p>
+  <ol class="steps">
+    <li>「大会の設定」→「出場停止の自動判定」を「使う」にし、枚数・試合数を入力</li>
+    <li>「警告・退場」タブに、出場停止中の選手と対象試合が自動で一覧表示されます</li>
+    <li>メンバー表で対象選手を選ぶと「⚠出停」の警告が表示されます（選択そのものは止めません。最終確認は運営でお願いします）</li>
+  </ol>
+  <div class="note warn"><b class="tag">注意</b>大会をまたぐ持ち越しには対応していません（この大会の中だけで数えます）。</div>
+</section>
+
+<section id="official">
+  <h2><span class="num">09</span>公式記録を作る</h2>
+  <p>結果入力画面から「📄 公式記録」で開きます。得点・メンバー・警告退場は自動で下書きされ、審判名・天候などは手入力です。</p>
+  <ul>
+    <li>枠をタップしてそのまま書き込み。選手名欄はタップで名簿から選べます</li>
+    <li>「🔄 試合結果を取り込み直す」で、結果修正後も最新の内容に同期（手入力した項目は保持されます）</li>
+    <li>「🖨 印刷・PDF」でJFA様式の用紙として出力</li>
+    <li>試合カードから「🔗 公式記録を公開する」を押すと、保護者・観覧者もリンクから見られるようになります</li>
+  </ul>
+</section>
+
+<section id="notice">
+  <h2><span class="num">10</span>お知らせを出す</h2>
+  <p>大会の「お知らせ」タブから、雨天延期・時間変更などを掲示できます。</p>
+  <ol class="steps">
+    <li><kbd class="btn">＋ お知らせを追加</kbd>でタイトル・本文を入力</li>
+    <li>「固定表示」で先頭に常に表示、公開開始・終了日時も指定可能</li>
+    <li>「公開する」にするまでは下書き（運営にだけ見える）のままです</li>
+  </ol>
+</section>
+
+<section id="staff">
+  <h2><span class="num">11</span>スタッフを招待する</h2>
+  <p>台帳画面の「スタッフ」欄から、個人のメールアドレスを「大会管理者」または「閲覧のみ」として招待できます。</p>
+  <ol class="steps">
+    <li><kbd class="btn">＋ スタッフを招待</kbd>でメールアドレスと権限を指定（招待しただけではメールは届きません）</li>
+    <li>招待したメールアドレスを本人に伝える</li>
+    <li>本人がログイン画面の「招待されたスタッフの方はこちら」から、自分でログイン用リンクを受け取ります</li>
+  </ol>
+  <p>詳しいログイン手順は「大会ベース スタッフガイド」をお渡しください。</p>
+</section>
+
+<section id="history">
+  <h2><span class="num">12</span>変更履歴を見る</h2>
+  <p>結果入力画面の<kbd class="btn">🕘 履歴</kbd>から、その試合がいつ・何を変更されたかを確認できます。誤入力があったときの確認用です。</p>
+</section>
+
+<section id="backup">
+  <h2><span class="num">13</span>バックアップを取る</h2>
+  <p>台帳画面の<kbd class="btn">🗄 全データをバックアップ（ダウンロード）</kbd>で、大会・チーム・選手・試合結果などをまとめて書き出せます。月1回など、決まったタイミングでの保存をおすすめします。</p>
+  <div class="note bad"><b class="tag">重要</b>選手の氏名・記入コードなど個人情報を含むファイルです。厳重に保管し、他人に渡さないでください。「バックアップから復元する」は、今あるデータの一部を上書きします。データが消えたときの回復専用です。</div>
+</section>
+
+<section id="faq">
+  <h2><span class="num">14</span>よくある質問</h2>
+  <div class="card"><b>Q. 結果を保存したのに、他の担当者の画面に反映されません。</b><br>画面を開き直すか「↻ 更新」を押してください。得点の＋－は保存ボタンを押すまで自分の画面だけの表示です。</div>
+  <div class="card"><b>Q. 終了した試合を直したい。</b><br>結果入力画面の「✏ 修正する」でロックを解除できます。</div>
+  <div class="card"><b>Q. チームや選手が多くて手入力が大変。</b><br>台帳・チームどちらの選手登録欄も「まとめて貼り付け」でExcelの内容をそのまま貼り付けられます。</div>
+</section>
+
+</main>
+</div>
+
+<hr class="divider">
+<footer>大会ベース 運営ガイド ・ この説明書は実際の画面をもとに作成しています。今後の機能追加により表示が変わる場合があります。</footer>

@@ -1,0 +1,167 @@
+<title>大会ベース スタッフガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F5EF; --paper-2:#EFEBE1; --ink:#15213A; --ink-soft:#33405C;
+  --navy:#0D1B3D; --navy-2:#163262; --gold:#6B4E0A; --gold-bright:#D9A93B;
+  --line:#CFC7AF; --card:#FFFFFF;
+  --ok:#0F7A56; --warn:#9C5F06; --bad:#A02E24;
+  --shadow:0 1px 2px rgba(13,27,61,.06), 0 8px 24px rgba(13,27,61,.07);
+  --font-d:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  --font-b:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+    --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+    --line:#25355A; --card:#101E38;
+    --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+  --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+  --line:#25355A; --card:#101E38;
+  --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-b);line-height:1.75;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-d);font-weight:900;text-wrap:balance;color:var(--navy);line-height:1.35;letter-spacing:-.01em}
+:root[data-theme="dark"] h1,:root[data-theme="dark"] h2,:root[data-theme="dark"] h3{color:#F5EFD9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) h1,:root:not([data-theme="light"]) h2,:root:not([data-theme="light"]) h3{color:#F5EFD9}}
+a{color:var(--navy-2)}
+:root[data-theme="dark"] a{color:var(--gold-bright)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) a{color:var(--gold-bright)}}
+
+.cover{background:linear-gradient(160deg,var(--navy),#152c58 60%,var(--navy));color:#F4F1E6;padding:64px 24px 56px;position:relative;overflow:hidden}
+.cover::after{content:"";position:absolute;inset:auto -10% -60% auto;width:60%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, rgba(184,144,30,.18), transparent 70%);pointer-events:none}
+.cover-inner{max-width:640px;margin:0 auto;position:relative}
+.mark{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.14em;color:var(--gold-bright);font-weight:700}
+.rule{width:56px;height:2px;background:var(--gold-bright);margin:18px 0 22px;border-radius:2px}
+.cover h1{font-size:clamp(32px,5vw,44px);margin:0 0 10px;color:#fff;font-weight:700}
+.role-pill{display:inline-block;margin-top:6px;padding:6px 14px;border:1px solid rgba(244,241,230,.35);border-radius:999px;
+  font-size:13px;letter-spacing:.06em;color:#F4F1E6}
+.cover p.lede{max-width:52ch;color:#D9DEEC;font-size:16px;margin-top:18px}
+
+.wrap{max-width:640px;margin:0 auto;padding:0 24px 100px}
+main{margin-top:40px}
+section{padding-top:8px;margin-bottom:52px}
+section h2{font-size:22px;display:flex;align-items:baseline;gap:12px;margin:0 0 6px}
+section h2 .num{font-family:var(--font-b);font-weight:900;color:var(--gold);font-size:15px;font-variant-numeric:tabular-nums}
+h3{font-size:16.5px;margin:24px 0 10px}
+p{margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);margin:16px 0}
+
+ol.steps{counter-reset:step;list-style:none;margin:18px 0;padding:0;display:flex;flex-direction:column;gap:2px}
+ol.steps li{counter-increment:step;position:relative;padding:12px 14px 12px 46px;border-radius:10px}
+ol.steps li:hover{background:var(--paper-2)}
+ol.steps li::before{content:counter(step);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:50%;
+  background:var(--navy);color:#F4F1E6;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums}
+:root[data-theme="dark"] ol.steps li::before{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) ol.steps li::before{background:var(--gold);color:#12203D}}
+
+.note{border-radius:12px;padding:14px 16px;font-size:14.5px;margin:16px 0;border:1px solid var(--line);
+  display:flex;gap:10px;background:var(--paper-2)}
+.note b.tag{flex:0 0 auto;font-size:11.5px;letter-spacing:.08em;font-weight:800;padding:2px 8px;border-radius:6px;height:fit-content}
+.note.tip b.tag{background:rgba(28,143,106,.15);color:var(--ok)}
+.note.warn b.tag{background:rgba(184,118,10,.15);color:var(--warn)}
+.note.bad b.tag{background:rgba(180,54,44,.15);color:var(--bad)}
+
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--paper-2);font-weight:700;color:var(--ink-soft);font-size:12.5px}
+tr:last-child td{border-bottom:none}
+
+.role-cards{display:grid;grid-template-columns:1fr;gap:12px;margin:18px 0}
+@media (min-width:560px){.role-cards{grid-template-columns:1fr 1fr}}
+.role-card{border:1.5px solid var(--line);border-radius:14px;padding:18px}
+.role-card.admin{border-color:color-mix(in srgb, var(--gold) 45%, var(--line))}
+.role-card h4{margin:0 0 8px;font-size:15px;font-weight:800}
+.role-card ul{margin:0;padding-left:18px;font-size:14px;color:var(--ink-soft)}
+
+kbd.btn{display:inline-block;background:var(--navy);color:#F4F1E6;padding:3px 10px;border-radius:7px;font-size:13px;font-weight:600}
+:root[data-theme="dark"] kbd.btn{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) kbd.btn{background:var(--gold);color:#12203D}}
+.divider{border:none;border-top:1px solid var(--line);margin:52px 0}
+footer{max-width:640px;margin:0 auto;padding:40px 24px 80px;color:var(--ink-soft);font-size:13px}
+
+@media print{
+  body{background:#fff}
+  .cover{background:var(--navy) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cover::after{display:none}
+  section{break-inside:avoid-page}
+  .card,.note,.tblwrap,.role-card{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+
+<div class="cover">
+  <div class="cover-inner">
+    <span class="mark">🏆 大会ベース</span>
+    <div class="rule"></div>
+    <h1>スタッフガイド</h1>
+    <span class="role-pill">招待されたスタッフの方へ</span>
+    <p class="lede">運営（団体代表）から招待を受けた方向けの案内です。ログイン方法と、できることの範囲を説明します。</p>
+  </div>
+</div>
+
+<div class="wrap">
+<main>
+
+<section>
+  <h2><span class="num">01</span>招待されたら</h2>
+  <p>運営から、あなたのメールアドレス宛に「招待した」という連絡が届きます（メール自体は自動送信されません。口頭・LINEなどで案内されます）。役割は次の2種類のどちらかです。</p>
+  <div class="role-cards">
+    <div class="role-card admin">
+      <h4>大会管理者</h4>
+      <ul><li>結果入力</li><li>台帳・チーム編集</li><li>大会設定の変更</li><li>運営代表と同じように操作可能</li></ul>
+    </div>
+    <div class="role-card">
+      <h4>閲覧のみ</h4>
+      <ul><li>大会の内容をすべて閲覧</li><li>変更・保存はできない</li><li>非公開の大会の中身も見られる</li></ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span>ログインする</h2>
+  <p>合言葉は使いません。メールアドレスに届くリンクでログインします（マジックリンク方式）。</p>
+  <ol class="steps">
+    <li>大会ベースのトップ画面 →「運営ログイン」を開く</li>
+    <li>「招待されたスタッフの方はこちら」を押す</li>
+    <li>招待されたメールアドレスを入力し、<kbd class="btn">ログイン用リンクを送る</kbd></li>
+    <li>届いたメールを開き、リンクをタップ（<b>届いたらすぐに</b>開いてください）</li>
+  </ol>
+  <div class="note tip"><b class="tag">TIP</b>一度ログインすれば、ログアウトしない限りそのブラウザでは再ログイン不要です。別の端末・別のブラウザで開くときや、ログアウト後は、もう一度同じ手順で新しいリンクを受け取ってください（前回のリンクは使えません）。</div>
+</section>
+
+<section>
+  <h2><span class="num">03</span>ログインできないとき</h2>
+  <div class="tblwrap"><table>
+    <thead><tr><th>症状</th><th>原因・対処</th></tr></thead>
+    <tbody>
+      <tr><td>「送信できませんでした：email rate limit exceeded」</td><td>短時間に何度もリンクを送りすぎています。30分〜1時間ほど空けてから再度お試しください。</td></tr>
+      <tr><td>メールが届かない</td><td>迷惑メールフォルダをご確認ください。届かない場合は運営にご連絡ください。</td></tr>
+      <tr><td>リンクを開くと「期限切れ」と出る</td><td>リンクは1回・短時間のみ有効です。もう一度メールアドレスを入力してやり直してください。</td></tr>
+      <tr><td>「まだどの団体からも招待されていません」と出る</td><td>入力したメールアドレスが招待時と違う可能性があります。運営にご確認ください。</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="num">04</span>操作のしかた</h2>
+  <p>大会管理者としてログインした場合、できることは団体代表と同じです。大会づくり・結果入力・公式記録・お知らせなど、具体的な操作方法は「大会ベース 運営ガイド」をご覧ください。</p>
+  <div class="note warn"><b class="tag">注意</b>スタッフの招待・削除・権限変更は団体代表のみが行えます。大会管理者としてログインしていても、この操作はできません。</div>
+</section>
+
+</main>
+</div>
+<hr class="divider">
+<footer>大会ベース スタッフガイド ・ この説明書は実際の画面をもとに作成しています。</footer>

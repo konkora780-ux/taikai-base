@@ -1,0 +1,136 @@
+<title>大会ベース 観覧ガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F5EF; --paper-2:#EFEBE1; --ink:#15213A; --ink-soft:#33405C;
+  --navy:#0D1B3D; --navy-2:#163262; --gold:#6B4E0A; --gold-bright:#D9A93B;
+  --line:#CFC7AF; --card:#FFFFFF;
+  --ok:#0F7A56; --warn:#9C5F06; --bad:#A02E24;
+  --shadow:0 1px 2px rgba(13,27,61,.06), 0 8px 24px rgba(13,27,61,.07);
+  --font-d:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  --font-b:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+    --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+    --line:#25355A; --card:#101E38;
+    --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+  --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+  --line:#25355A; --card:#101E38;
+  --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-b);line-height:1.75;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-d);font-weight:900;text-wrap:balance;color:var(--navy);line-height:1.35;letter-spacing:-.01em}
+:root[data-theme="dark"] h1,:root[data-theme="dark"] h2,:root[data-theme="dark"] h3{color:#F5EFD9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) h1,:root:not([data-theme="light"]) h2,:root:not([data-theme="light"]) h3{color:#F5EFD9}}
+a{color:var(--navy-2)}
+:root[data-theme="dark"] a{color:var(--gold-bright)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) a{color:var(--gold-bright)}}
+
+.cover{background:linear-gradient(160deg,var(--navy),#152c58 60%,var(--navy));color:#F4F1E6;padding:64px 24px 56px;position:relative;overflow:hidden}
+.cover::after{content:"";position:absolute;inset:auto -10% -60% auto;width:60%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, rgba(184,144,30,.18), transparent 70%);pointer-events:none}
+.cover-inner{max-width:640px;margin:0 auto;position:relative}
+.mark{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.14em;color:var(--gold-bright);font-weight:700}
+.rule{width:56px;height:2px;background:var(--gold-bright);margin:18px 0 22px;border-radius:2px}
+.cover h1{font-size:clamp(32px,5vw,44px);margin:0 0 10px;color:#fff;font-weight:700}
+.role-pill{display:inline-block;margin-top:6px;padding:6px 14px;border:1px solid rgba(244,241,230,.35);border-radius:999px;
+  font-size:13px;letter-spacing:.06em;color:#F4F1E6}
+.cover p.lede{max-width:52ch;color:#D9DEEC;font-size:16px;margin-top:18px}
+
+.wrap{max-width:640px;margin:0 auto;padding:0 24px 100px}
+main{margin-top:40px}
+section{padding-top:8px;margin-bottom:52px}
+section h2{font-size:22px;display:flex;align-items:baseline;gap:12px;margin:0 0 6px}
+section h2 .num{font-family:var(--font-b);font-weight:900;color:var(--gold);font-size:15px;font-variant-numeric:tabular-nums}
+p{margin:0 0 14px}
+
+.note{border-radius:12px;padding:14px 16px;font-size:14.5px;margin:16px 0;border:1px solid var(--line);
+  display:flex;gap:10px;background:var(--paper-2)}
+.note b.tag{flex:0 0 auto;font-size:11.5px;letter-spacing:.08em;font-weight:800;padding:2px 8px;border-radius:6px;height:fit-content}
+.note.tip b.tag{background:rgba(28,143,106,.15);color:var(--ok)}
+
+.tabgrid{display:grid;grid-template-columns:1fr;gap:10px;margin:18px 0}
+@media (min-width:560px){.tabgrid{grid-template-columns:1fr 1fr}}
+.tabitem{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--card)}
+.tabitem b{display:block;font-size:14.5px;color:var(--navy);margin-bottom:3px}
+:root[data-theme="dark"] .tabitem b{color:#F2E6C4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tabitem b{color:#F2E6C4}}
+.tabitem span{font-size:13px;color:var(--ink-soft)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);margin:16px 0}
+kbd.btn{display:inline-block;background:var(--navy);color:#F4F1E6;padding:3px 10px;border-radius:7px;font-size:13px;font-weight:600}
+:root[data-theme="dark"] kbd.btn{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) kbd.btn{background:var(--gold);color:#12203D}}
+.divider{border:none;border-top:1px solid var(--line);margin:52px 0}
+footer{max-width:640px;margin:0 auto;padding:40px 24px 80px;color:var(--ink-soft);font-size:13px}
+
+@media print{
+  body{background:#fff}
+  .cover{background:var(--navy) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cover::after{display:none}
+  section{break-inside:avoid-page}
+  .card,.note,.tabitem{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+
+<div class="cover">
+  <div class="cover-inner">
+    <span class="mark">🏆 大会ベース</span>
+    <div class="rule"></div>
+    <h1>観覧ガイド</h1>
+    <span class="role-pill">保護者・応援に来られる方へ</span>
+    <p class="lede">アカウント登録もログインも不要です。届いたURLを開くだけで、大会の日程・結果・順位を確認できます。</p>
+  </div>
+</div>
+
+<div class="wrap">
+<main>
+
+<section>
+  <h2><span class="num">01</span>大会ページを開く</h2>
+  <p>運営から共有されたURL（または大会ベースのトップ画面の「公開大会を見る」）から、見たい大会を開きます。上部にタブが並んでいて、切り替えて見られます。</p>
+</section>
+
+<section>
+  <h2><span class="num">02</span>タブの見方</h2>
+  <div class="tabgrid">
+    <div class="tabitem"><b>大会概要</b><span>試合時間・順位決定方法・お問い合わせ先など</span></div>
+    <div class="tabitem"><b>お知らせ</b><span>雨天延期・時間変更などの運営からの連絡</span></div>
+    <div class="tabitem"><b>会場アクセス</b><span>使われている会場の住所・電話番号・地図</span></div>
+    <div class="tabitem"><b>日程・結果</b><span>試合ごとのスコア・得点者。チーム名をタップすると詳細ページへ</span></div>
+    <div class="tabitem"><b>順位表</b><span>勝点・得失点差などの順位</span></div>
+    <div class="tabitem"><b>戦績表</b><span>チームどうしの対戦結果を一覧で</span></div>
+    <div class="tabitem"><b>トーナメント表</b><span>勝ち上がりの組み合わせ</span></div>
+    <div class="tabitem"><b>得点・アシストランキング</b><span>個人成績</span></div>
+    <div class="tabitem"><b>出場記録</b><span>選手ごとの出場試合数・時間</span></div>
+  </div>
+  <div class="note tip"><b class="tag">TIP</b>日程・結果のチーム名をタップすると、そのチームのプロフィール（校章・監督名・選手一覧など）が見られます。運営が登録していない項目は表示されません。</div>
+</section>
+
+<section>
+  <h2><span class="num">03</span>公式記録を見る</h2>
+  <p>試合カードに<kbd class="btn">📄 公式記録を見る</kbd>が出ている試合は、運営が公開したJFA様式の記録用紙をそのまま見られます（審判・メンバー・得点経過など）。</p>
+</section>
+
+<section>
+  <h2><span class="num">04</span>よくある質問</h2>
+  <div class="card"><b>Q. スコアが更新されない。</b><br>画面を開き直すか「↻ 更新」を押してください。試合中の途中経過は運営が保存したタイミングで反映されます。</div>
+  <div class="card"><b>Q. 選手や自分の子どもの情報は誰でも見られる？</b><br>公開画面に表示される内容は運営が管理しています。表示範囲について気になる点があれば、大会の運営にお問い合わせください。</div>
+</section>
+
+</main>
+</div>
+<hr class="divider">
+<footer>大会ベース 観覧ガイド ・ この説明書は実際の画面をもとに作成しています。</footer>

@@ -1,0 +1,170 @@
+<title>大会ベース チーム登録ガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F5EF; --paper-2:#EFEBE1; --ink:#15213A; --ink-soft:#33405C;
+  --navy:#0D1B3D; --navy-2:#163262; --gold:#6B4E0A; --gold-bright:#D9A93B;
+  --line:#CFC7AF; --card:#FFFFFF;
+  --ok:#0F7A56; --warn:#9C5F06; --bad:#A02E24;
+  --shadow:0 1px 2px rgba(13,27,61,.06), 0 8px 24px rgba(13,27,61,.07);
+  --font-d:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+  --font-b:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+    --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+    --line:#25355A; --card:#101E38;
+    --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0B1526; --paper-2:#101E38; --ink:#E9ECF5; --ink-soft:#B7C0D6;
+  --navy:#16294F; --navy-2:#3E5D93; --gold:#D9B24C; --gold-bright:#E8C766;
+  --line:#25355A; --card:#101E38;
+  --ok:#3FBE93; --warn:#E0A63E; --bad:#E2685C;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-b);line-height:1.75;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-d);font-weight:900;text-wrap:balance;color:var(--navy);line-height:1.35;letter-spacing:-.01em}
+:root[data-theme="dark"] h1,:root[data-theme="dark"] h2,:root[data-theme="dark"] h3{color:#F5EFD9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) h1,:root:not([data-theme="light"]) h2,:root:not([data-theme="light"]) h3{color:#F5EFD9}}
+a{color:var(--navy-2)}
+:root[data-theme="dark"] a{color:var(--gold-bright)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) a{color:var(--gold-bright)}}
+
+.cover{background:linear-gradient(160deg,var(--navy),#152c58 60%,var(--navy));color:#F4F1E6;padding:64px 24px 56px;position:relative;overflow:hidden}
+.cover::after{content:"";position:absolute;inset:auto -10% -60% auto;width:60%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, rgba(184,144,30,.18), transparent 70%);pointer-events:none}
+.cover-inner{max-width:640px;margin:0 auto;position:relative}
+.mark{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.14em;color:var(--gold-bright);font-weight:700}
+.rule{width:56px;height:2px;background:var(--gold-bright);margin:18px 0 22px;border-radius:2px}
+.cover h1{font-size:clamp(32px,5vw,44px);margin:0 0 10px;color:#fff;font-weight:700}
+.role-pill{display:inline-block;margin-top:6px;padding:6px 14px;border:1px solid rgba(244,241,230,.35);border-radius:999px;
+  font-size:13px;letter-spacing:.06em;color:#F4F1E6}
+.cover p.lede{max-width:52ch;color:#D9DEEC;font-size:16px;margin-top:18px}
+
+.wrap{max-width:640px;margin:0 auto;padding:0 24px 100px}
+main{margin-top:40px}
+section{padding-top:8px;margin-bottom:52px}
+section h2{font-size:22px;display:flex;align-items:baseline;gap:12px;margin:0 0 6px}
+section h2 .num{font-family:var(--font-b);font-weight:900;color:var(--gold);font-size:15px;font-variant-numeric:tabular-nums}
+h3{font-size:16.5px;margin:24px 0 10px}
+p{margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);margin:16px 0}
+
+ol.steps{counter-reset:step;list-style:none;margin:18px 0;padding:0;display:flex;flex-direction:column;gap:2px}
+ol.steps li{counter-increment:step;position:relative;padding:12px 14px 12px 46px;border-radius:10px}
+ol.steps li:hover{background:var(--paper-2)}
+ol.steps li::before{content:counter(step);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:50%;
+  background:var(--navy);color:#F4F1E6;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums}
+:root[data-theme="dark"] ol.steps li::before{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) ol.steps li::before{background:var(--gold);color:#12203D}}
+
+.note{border-radius:12px;padding:14px 16px;font-size:14.5px;margin:16px 0;border:1px solid var(--line);
+  display:flex;gap:10px;background:var(--paper-2)}
+.note b.tag{flex:0 0 auto;font-size:11.5px;letter-spacing:.08em;font-weight:800;padding:2px 8px;border-radius:6px;height:fit-content}
+.note.tip b.tag{background:rgba(28,143,106,.15);color:var(--ok)}
+.note.warn b.tag{background:rgba(184,118,10,.15);color:var(--warn)}
+.note.bad b.tag{background:rgba(180,54,44,.15);color:var(--bad)}
+
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--paper-2);font-weight:700;color:var(--ink-soft);font-size:12.5px}
+tr:last-child td{border-bottom:none}
+
+.two{display:grid;grid-template-columns:1fr;gap:14px;margin:18px 0}
+@media (min-width:640px){.two{grid-template-columns:1fr 1fr}}
+.linkcard{border:1.5px solid var(--line);border-radius:14px;padding:18px}
+.linkcard h4{margin:0 0 8px;font-size:15.5px;font-weight:800;color:var(--navy)}
+:root[data-theme="dark"] .linkcard h4{color:#F2E6C4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .linkcard h4{color:#F2E6C4}}
+.linkcard p{font-size:14px;color:var(--ink-soft);margin:0}
+
+kbd.btn{display:inline-block;background:var(--navy);color:#F4F1E6;padding:3px 10px;border-radius:7px;font-size:13px;font-weight:600}
+:root[data-theme="dark"] kbd.btn{background:var(--gold);color:#12203D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) kbd.btn{background:var(--gold);color:#12203D}}
+.divider{border:none;border-top:1px solid var(--line);margin:52px 0}
+footer{max-width:640px;margin:0 auto;padding:40px 24px 80px;color:var(--ink-soft);font-size:13px}
+
+@media print{
+  body{background:#fff}
+  .cover{background:var(--navy) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cover::after{display:none}
+  section{break-inside:avoid-page}
+  .card,.note,.tblwrap,.linkcard{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+
+<div class="cover">
+  <div class="cover-inner">
+    <span class="mark">🏆 大会ベース</span>
+    <div class="rule"></div>
+    <h1>チーム登録ガイド</h1>
+    <span class="role-pill">コーチ・監督・チーム担当者の方へ</span>
+    <p class="lede">運営から届いた「記入リンク」を使って、ログインなしで選手名簿を登録・提出する方法です。</p>
+  </div>
+</div>
+
+<div class="wrap">
+<main>
+
+<section>
+  <h2><span class="num">01</span>記入リンクとは</h2>
+  <p>運営から、URLと6桁のコードが送られてきます（LINE・メール・紙などで案内されます）。<b>アカウント登録やログインは不要</b>です。リンクを開いてコードを入力するだけで、自分のチームの選手を登録・編集できます。</p>
+  <p>記入リンクには2種類あり、運営からどちらが届いたかで使い方が変わります。</p>
+  <div class="two">
+    <div class="linkcard">
+      <h4>大会の記入リンク</h4>
+      <p>特定の大会に出場する選手を選ぶためのリンクです。台帳（下記）に登録済みの選手から出場メンバーを選びます。</p>
+    </div>
+    <div class="linkcard">
+      <h4>台帳の記入リンク</h4>
+      <p>年度はじめなどに、チーム名と選手を一から登録・更新するためのリンクです。ここで登録した内容が、複数の大会で使い回されます。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">02</span>台帳の記入リンクで登録する</h2>
+  <ol class="steps">
+    <li>届いたURLを開き、6桁のコードを入力</li>
+    <li>チーム名・校章（任意）・選手（背番号・氏名・学年・位置など）を入力</li>
+    <li>すでに選手が登録されている場合は「現在の名簿を読み込む」で呼び出し、卒業した選手を削除・新入生を追加してから提出できます</li>
+    <li>入力できたら提出する</li>
+  </ol>
+  <div class="note tip"><b class="tag">TIP</b>これで登録した内容は、運営が「台帳から選ぶ」でいくつもの大会に呼び出せます。年度はじめに1回きちんと登録しておくと、その後の大会のたびに入力し直す必要がありません。</div>
+</section>
+
+<section>
+  <h2><span class="num">03</span>大会の記入リンクで選手を選ぶ</h2>
+  <ol class="steps">
+    <li>届いたURLを開き、コードを入力</li>
+    <li>台帳に登録済みの選手一覧から、この大会に出す選手にチェックを入れる（人数の上限が決められている場合があります）</li>
+    <li>背番号は台帳の番号を引き継ぐか、1番から振り直すか選べます</li>
+    <li>「この内容で提出する」で確定</li>
+  </ol>
+  <div class="note warn"><b class="tag">注意</b>提出期限が設定されている場合、期限を過ぎるとリンクが使えなくなります。運営が案内する締切をご確認ください。</div>
+</section>
+
+<section>
+  <h2><span class="num">04</span>提出後に直したいとき</h2>
+  <p>同じリンク・同じコードでもう一度開けば、提出内容を編集して再提出できます（運営がリンクを閉じていない限り）。回数に制限がある場合がありますので、入力内容は提出前によくご確認ください。</p>
+</section>
+
+<section>
+  <h2><span class="num">05</span>個人情報の取り扱いについて</h2>
+  <p>入力する選手の氏名・学年などの情報は、大会の運営団体が管理します。記入リンクのコードは、他の人に共有しないようご注意ください。</p>
+</section>
+
+</main>
+</div>
+<hr class="divider">
+<footer>大会ベース チーム登録ガイド ・ この説明書は実際の画面をもとに作成しています。</footer>
