@@ -1084,17 +1084,29 @@ function viewTeamPublic(){
     : `<div class="empty">選手情報がありません。</div>`}
   </div></div>`;
 }
+const RESULT_TYPE_LABEL = {
+  walkover_home:"不戦勝", walkover_away:"不戦勝",
+  forfeit_home:"没収試合", forfeit_away:"没収試合",
+  awarded:"認定スコア",
+};
 function matchCard(m){
   const sp = sportOf(state.t);
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
   const w = winnerOf(m);
-  const st = m.status==="live" ? `<span class="badge live">試合中</span>`
+  const st = m.status==="postponed" ? `<span class="badge todo">延期</span>`
+           : m.status==="cancelled" ? `<span class="badge todo">中止</span>`
+           : m.status==="live" ? `<span class="badge live">試合中</span>`
            : isDone(m)         ? `<span class="badge done">終了</span>`
            : `<span class="badge todo">未実施</span>`;
   const sc = isDone(m)
     ? `<span class="${w&&w===H.id?"win":""}">${m.home_score}</span> - <span class="${w&&w===A.id?"win":""}">${m.away_score}</span>`
-    : m.status==="live" ? `${m.home_score??0} - ${m.away_score??0}` : "vs";
+    : m.status==="live" ? `${m.home_score??0} - ${m.away_score??0}`
+    : m.status==="postponed" ? "延期"
+    : m.status==="cancelled" ? "中止"
+    : "vs";
   const pk = (m.home_pk!=null&&m.away_pk!=null) ? `<div class="pk">PK ${m.home_pk}-${m.away_pk}</div>` : "";
+  const resultTypeLine = (isDone(m) && m.result_type) ? `<div class="scorers">${esc(RESULT_TYPE_LABEL[m.result_type]||"")}${m.result_note?"："+esc(m.result_note):""}</div>` : "";
+  const cancelNote = ((m.status==="postponed"||m.status==="cancelled") && m.result_note) ? `<div class="scorers">${esc(m.result_note)}</div>` : "";
   const goals = (m.events||[]).filter(e=>e.type==="goal"||e.type==="pk"||e.type==="og");
   const scline = goals.length ? `<div class="scorers">⚽ ${goals.map(e=>{
       const tid = e.team==="H" ? H.id : A.id;
@@ -1113,6 +1125,7 @@ function matchCard(m){
       <span class="side away">${teamNameLink(A)}</span>
     </${canEdit()?"button":"div"}>
     ${m.note?`<div class="mnote">📣 ${esc(m.note)}</div>`:""}
+    ${resultTypeLine}${cancelNote}
     ${scline}
     ${canEdit() ? (m.official&&m.official.public
       ? `<div class="mpub"><span class="pill ok">🔗 公式記録を公開中</span>

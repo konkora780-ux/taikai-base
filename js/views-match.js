@@ -837,9 +837,27 @@ function viewMatch(){
       </div>
       <p class="hint" style="text-align:center;margin-top:2px">得点の＋－は画面には反映されますが、この保存を押すまでほかの人には伝わりません。</p>
       <div class="seg" style="margin-top:14px">
-        ${[["todo","未実施"],["live","試合中"],["done","🏁 終了"]].map(([k,l])=>
+        ${[["todo","未実施"],["live","試合中"],["done","🏁 終了"],["postponed","延期"],["cancelled","中止"]].map(([k,l])=>
           `<button class="${m.status===k?"on":""}" onclick="${k==="done"?"setMatchDone()":`setStatus('${k}')`}">${esc(l)}</button>`).join("")}
       </div>
+      ${m.status==="done" ? `
+      <div style="margin-top:10px">
+        <label class="f">決着の種類（任意・通常の試合なら選ばなくてOK）</label>
+        <select class="in" onchange="setField('result_type',this.value||null)">
+          <option value="" ${!m.result_type?"selected":""}>通常</option>
+          <option value="walkover_home" ${m.result_type==="walkover_home"?"selected":""}>不戦勝：${esc(H.label)}</option>
+          <option value="walkover_away" ${m.result_type==="walkover_away"?"selected":""}>不戦勝：${esc(A.label)}</option>
+          <option value="forfeit_home" ${m.result_type==="forfeit_home"?"selected":""}>没収試合：${esc(H.label)}の勝ち</option>
+          <option value="forfeit_away" ${m.result_type==="forfeit_away"?"selected":""}>没収試合：${esc(A.label)}の勝ち</option>
+          <option value="awarded" ${m.result_type==="awarded"?"selected":""}>運営判断による認定スコア</option>
+        </select>
+        ${m.result_type ? `<input class="in" style="margin-top:8px" value="${esc(m.result_note||"")}" oninput="setField('result_note',this.value||null)" placeholder="理由・メモ（任意）">` : ""}
+        <p class="hint">上のスコア欄に、大会の規定に沿った点数（不戦勝の既定点など）をあわせて入れてください。順位表・戦績表はこのスコアでそのまま計算されます。</p>
+      </div>` : ""}
+      ${(m.status==="postponed"||m.status==="cancelled") ? `
+      <div style="margin-top:10px">
+        <input class="in" value="${esc(m.result_note||"")}" oninput="setField('result_note',this.value||null)" placeholder="理由・メモ（任意・例：雨天のため／会場都合のため）">
+      </div>` : ""}
       ${sp.scorers ? `
         <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
           <div style="display:grid;grid-template-columns:1fr auto auto;gap:5px 16px;align-items:center;max-width:280px;margin:0 auto">
@@ -1262,10 +1280,10 @@ async function saveMatch(stay){
 function stripMatch(m){
   const { id,tournament_id,org_id,stage,grp,round,slot,matchNo,home_team,away_team,home_src,away_src,
           kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,
-          updated_at,official,lineups } = m;
+          updated_at,official,lineups,result_type,result_note } = m;
   return { id,tournament_id,org_id,stage,grp,round,slot,matchNo,home_team,away_team,home_src,away_src,
            kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,
-           updated_at,official,lineups };
+           updated_at,official,lineups,result_type:result_type||null,result_note:result_note||null };
 }
 
 /* --- 変更履歴（setup-14実行済みの本番でのみ記録される。お試し版・オフラインでは空） --- */
