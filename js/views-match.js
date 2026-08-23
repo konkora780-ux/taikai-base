@@ -68,6 +68,22 @@ async function saveSchedule(){
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
 }
 
+/* --- 会場アクセス（この大会の試合で実際に使われている会場だけ・保護者/一般も閲覧） --- */
+function tabVenues(){
+  const usedNames = [...new Set((state.matches||[]).map(m=>m.venue).filter(Boolean))];
+  if(!usedNames.length) return `<div class="empty">会場情報はまだありません。</div>`;
+  const byName = new Map((state.tournamentVenues||[]).map(v=>[v.name, v]));
+  const card = name=>{
+    const v = byName.get(name);
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="font-weight:700">${esc(name)}</div>
+      ${v && (v.address||v.phone) ? `<div class="hint" style="margin:4px 0 0">${[v.address,v.phone].filter(Boolean).map(esc).join("　")}</div>` : ""}
+      ${v && v.map_url ? `<a href="${esc(v.map_url)}" target="_blank" rel="noopener" class="hint" style="margin:4px 0 0;display:inline-block">🗺 地図を開く</a>` : ""}
+    </div>`;
+  };
+  return usedNames.map(card).join("");
+}
+
 /* --- お知らせ（テキストのみ・保護者/一般も閲覧） --- */
 function announcementVisible(a){
   const now = new Date();

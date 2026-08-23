@@ -846,6 +846,7 @@ function tournamentTabs(t, cfg){
   return [
     ["overview","大会概要"],
     ["notice","お知らせ"],
+    ["venues","会場アクセス"],
     ["schedule","日程・結果"],
     ...(f.hasLeague ? [["table","順位表"],["matrix","戦績表"]] : []),
     ...(f.hasKO ? [["bracket","トーナメント表"]] : []),
@@ -884,7 +885,7 @@ function viewTournament(){
   const ADMIN_TABS = ["cards","team"];
   if(!canEdit() && ADMIN_TABS.includes(state.tab)) state.tab = "schedule";
   const body = {
-    overview:tabOverview, notice:tabNotice, schedule:tabSchedule, table:tabTable, matrix:tabMatrix,
+    overview:tabOverview, notice:tabNotice, venues:tabVenues, schedule:tabSchedule, table:tabTable, matrix:tabMatrix,
     bracket:tabBracket, scorers:tabScorers, assists:tabAssists, cards:tabCards, appear:tabAppearances, team:tabTeam,
   }[state.tab] || tabSchedule;
 

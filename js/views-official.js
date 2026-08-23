@@ -741,6 +741,7 @@ async function openTournament(id){
     if(!d.t){ toast("大会が見つかりません"); return go("home"); }
     state.t = d.t; state.teams = d.teams; state.matches = d.matches;
     state.announcements = await DB.loadAnnouncements(id).catch(()=>[]);
+    state.tournamentVenues = await DB.loadVenuesForOrg(d.t.org_id).catch(()=>[]);
     state.tab = "schedule"; state.view = "t"; state.bracket = null;   // 表示中の櫓は先頭に戻す
     state.unlockTeams = false;   // 選手登録の締切ロック解除は大会を開き直したらリセット
     initScheduleCollapse();   // 全部たたむ＋今日にいちばん近い節だけ開く＋そのブロックを選ぶ

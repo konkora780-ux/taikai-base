@@ -89,6 +89,17 @@ const DB = {
     return data || [];
   },
 
+  /* --- 会場アクセス（公開用・setup-21）。org_idだけで読める＝ログイン不要 --- */
+  async loadVenuesForOrg(orgId){
+    if(!sb){
+      const d = local.read();
+      return d.venues.filter(v=>v.org_id===orgId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    }
+    const { data, error } = await sb.from("gn_venues").select("*").eq("org_id", orgId).order("sort_order");
+    if(error) return [];
+    return data || [];
+  },
+
   /* --- 大会のお知らせ（setup-18・テキストのみ） --- */
   async loadAnnouncements(tournamentId){
     if(!sb){
