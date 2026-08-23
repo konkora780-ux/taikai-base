@@ -230,13 +230,20 @@ function viewRoster(){
     <div class="block-label" style="margin-top:22px">会場（${state.venues.length}）</div>
     ${state.venues.length ? `<div class="card">
       ${state.venues.slice().sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(v=>`
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
-          <button class="pick" style="flex:1;padding:4px 0" onclick="renameVenue('${v.id}')">${esc(v.name)}</button>
-          <button class="btn ghost sm" onclick="removeVenue('${v.id}')">削除</button>
+        <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600">${esc(v.name)}</div>
+              ${(v.address||v.phone) ? `<div class="hint" style="margin:2px 0 0">${[v.address,v.phone].filter(Boolean).map(esc).join("　")}</div>` : ""}
+              ${v.map_url ? `<a href="${esc(v.map_url)}" target="_blank" rel="noopener" class="hint" style="margin:2px 0 0;display:inline-block">🗺 地図を開く</a>` : ""}
+            </div>
+            <button class="btn ghost sm" onclick="openVenueEditor('${v.id}')">編集</button>
+            <button class="btn ghost sm" onclick="removeVenue('${v.id}')">削除</button>
+          </div>
         </div>`).join("")}
     </div>` : `<div class="empty">まだ会場がありません。</div>`}
-    <button class="btn sec sm" style="width:100%;margin-top:6px" onclick="addVenue()">＋ 会場を追加</button>
-    <p class="hint">ここに登録した会場は、結果入力画面の「会場」欄で候補として選べるようになります（自由入力も引き続きできます）。</p>
+    <button class="btn sec sm" style="width:100%;margin-top:6px" onclick="openVenueEditor()">＋ 会場を追加</button>
+    <p class="hint">ここに登録した会場（名称）は、結果入力画面の「会場」欄で候補として選べます。住所・電話番号・地図リンクは運営の控え用です（結果入力画面には反映されません）。</p>
 
     ${state.user.role==="owner" ? `
     <div class="block-label" style="margin-top:22px">スタッフ（${state.orgMembers.length}）</div>
@@ -483,22 +490,42 @@ const stripMember= m => ({ id:m.id, org_id:m.org_id, club_id:m.club_id, name:m.n
                            no:m.no, pos:m.pos, grade:m.grade, prev_team:m.prev_team||null,
                            status:m.status, sort_order:m.sort_order, note:m.note });
 const stripOrg   = o => ({ id:o.id, name:o.name, year:o.year });
-const stripVenue = v => ({ id:v.id, org_id:v.org_id, name:v.name, note:v.note||null, sort_order:v.sort_order||0 });
+const stripVenue = v => ({ id:v.id, org_id:v.org_id, name:v.name,
+  address:v.address||null, phone:v.phone||null, map_url:v.map_url||null,
+  note:v.note||null, sort_order:v.sort_order||0 });
 
 /* --- 会場リスト --- */
-function addVenue(){
-  const name = prompt("会場名を入れてください（例：第1グラウンド）");
-  if(!name || !name.trim()) return;
-  const maxOrder = state.venues.reduce((mx,v)=>Math.max(mx, v.sort_order||0), 0);
-  state.venues.push({ id:uid(), org_id:state.user.id, name:name.trim(), note:null, sort_order:maxOrder+1, _dirty:true });
-  saveRoster(true);
-}
-function renameVenue(id){
-  const v = state.venues.find(x=>x.id===id); if(!v) return;
-  const name = prompt("会場名を変更", v.name);
-  if(!name || !name.trim() || name.trim()===v.name) return;
-  v.name = name.trim(); v._dirty = true;
-  saveRoster(true);
+function openVenueEditor(id){
+  const v = id ? state.venues.find(x=>x.id===id) : null;
+  const el = document.createElement("div"); el.className="modal";
+  el.innerHTML = `<div class="sheet"><h3>${v?"会場を編集":"会場を追加"}</h3>
+    <label class="f">名称</label>
+    <input class="in" id="ve-name" value="${v?esc(v.name):""}" placeholder="例）第1グラウンド">
+    <label class="f">住所</label>
+    <input class="in" id="ve-address" value="${v?esc(v.address||""):""}" placeholder="例）盛岡市〇〇1-1-1">
+    <label class="f">電話番号</label>
+    <input class="in" id="ve-phone" value="${v?esc(v.phone||""):""}" placeholder="例）019-000-0000">
+    <label class="f">地図のリンク</label>
+    <input class="in" id="ve-map" value="${v?esc(v.map_url||""):""}" placeholder="例）GoogleマップのリンクURL">
+    <div class="btnrow"><button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="ve-ok">${v?"保存":"追加"}</button></div>
+  </div>`;
+  document.body.appendChild(el);
+  $("#ve-ok").onclick = async ()=>{
+    const name = $("#ve-name").value.trim();
+    if(!name) return toast("名称を入れてください");
+    const address = $("#ve-address").value.trim() || null;
+    const phone = $("#ve-phone").value.trim() || null;
+    const map_url = $("#ve-map").value.trim() || null;
+    if(v){ Object.assign(v, { name, address, phone, map_url, _dirty:true }); }
+    else{
+      const maxOrder = state.venues.reduce((mx,x)=>Math.max(mx, x.sort_order||0), 0);
+      state.venues.push({ id:uid(), org_id:state.user.id, name, address, phone, map_url, sort_order:maxOrder+1, _dirty:true });
+    }
+    el.remove();
+    await saveRoster(true); render();
+    toast(v?"保存しました":"追加しました");
+  };
 }
 async function removeVenue(id){
   const v = state.venues.find(x=>x.id===id); if(!v) return;
