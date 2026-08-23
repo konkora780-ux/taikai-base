@@ -676,6 +676,32 @@ function cardRanking(blockId){
     .map(r=>({ ...r, name:playerName(r.teamId,r.pid), team:teamName(r.teamId) }));
 }
 
+/* --- 会場リストの候補(datalist)。<input list="venueList">と組で使う --- */
+function venueDatalistHTML(){
+  return `<datalist id="venueList">${(state.venues||[])
+    .map(v=>`<option value="${esc(v.name)}">`).join("")}</datalist>`;
+}
+
+/* --- 変更履歴の差分要約（gn_matchesの列名→日本語ラベル） --- */
+const HISTORY_FIELD_LABEL = {
+  home_score:"ホームの得点", away_score:"アウェイの得点", home_pk:"ホームのPK", away_pk:"アウェイのPK",
+  events:"得点・警告・交代などの記録", lineups:"メンバー表", official:"公式記録の詳細",
+  venue:"会場", kickoff:"日時", note:"メモ", status:"状態", matchNo:"試合番号",
+  home_team:"ホームチーム", away_team:"アウェイチーム", home_src:"ホーム側の枠", away_src:"アウェイ側の枠",
+};
+function summarizeMatchDiff(before, after){
+  if(!before) return "新規作成";
+  if(!after) return "削除";
+  const skip = new Set(["id","org_id","tournament_id","sort_order"]);
+  const keys = new Set([...Object.keys(before||{}), ...Object.keys(after||{})]);
+  const changed = [];
+  keys.forEach(k=>{
+    if(skip.has(k)) return;
+    if(JSON.stringify(before[k]) !== JSON.stringify(after[k])) changed.push(HISTORY_FIELD_LABEL[k] || k);
+  });
+  return changed.length ? changed.join("・") : "変更なし（付随情報のみ）";
+}
+
 /* ==========================================================================
    画面
    ========================================================================== */

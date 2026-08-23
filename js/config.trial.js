@@ -196,9 +196,9 @@ const orgYear = ()=> state.org?.year ?? fiscalYear();
    保存まわり（Supabase / 端末内）
    ========================================================================== */
 const LOCAL_KEY = "taikai_local_v1";
-const EMPTY_DB  = { t:[], teams:[], matches:[], clubs:[], members:[], orgs:[], entry:[], clubEntry:[] };
+const EMPTY_DB  = { t:[], teams:[], matches:[], clubs:[], members:[], orgs:[], entry:[], clubEntry:[], venues:[] };
 const TBL_KEY   = { gn_tournaments:"t", gn_teams:"teams", gn_matches:"matches",
-                    gn_clubs:"clubs", gn_members:"members", gn_orgs:"orgs", gn_entry:"entry" };
+                    gn_clubs:"clubs", gn_members:"members", gn_orgs:"orgs", gn_entry:"entry", gn_venues:"venues" };
 const local = {
   read(){ try{ return Object.assign({}, EMPTY_DB, JSON.parse(localStorage.getItem(LOCAL_KEY))||{}); }
           catch(e){ return Object.assign({}, EMPTY_DB); } },

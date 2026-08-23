@@ -739,15 +739,15 @@ function openClub(id){ state.clubId = id; state.showGrads = false; state.view = 
 
 /* 台帳（チーム・選手・年度）を読み込む */
 async function reloadRoster(){
-  if(!state.user){ state.org = null; state.clubs = []; state.members = []; return; }
+  if(!state.user){ state.org = null; state.clubs = []; state.members = []; state.venues = []; return; }
   try{
     const d = await DB.loadRoster(state.user.id);
     state.org = d.org || { id:state.user.id, name:state.user.code, year:fiscalYear() };
-    state.clubs = d.clubs; state.members = d.members;
+    state.clubs = d.clubs; state.members = d.members; state.venues = d.venues || [];
   }catch(e){
     console.error(e);
     state.org = { id:state.user.id, name:state.user.code, year:fiscalYear() };
-    state.clubs = []; state.members = [];
+    state.clubs = []; state.members = []; state.venues = [];
   }
 }
 async function refresh(){

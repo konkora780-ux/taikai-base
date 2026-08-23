@@ -226,6 +226,18 @@ function viewRoster(){
       <button class="btn sec sm" style="flex:1" onclick="openClubEntryLinks()">📨 記入リンクを配る</button>
     </div>
     <p class="hint">各チームに「記入リンク」を配ると、チームがログイン不要でチーム名・選手を登録できます（初年度の登録に便利）。</p>
+
+    <div class="block-label" style="margin-top:22px">会場（${state.venues.length}）</div>
+    ${state.venues.length ? `<div class="card">
+      ${state.venues.slice().sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(v=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+          <button class="pick" style="flex:1;padding:4px 0" onclick="renameVenue('${v.id}')">${esc(v.name)}</button>
+          <button class="btn ghost sm" onclick="removeVenue('${v.id}')">削除</button>
+        </div>`).join("")}
+    </div>` : `<div class="empty">まだ会場がありません。</div>`}
+    <button class="btn sec sm" style="width:100%;margin-top:6px" onclick="addVenue()">＋ 会場を追加</button>
+    <p class="hint">ここに登録した会場は、結果入力画面の「会場」欄で候補として選べるようになります（自由入力も引き続きできます）。</p>
+
     <button class="btn ghost sm" style="width:100%;margin-top:14px" onclick="doBackupExport()">🗄 全データをバックアップ（ダウンロード）</button>
     <p class="hint">大会・チーム・選手・試合結果など、この団体の全データを1つのファイルに書き出します。月に1回など決まったタイミングでダウンロードし、パソコンやクラウドストレージに保存しておくことをおすすめします。<b>選手の氏名・記入コードなど個人情報や秘密情報を含むファイルです。厳重に保管し、他人に渡さないでください。</b></p>
     <button class="btn ghost sm" style="width:100%;margin-top:6px" onclick="doBackupImport()">♻️ バックアップから復元する</button>
@@ -434,13 +446,15 @@ async function removeClub(id){
 async function saveRoster(silent){
   const dc = state.clubs.filter(c=>c._dirty);
   const dm = state.members.filter(m=>m._dirty).filter(m=>String(m.name||"").trim());
+  const dv = state.venues.filter(v=>v._dirty).filter(v=>String(v.name||"").trim());
   const del = state._deletedMembers || [];
   try{
     if(del.length){ await DB.remove("gn_members", del); state._deletedMembers = []; }
     if(dc.length) await DB.upsert("gn_clubs", dc.map(stripClub));
     if(dm.length) await DB.upsert("gn_members", dm.map(stripMember));
+    if(dv.length) await DB.upsert("gn_venues", dv.map(stripVenue));
     if(state.org?._dirty){ await DB.upsert("gn_orgs", stripOrg(state.org)); delete state.org._dirty; }
-    dc.forEach(c=>delete c._dirty); dm.forEach(m=>delete m._dirty);
+    dc.forEach(c=>delete c._dirty); dm.forEach(m=>delete m._dirty); dv.forEach(v=>delete v._dirty);
     if(!silent) toast("保存しました");
     render();
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
@@ -450,6 +464,32 @@ const stripMember= m => ({ id:m.id, org_id:m.org_id, club_id:m.club_id, name:m.n
                            no:m.no, pos:m.pos, grade:m.grade, prev_team:m.prev_team||null,
                            status:m.status, sort_order:m.sort_order, note:m.note });
 const stripOrg   = o => ({ id:o.id, name:o.name, year:o.year });
+const stripVenue = v => ({ id:v.id, org_id:v.org_id, name:v.name, note:v.note||null, sort_order:v.sort_order||0 });
+
+/* --- 会場リスト --- */
+function addVenue(){
+  const name = prompt("会場名を入れてください（例：第1グラウンド）");
+  if(!name || !name.trim()) return;
+  const maxOrder = state.venues.reduce((mx,v)=>Math.max(mx, v.sort_order||0), 0);
+  state.venues.push({ id:uid(), org_id:state.user.id, name:name.trim(), note:null, sort_order:maxOrder+1, _dirty:true });
+  saveRoster(true);
+}
+function renameVenue(id){
+  const v = state.venues.find(x=>x.id===id); if(!v) return;
+  const name = prompt("会場名を変更", v.name);
+  if(!name || !name.trim() || name.trim()===v.name) return;
+  v.name = name.trim(); v._dirty = true;
+  saveRoster(true);
+}
+async function removeVenue(id){
+  const v = state.venues.find(x=>x.id===id); if(!v) return;
+  if(!confirm(`「${v.name}」を会場リストから消します。\n（すでに試合に入力済みの会場名はそのまま残ります）\n\nよろしいですか？`)) return;
+  try{
+    await DB.remove("gn_venues", id);
+    state.venues = state.venues.filter(x=>x.id!==id);
+    toast("消しました"); render();
+  }catch(e){ toast("消せませんでした: "+(e.message||e)); }
+}
 
 /* --- まとめて貼り付け --- */
 function parseMemberLine(line){

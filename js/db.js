@@ -56,16 +56,29 @@ const DB = {
       const d = local.read();
       return { org: d.orgs.find(o=>o.id===orgId) || null,
                clubs: d.clubs.filter(c=>c.org_id===orgId),
-               members: d.members.filter(m=>m.org_id===orgId) };
+               members: d.members.filter(m=>m.org_id===orgId),
+               venues: d.venues.filter(v=>v.org_id===orgId) };
     }
-    const [ro, rc, rm] = await Promise.all([
+    const [ro, rc, rm, rv] = await Promise.all([
       sb.from("gn_orgs").select("*").eq("id",orgId).maybeSingle(),
       sb.from("gn_clubs").select("*").eq("org_id",orgId),
       sb.from("gn_members").select("*").eq("org_id",orgId),
+      sb.from("gn_venues").select("*").eq("org_id",orgId).order("sort_order"),
     ]);
     if(rc.error) throw rc.error;
     if(rm.error) throw rm.error;
-    return { org: ro.error ? null : ro.data, clubs: rc.data||[], members: rm.data||[] };
+    // gn_venuesがまだ作られていない団体（setup-15未実行）でも台帳全体が読めなくなるのは避ける＝会場だけ空扱いにする
+    const venues = rv.error ? [] : (rv.data||[]);
+    return { org: ro.error ? null : ro.data, clubs: rc.data||[], members: rm.data||[], venues };
+  },
+
+  /* --- 試合(gn_matches)の変更履歴（setup-14のトリガーで自動記録されたもの） --- */
+  async loadMatchHistory(matchId){
+    if(!sb) return [];
+    const { data, error } = await sb.from("gn_match_history").select("*")
+      .eq("match_id", matchId).order("changed_at",{ascending:false}).limit(50);
+    if(error) throw error;
+    return data || [];
   },
 
   /* --- 全データのバックアップ（この団体の全部をまとめて書き出す） --- */

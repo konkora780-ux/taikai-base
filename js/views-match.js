@@ -21,10 +21,11 @@ function viewSchedule(){
           <input class="in" type="date" value="${localDate(m.kickoff)}" onchange="setSched('${m.id}','date',this.value)">
           <input class="in" type="time" value="${localTime(m.kickoff)}" onchange="setSched('${m.id}','time',this.value)">
         </div>
-        <input class="in" style="margin-top:6px" value="${esc(m.venue||"")}" onchange="setSchedVenue('${m.id}',this.value)" placeholder="会場（例：第1グラウンド）">
+        <input class="in" list="venueList" style="margin-top:6px" value="${esc(m.venue||"")}" onchange="setSchedVenue('${m.id}',this.value)" placeholder="会場（例：第1グラウンド）">
       </div>`;
     }).join("")}
     <button class="btn" onclick="saveSchedule()">保存する</button>
+    ${venueDatalistHTML()}
   </div>`;
 }
 function setSched(id, part, val){
@@ -44,7 +45,7 @@ function openBulkDay(){
   el.innerHTML=`<div class="sheet"><h3>まとめて入力</h3>
     <p class="hint" style="margin-bottom:8px">入れた項目だけ、まだ空の試合に一括で入ります（入力済みは変えません）。</p>
     <label class="f">日付</label><input class="in" id="bd-date" type="date">
-    <label class="f">会場</label><input class="in" id="bd-venue" placeholder="会場名">
+    <label class="f">会場</label><input class="in" id="bd-venue" list="venueList" placeholder="会場名">
     <div class="btnrow"><button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
       <button class="btn" id="bd-ok">空いている試合に入れる</button></div></div>`;
   document.body.appendChild(el);
@@ -685,9 +686,11 @@ function viewMatch(){
   }).join("") || `<div class="hint" style="padding:8px 2px">まだ記録がありません。</div>`;
 
   return `<div class="tourwrap">`
-  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:"go('t')" })
+  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:"go('t')",
+      act: canEdit() ? `<button class="btn ghost sm" onclick="openMatchHistory()">🕘 履歴</button>` : "" })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
     <div class="screen">
+    ${venueDatalistHTML()}
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
     <fieldset class="ovlock"${locked?" disabled":""}>
     <div class="scorebox">
@@ -771,7 +774,7 @@ function viewMatch(){
     <div class="card">
       <label class="f">キックオフ・会場</label>
       <input class="in" type="datetime-local" value="${esc(kickoffLocal)}" oninput="setKickoff(this.value)">
-      <input class="in" style="margin-top:8px" value="${esc(m.venue||"")}" oninput="setField('venue',this.value)" placeholder="会場（例：第1グラウンド）">
+      <input class="in" list="venueList" style="margin-top:8px" value="${esc(m.venue||"")}" oninput="setField('venue',this.value)" placeholder="会場（例：第1グラウンド）">
       <label class="f">メモ（保護者・観覧者にも表示されます）</label>
       <input class="in" value="${esc(m.note||"")}" oninput="setField('note',this.value)" placeholder="例）雷のため30分遅延中／雨天のため時間短縮">
       <p class="hint">試合の連絡に。保存すると、結果を見ている人の画面にも 📣 で出ます。</p>
@@ -1144,6 +1147,36 @@ function stripMatch(m){
   return { id,tournament_id,org_id,stage,grp,round,slot,matchNo,home_team,away_team,home_src,away_src,
            kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,
            updated_at,official,lineups };
+}
+
+/* --- 変更履歴（setup-14実行済みの本番でのみ記録される。お試し版・オフラインでは空） --- */
+async function openMatchHistory(){
+  const m = curMatch(); if(!m) return;
+  const el = document.createElement("div"); el.className="modal";
+  el.innerHTML = `<div class="sheet"><h3>変更履歴</h3>
+    <div id="mh-body" class="hint">読み込み中…</div>
+    <div class="btnrow"><button class="btn ghost" onclick="this.closest('.modal').remove()">閉じる</button></div>
+  </div>`;
+  document.body.appendChild(el);
+  try{
+    const rows = await DB.loadMatchHistory(m.id);
+    $("#mh-body").innerHTML = rows.length ? rows.map(r=>`
+      <div class="card" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+          <b>${r.action==="delete"?"🗑 削除":"✏️ 更新"}</b>
+          <span class="meta">${esc(fmtDate(r.changed_at))} ${esc(fmtTime(r.changed_at))}</span>
+        </div>
+        <div class="hint" style="margin-top:4px">${esc(summarizeMatchDiff(r.before,r.after))}</div>
+        <button class="btn ghost sm" style="margin-top:6px" onclick="const p=this.nextElementSibling; p.style.display = p.style.display==='none' ? 'block' : 'none';">生データを見る</button>
+        <pre style="display:none;font-size:11px;white-space:pre-wrap;background:var(--card2,#f4f4f4);padding:8px;border-radius:6px;margin-top:6px">変更前:
+${esc(JSON.stringify(r.before,null,1))}
+
+変更後:
+${esc(JSON.stringify(r.after,null,1))}</pre>
+      </div>`).join("") : `<div class="empty">まだ変更履歴がありません。</div>`;
+  }catch(e){
+    $("#mh-body").innerHTML = `<div class="empty">読み込めませんでした（${esc(e.message||String(e))}）。</div>`;
+  }
 }
 
 /* ---------- チーム・選手の編集 ---------- */
