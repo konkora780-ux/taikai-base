@@ -315,6 +315,8 @@ function viewClub(){
         value="${m.no??""}" onchange="editMember('${m.id}','no',this.value===''?null:+this.value)"></td>
       <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(m.name)}" title="${esc(m.name)}"
         onchange="editMember('${m.id}','name',this.value)"></td>
+      <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(m.kana||'')}" title="${esc(m.kana||'')}"
+        placeholder="よみがな" onchange="editMember('${m.id}','kana',this.value||null)"></td>
       <td style="text-align:left"><input class="in" style="padding:7px" value="${esc(m.prev_team||'')}" title="${esc(m.prev_team||'')}"
         placeholder="前所属" onchange="editMember('${m.id}','prev_team',this.value||null)"></td>
       ${cat.max?`<td><select class="in" style="padding:7px" onchange="editMember('${m.id}','grade',+this.value)">
@@ -326,6 +328,10 @@ function viewClub(){
         <option value="">-</option>
         ${POSITIONS.map(p=>`<option value="${p}" ${m.pos===p?"selected":""}>${p}</option>`).join("")}
       </select></td>
+      <td><input class="in" style="padding:7px;text-align:center" inputmode="numeric" value="${esc(m.height||'')}"
+        placeholder="cm" onchange="editMember('${m.id}','height',this.value||null)"></td>
+      <td><input class="in" style="padding:7px;text-align:center" inputmode="numeric" value="${esc(m.weight||'')}"
+        placeholder="kg" onchange="editMember('${m.id}','weight',this.value||null)"></td>
       <td style="white-space:nowrap">
         <button class="del" style="color:${isG?"var(--accent)":"var(--bad)"};font-size:11px;font-weight:700;padding:4px 3px"
         onclick="${isG?`unGraduate('${m.id}')`:`removeMember('${m.id}')`}">${isG?"復帰":"削除"}</button></td>
@@ -355,11 +361,32 @@ function viewClub(){
       <p class="hint">全国・都道府県・地域のどの大会に出るか。重ねて選べます（例：全国＋都道府県）。大会をつくるとき、ここで選んだ規模に合うチームだけが呼び出せます。</p>
     </div>
 
+    <div class="card">
+      <label class="f" style="margin-top:0">チームのプロフィール（任意・台帳での管理のみ。現時点では大会の公開画面には出ません）</label>
+      <div class="row2">
+        <div><label class="f">略称</label><input class="in" value="${esc(c.short_name||"")}" onchange="editClub('${c.id}','short_name',this.value||null)"></div>
+        <div><label class="f">読み仮名</label><input class="in" value="${esc(c.kana||"")}" onchange="editClub('${c.id}','kana',this.value||null)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">代表者</label><input class="in" value="${esc(c.rep_name||"")}" onchange="editClub('${c.id}','rep_name',this.value||null)"></div>
+        <div><label class="f">監督</label><input class="in" value="${esc(c.coach_name||"")}" onchange="editClub('${c.id}','coach_name',this.value||null)"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f">コーチ</label><input class="in" value="${esc(c.coach2_name||"")}" onchange="editClub('${c.id}','coach2_name',this.value||null)"></div>
+        <div><label class="f">ユニフォームカラー</label><input class="in" value="${esc(c.uniform_color||"")}" onchange="editClub('${c.id}','uniform_color',this.value||null)" placeholder="例）赤/白"></div>
+      </div>
+      <label class="f">チーム紹介</label>
+      <textarea class="in" style="min-height:80px" onchange="editClub('${c.id}','intro',this.value||null)">${esc(c.intro||"")}</textarea>
+      <label class="f">公式サイト・SNS（自由記入・複数行OK）</label>
+      <textarea class="in" style="min-height:60px" onchange="editClub('${c.id}','links',this.value||null)">${esc(c.links||"")}</textarea>
+    </div>
+
     <div class="block-label">選手（${membersOf(c.id).length}名）</div>
     ${ms.length ? `<div class="tblwrap"><table class="rostertbl">
-      <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:76px">学年</th>`:""}<th style="width:70px">位置</th><th style="width:48px"></th></tr></thead>
+      <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="text-align:left">読み仮名</th><th style="text-align:left">前所属</th>${cat.max?`<th style="width:76px">学年</th>`:""}<th style="width:70px">位置</th><th style="width:64px">身長</th><th style="width:64px">体重</th><th style="width:48px"></th></tr></thead>
       <tbody>${ms.map(row).join("")}</tbody></table></div>`
     : `<div class="empty">まだ選手がいません。</div>`}
+    <p class="hint">読み仮名・身長・体重は任意です（生年月日は今回のバージョンでは扱いません）。台帳での管理のみで、現時点では大会の公開画面には出ません。</p>
 
     <div class="btnrow">
       <button class="btn sec sm" style="flex:1" onclick="addMember('${c.id}')">＋ 1人ずつ追加</button>
@@ -427,7 +454,7 @@ function addMember(clubId){
   const n = membersOf(clubId).length;
   state.members.push({ id:uid(), org_id:state.user.id, club_id:clubId,
     name:"", kana:null, no:null, pos:null, prev_team:null, grade:CATEGORIES[c.category]?.max?1:null,
-    status:"active", sort_order:n, note:null, _dirty:true });
+    status:"active", sort_order:n, note:null, height:null, weight:null, _dirty:true });
   render();
 }
 function removeMember(id){
@@ -485,10 +512,14 @@ async function saveRoster(silent){
     render();
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
 }
-const stripClub  = c => ({ id:c.id, org_id:c.org_id, name:c.name, category:c.category, regions:Array.isArray(c.regions)?c.regions:[], crest:c.crest||null, note:c.note });
+const stripClub  = c => ({ id:c.id, org_id:c.org_id, name:c.name, category:c.category, regions:Array.isArray(c.regions)?c.regions:[], crest:c.crest||null, note:c.note,
+                           short_name:c.short_name||null, kana:c.kana||null, rep_name:c.rep_name||null,
+                           coach_name:c.coach_name||null, coach2_name:c.coach2_name||null,
+                           uniform_color:c.uniform_color||null, intro:c.intro||null, links:c.links||null });
 const stripMember= m => ({ id:m.id, org_id:m.org_id, club_id:m.club_id, name:m.name, kana:m.kana,
                            no:m.no, pos:m.pos, grade:m.grade, prev_team:m.prev_team||null,
-                           status:m.status, sort_order:m.sort_order, note:m.note });
+                           status:m.status, sort_order:m.sort_order, note:m.note,
+                           height:m.height||null, weight:m.weight||null });
 const stripOrg   = o => ({ id:o.id, name:o.name, year:o.year });
 const stripVenue = v => ({ id:v.id, org_id:v.org_id, name:v.name,
   address:v.address||null, phone:v.phone||null, map_url:v.map_url||null,
@@ -592,14 +623,17 @@ async function removeMember(id){
 /* --- まとめて貼り付け --- */
 function parseMemberLine(line){
   if(/^(番号|No\.?|氏名|名前)([\t,\s]|$)/i.test(line.trim())) return null;  // 見出し行はとばす
-  let no=null, name="", kana=null, grade=null, pos=null, prev_team=null;
-  if(/[\t,]/.test(line)){                                  // Excelから貼った場合は列の位置で読む（番号／氏名／前所属／学年／位置）
+  let no=null, name="", kana=null, grade=null, pos=null, prev_team=null, height=null, weight=null;
+  if(/[\t,]/.test(line)){                                  // Excelから貼った場合は列の位置で読む（番号／氏名／前所属／学年／位置／よみがな／身長／体重）
     const p = line.split(/[\t,]/).map(s=>s.trim());
     no        = /^\d{1,3}$/.test(p[0]||"") ? num(p[0]) : null;
     name      = p[1] || p[0] || "";
     prev_team = p[2] || null;
     grade     = /^\d/.test(p[3]||"") ? num(p[3]) : null;
     pos       = POSITIONS.includes(String(p[4]||"").toUpperCase()) ? p[4].toUpperCase() : null;
+    kana      = p[5] || null;      // 追加の任意列（無くても従来どおり動く）
+    height    = p[6] || null;
+    weight    = p[7] || null;
   }else{                                                   // 「10 山田太郎 6 FW」のような書き方（前所属はスペース区切りでは読みません）
     const rest = [];
     line.split(/\s+/).filter(Boolean).forEach(x=>{
@@ -610,7 +644,7 @@ function parseMemberLine(line){
     });
     name = rest.join(" ");
   }
-  return name.trim() ? { no, name:name.trim(), kana, grade, pos, prev_team } : null;
+  return name.trim() ? { no, name:name.trim(), kana, grade, pos, prev_team, height, weight } : null;
 }
 
 function openBulkSheet(clubId){
@@ -621,8 +655,8 @@ function openBulkSheet(clubId){
   el.innerHTML = `<div class="sheet">
     <h3>選手をまとめて登録</h3>
     <p class="hint" style="margin-bottom:8px">1行に1人。<b>Excelからそのまま貼り付け</b>できます。列の順番は<br>
-    <b>番号 / 氏名 / 前所属 / 学年 / 位置</b>（タブ・カンマ区切り）。<br>
-    手で打つときは「<b>10 山田太郎 6 FW</b>」のように、番号・名前・学年・位置をスペースで区切ってください（この書き方では前所属は入りません）。番号や学年は無くてもかまいません。40人・100人でも一度に貼れます。</p>
+    <b>番号 / 氏名 / 前所属 / 学年 / 位置</b>（タブ・カンマ区切り。うしろに<b>よみがな / 身長 / 体重</b>の列を続けても読み取ります・無くてもOK）。<br>
+    手で打つときは「<b>10 山田太郎 6 FW</b>」のように、番号・名前・学年・位置をスペースで区切ってください（この書き方では前所属・よみがな等は入りません）。番号や学年は無くてもかまいません。40人・100人でも一度に貼れます。</p>
     <textarea class="in" id="bulk-tx" style="min-height:180px" placeholder="10	山田太郎	さくら少年団	6	FW
 1	佐藤花子	みどりSC	5	GK
 7	鈴木一郎		4"></textarea>
@@ -655,7 +689,7 @@ function openBulkSheet(clubId){
       id:uid(), org_id:state.user.id, club_id:clubId,
       name:r.name, kana:r.kana, no:r.no, pos:r.pos, prev_team:r.prev_team||null,
       grade: cat.max ? (r.grade && r.grade<=cat.max ? r.grade : null) : null,
-      status:"active", sort_order:base+i, note:null, _dirty:true }));
+      status:"active", sort_order:base+i, note:null, height:r.height||null, weight:r.weight||null, _dirty:true }));
     el.remove();
     await saveRoster(true);
     toast(`${rows.length}名を登録しました`);
