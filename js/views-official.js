@@ -258,7 +258,7 @@ async function saveOfficial(silent){
 
 /* ---------- 大会の設定 ---------- */
 function viewSettings(){
-  const t = state.t, cfg = cfgOf(t);
+  const t = state.t, cfg = cfgOf(t), sp = sportOf(t);
   return `<div class="tourwrap">`
   + topbar({ title:"大会の設定", sub:t.name, back:"go('t')" })
   + `<div class="twrap">${tournamentSidebar("settings")}<div class="tmain">
@@ -387,6 +387,24 @@ function viewSettings(){
       <textarea class="in" style="min-height:96px" onchange="ov_set('rankRule',this.value)" placeholder="(1)勝点 (2)得失点差 …">${esc(cfg.overview?.rankRule||"")}</textarea>
       <label class="f">警告の累積</label>
       <input class="in" value="${esc(cfg.overview?.cardRule||"")}" onchange="ov_set('cardRule',this.value)" placeholder="例）警告の累積が4回で出場停止処分とする。">
+      ${sp.cards ? `<label class="f">出場停止の自動判定（この大会の中だけで計算）</label>
+      <div class="seg">
+        <button class="${!cfg.suspension?.enabled?"on":""}" onclick="susp_set('enabled',false);render()">使わない</button>
+        <button class="${cfg.suspension?.enabled?"on":""}" onclick="susp_set('enabled',true);render()">使う</button>
+      </div>
+      ${cfg.suspension?.enabled ? `
+      <div class="row2" style="margin-top:8px">
+        <div><div class="hint" style="margin:0 0 3px">警告 何枚累積で</div>
+          <input class="in" type="number" inputmode="numeric" min="1" value="${cfg.suspension?.yellowAccum??2}" onchange="susp_set('yellowAccum',Math.max(1,+this.value||1));render()"></div>
+        <div><div class="hint" style="margin:0 0 3px">何試合 出場停止</div>
+          <input class="in" type="number" inputmode="numeric" min="1" value="${cfg.suspension?.yellowGames??1}" onchange="susp_set('yellowGames',Math.max(1,+this.value||1));render()"></div>
+      </div>
+      <div style="margin-top:8px;max-width:220px">
+        <div class="hint" style="margin:0 0 3px">退場1回で 何試合 出場停止</div>
+        <input class="in" type="number" inputmode="numeric" min="1" value="${cfg.suspension?.redGames??1}" onchange="susp_set('redGames',Math.max(1,+this.value||1));render()">
+      </div>
+      <p class="hint">「警告・退場」タブに、いま出場停止中の選手と対象試合を自動で表示します。数え方はこの大会の中だけで、他の大会の分は含みません。実際に出場していないかの最終確認は運営でお願いします。</p>
+      ` : ""}` : ""}
       <label class="f">当大会に関するお問い合わせ先</label>
       <textarea class="in" style="min-height:80px" onchange="ov_set('contact',this.value)" placeholder="実行本部／メール／電話 など">${esc(cfg.overview?.contact||"")}</textarea>
     </div>
@@ -399,6 +417,7 @@ function viewSettings(){
 function t_set(k,v){ state.t[k] = v; }
 function cfg_set(k,v){ state.t.settings = Object.assign(cfgOf(state.t), {[k]:v}); }
 function ov_set(k,v){ const s = state.t.settings = cfgOf(state.t); s.overview = Object.assign({}, s.overview||{}, {[k]:v}); }
+function susp_set(k,v){ const s = state.t.settings = cfgOf(state.t); s.suspension = Object.assign({}, s.suspension||{}, {[k]:v}); }
 async function setBracketDir(vert){
   const s = state.t.settings = cfgOf(state.t);
   s.overview = Object.assign({}, s.overview||{}, {bracketVert:!!vert});

@@ -540,14 +540,25 @@ function tabAssists(){
 function tabCards(){
   const sw = blockSwitcher();
   const rows = cardRanking(curBlockFilter());
-  if(!rows.length) return sw + `<div class="empty">まだ警告・退場の記録がありません。</div>`;
+  const susp = computeSuspensions();
+  const suspHTML = susp.length ? `
+    <div class="block-label" style="margin-top:18px">出場停止（この大会の中で自動計算）</div>
+    <div class="card">
+      ${susp.map(s=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <b>${esc(s.name)}</b> <span class="meta">${esc(s.team)}</span>
+        <div class="hint" style="margin-top:2px">🟨${s.yellow||0}　🟥${s.red||0}${s.stillPending?`　・残り${s.stillPending}試合分`:""}</div>
+        ${s.matches.length ? `<div class="hint" style="margin-top:2px">対象：${s.matches.map(m=>`${m.done?"✔":"⏳"} ${esc(m.label)}`).join("　")}</div>` : ""}
+      </div>`).join("")}
+    </div>
+    <p class="hint">✔は消化済み（実際に出場していないかは運営でご確認ください）・⏳はこれから迎える試合です。</p>` : "";
+  if(!rows.length) return sw + `<div class="empty">まだ警告・退場の記録がありません。</div>` + suspHTML;
   return sw + `<div class="tblwrap"><table>
     <thead><tr><th style="text-align:left">選手</th><th style="text-align:left">チーム</th><th>🟨</th><th>🟥</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
       <td class="nm">${esc(r.name)}</td><td class="nm">${esc(r.team)}</td>
       <td>${r.yellow||""}</td><td>${r.red||""}</td></tr>`).join("")}</tbody>
   </table></div>
-  <p class="hint">累積警告の確認にお使いください。</p>`;
+  <p class="hint">累積警告の確認にお使いください。</p>` + suspHTML;
 }
 
 /* --- 出場記録（選手ごとの 試合数・出場時間・得点。保護者・一般も閲覧可） --- */

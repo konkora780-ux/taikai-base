@@ -676,6 +676,57 @@ function cardRanking(blockId){
     .map(r=>({ ...r, name:playerName(r.teamId,r.pid), team:teamName(r.teamId) }));
 }
 
+/* --- 出場停止の自動判定（この大会の中だけで数える。大会をまたぐ持ち越しは対象外） --- */
+function suspensionRule(){
+  const s = cfgOf(state.t).suspension;
+  return (s && s.enabled) ? {
+    yellowAccum: Math.max(1, s.yellowAccum||2),
+    yellowGames: Math.max(1, s.yellowGames||1),
+    redGames:    Math.max(1, s.redGames||1),
+  } : null;
+}
+/* チームごとに、そのチームの試合をスケジュール順に積み上げて、
+   累積警告・退場から出場停止を計算する。「次に出場できない試合」は、
+   出場停止が残っている状態で迎える、そのチームの次の試合（未実施でも良い）。 */
+function computeSuspensions(){
+  const rule = suspensionRule();
+  if(!rule) return [];
+  const all = matchesInOrder();
+  const out = [];
+  (state.teams||[]).forEach(team=>{
+    const ms = all.filter(m => sideId(m,"H")===team.id || sideId(m,"A")===team.id);
+    const players = new Map();   // pid -> { yellow, red, pending, lastCrossed, matches:[] }
+    ms.forEach(m=>{
+      const side = sideId(m,"H")===team.id ? "H" : "A";
+      players.forEach(rec=>{
+        if(rec.pending>0){ rec.matches.push(m); rec.pending--; }
+      });
+      (m.events||[]).forEach(ev=>{
+        if(ev.team!==side || !ev.playerId || !CARD_ICON[ev.type]) return;
+        const rec = players.get(ev.playerId) || { yellow:0, red:0, pending:0, lastCrossed:0, matches:[] };
+        if(ev.type==="yellow"){
+          rec.yellow++;
+          if(rec.yellow>rec.lastCrossed && rec.yellow % rule.yellowAccum === 0){
+            rec.pending += rule.yellowGames; rec.lastCrossed = rec.yellow;
+          }
+        }else if(ev.type==="red"){
+          rec.red++; rec.pending += rule.redGames;
+        }
+        players.set(ev.playerId, rec);
+      });
+    });
+    players.forEach((rec,pid)=>{
+      if(!rec.matches.length && !rec.pending) return;
+      out.push({ teamId:team.id, team:team.name, pid, name:playerName(team.id,pid),
+        yellow:rec.yellow, red:rec.red, stillPending:rec.pending,
+        matches: rec.matches.map(m=>({ id:m.id,
+          label:(m.matchNo?`No.${m.matchNo} `:"")+resolveSlot(m,"H").label+" vs "+resolveSlot(m,"A").label,
+          done:isDone(m) })) });
+    });
+  });
+  return out;
+}
+
 /* --- 会場リストの候補(datalist)。<input list="venueList">と組で使う --- */
 function venueDatalistHTML(){
   return `<datalist id="venueList">${(state.venues||[])

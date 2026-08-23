@@ -898,14 +898,22 @@ function viewLineup(){
   const sp = sportOf(state.t);
   const need = sp===SPORTS.futsal ? 5 : 11;
 
+  const teamId = side==="H" ? H.id : A.id;
+  const suspHere = new Set();
+  if(sp.cards){
+    computeSuspensions().forEach(s=>{
+      if(s.matches.some(x=>x.id===m.id)) suspHere.add(s.teamId+"/"+s.pid);
+    });
+  }
   const roleMap = { start:["スタメン","rl-start"], sub:["控え","rl-sub"], out:["外す","rl-out"] };
   const prow = p=>{
     const [lbl,cls] = roleMap[p.role]||roleMap.sub;
+    const susp = suspHere.has(teamId+"/"+p.pid);
     return `<div class="lurow">
       <button class="rolepill ${cls}" onclick="cycleRole('${side}','${p.pid}')">${lbl}</button>
       <input class="in luno" type="number" inputmode="numeric" value="${p.no??""}"
         onchange="setLu('${side}','${p.pid}','no',this.value===''?'':+this.value)">
-      <span class="lunm">${esc(p.name)}${p.grade?` <small>${esc(String(p.grade))}年</small>`:""}</span>
+      <span class="lunm">${esc(p.name)}${p.grade?` <small>${esc(String(p.grade))}年</small>`:""}${susp?` <b style="color:var(--bad)" title="この試合は出場停止の対象です">⚠出停</b>`:""}</span>
       <select class="in lupos" onchange="setLu('${side}','${p.pid}','pos',this.value)">
         <option value="">-</option>${POSITIONS.map(x=>`<option ${p.pos===x?"selected":""}>${x}</option>`).join("")}
       </select>
