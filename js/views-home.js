@@ -1,12 +1,20 @@
+/* 「閲覧のみ」のスタッフには開かせない編集専用の画面。
+   ここに挙げた画面以外（大会の中のタブ類など）は今までどおり閲覧できる。 */
+const EDIT_ONLY_VIEWS = new Set(["new","settings","roster","club","sched","lineup","official","match"]);
+function viewViewerBlocked(){
+  return topbar({ title:"閲覧のみのアカウント", back:"go('home')" })
+  + `<div class="screen"><div class="empty">この画面は「大会管理者」だけが使えます。<br>あなたは「閲覧のみ」の権限で招待されています。</div></div>`;
+}
 function render(){
-  const v = {
+  const blockedForViewer = state.user && state.user.role==="viewer" && EDIT_ONLY_VIEWS.has(state.view);
+  const v = blockedForViewer ? viewViewerBlocked : ({
     home:viewHome, login:viewLogin, new:viewNew,
     t:viewTournament, match:viewMatch, teams:viewTeams, settings:viewSettings,
     roster:viewRoster, club:viewClub, official:viewOfficial, officialPublic:viewOfficialPublic, lineup:viewLineup, sched:viewSchedule,
     entry:viewEntry, entrylinks:viewEntryLinks,
     clubentry:viewClubEntry, clubentrylinks:viewClubEntryLinks,
     terms:viewTerms,
-  }[state.view] || viewHome;
+  }[state.view] || viewHome);
   const y = window.scrollY;
   // PC用サイドバー表示（980px以上）では画面全体ではなく.tmainの中がスクロールする＝
   // その場合はwindow.scrollYが常に0のままなので、.tmain自身のスクロール位置も別途保持する
@@ -306,6 +314,7 @@ function viewTerms(){
 
 /* ---------- ログイン ---------- */
 function viewLogin(){
+  const staffMode = state.loginMode === "staff";
   return topbar({ title:"運営ログイン", back:"go('home')" })
   + `<div class="screen">
     <div class="brandhero">
@@ -313,6 +322,21 @@ function viewLogin(){
       <div class="tag">大会運営を、もっとスマートに。</div>
     </div>
     <p class="lead">大会をつくる・結果を入力する人だけログインします。見るだけの人はログイン不要です。</p>
+    ${staffMode ? `
+    ${state.staffLoginError ? `<div class="callout" style="margin-bottom:10px">${esc(state.staffLoginError)}</div>` : ""}
+    ${state.staffOrgChoices ? `
+    <div class="card">
+      <label class="f">複数の団体から招待されています。どちらでログインしますか？</label>
+      ${state.staffOrgChoices.map((c,i)=>`<button class="pick" onclick="chooseStaffOrg(${i})">
+        <span>団体（${c.role==="admin"?"大会管理者":"閲覧のみ"}）</span><span class="chev">›</span></button>`).join("")}
+    </div>` : `
+    <div class="card">
+      <label class="f">メールアドレス（招待されたもの）</label>
+      <input class="in" id="lg-staff-email" type="email" autocapitalize="off" autocorrect="off" placeholder="例）yamada@example.com">
+      <button class="btn" style="margin-top:16px" onclick="doStaffLogin()">ログイン用リンクを送る</button>
+      <p class="hint">入力したメールアドレス宛にログイン用のリンクを送ります。リンクを開くとログインできます（合言葉は不要です）。あらかじめ団体の管理者から招待されている必要があります。</p>
+      <button class="btn ghost sm" style="margin-top:10px;width:100%" onclick="state.loginMode='org';render()">団体としてログインする方はこちら</button>
+    </div>`}` : `
     <div class="card">
       <label class="f">団体コード</label>
       <input class="in" id="lg-code" autocapitalize="off" autocorrect="off" placeholder="例）sakura-fc">
@@ -320,7 +344,8 @@ function viewLogin(){
       <input class="in" id="lg-pass" type="password" placeholder="合言葉">
       <button class="btn" style="margin-top:16px" onclick="doLogin()">ログイン</button>
       <p class="hint">団体コードと合言葉は、Supabaseの管理画面で発行します（README参照）。同じコードでログインすれば、複数の担当者が同じ大会に入力できます。</p>
-    </div>
+      <button class="btn ghost sm" style="margin-top:10px;width:100%" onclick="state.loginMode='staff';render()">招待されたスタッフの方はこちら</button>
+    </div>`}
   </div>`;
 }
 
@@ -329,20 +354,59 @@ async function doLogin(){
   const pass = $("#lg-pass").value;
   if(!code || !pass) return toast("団体コードと合言葉を入れてください");
   if(!sb){
-    state.user = { id:"local", code };
+    state.user = { id:"local", code, role:"owner" };
     localStorage.setItem("taikai_local_user", code);
     toast("お試しモードでログインしました");
     await Promise.all([reloadList(), reloadRoster()]); go("home"); return;
   }
   const { data, error } = await sb.auth.signInWithPassword({ email:`${code}@${LOGIN_DOMAIN}`, password:pass });
   if(error){ toast("コードか合言葉が違います"); return; }
-  state.user = { id:data.user.id, code };
+  state.user = { id:data.user.id, code, role:"owner" };
+  await Promise.all([reloadList(), reloadRoster()]); go("home"); toast("ログインしました");
+}
+/* スタッフ（招待されたメンバー）のログイン：メールアドレスにログイン用リンクを送る（マジックリンク＝パスワード不要） */
+async function doStaffLogin(){
+  const email = ($("#lg-staff-email")?.value || "").trim();
+  if(!email || !email.includes("@")) return toast("メールアドレスを入れてください");
+  if(!sb) return toast("お試しモードではスタッフログインは使えません");
+  try{
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.origin + location.pathname } });
+    if(error) throw error;
+    toast("メールを送りました。届いたリンクを開いてログインしてください。");
+  }catch(e){ toast("送信できませんでした: "+(e.message||e)); }
+}
+/* スタッフのログインセッションから、どの団体の・どの役割のメンバーかを確定する */
+async function resolveStaffSession(u){
+  try{
+    await sb.rpc("claim_org_invite");
+    const { data: rows, error } = await sb.from("gn_org_members").select("org_id,role").eq("user_id", u.id);
+    if(error) throw error;
+    if(!rows || !rows.length){
+      state.staffLoginError = "このメールアドレスは、まだどの団体からも招待されていません。団体の管理者に招待をお願いしてください。";
+      await sb.auth.signOut();
+      return;
+    }
+    if(rows.length > 1){
+      state.staffOrgChoices = rows; return;   // 複数団体から招待されている場合は選ばせる（まれ）
+    }
+    await setStaffUser(rows[0].org_id, rows[0].role, u);
+  }catch(e){ console.error(e); state.staffLoginError = "ログイン情報の確認に失敗しました。"; }
+}
+async function setStaffUser(orgId, role, u){
+  const { data: org } = await sb.from("gn_orgs").select("name").eq("id", orgId).maybeSingle();
+  state.user = { id: orgId, code: org?.name || "団体", role, authUid: u.id, staffEmail: u.email };
+}
+async function chooseStaffOrg(i){
+  const c = state.staffOrgChoices?.[i]; if(!c) return;
+  const { data } = await sb.auth.getUser();
+  await setStaffUser(c.org_id, c.role, data.user);
+  state.staffOrgChoices = null;
   await Promise.all([reloadList(), reloadRoster()]); go("home"); toast("ログインしました");
 }
 async function logout(){
   if(sb) await sb.auth.signOut();
   localStorage.removeItem("taikai_local_user");
-  state.user = null;
+  state.user = null; state.loginMode = null; state.staffOrgChoices = null; state.staffLoginError = null;
   await Promise.all([reloadList(), reloadRoster()]); go("home");
 }
 

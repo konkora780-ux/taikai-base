@@ -238,6 +238,25 @@ function viewRoster(){
     <button class="btn sec sm" style="width:100%;margin-top:6px" onclick="addVenue()">＋ 会場を追加</button>
     <p class="hint">ここに登録した会場は、結果入力画面の「会場」欄で候補として選べるようになります（自由入力も引き続きできます）。</p>
 
+    ${state.user.role==="owner" ? `
+    <div class="block-label" style="margin-top:22px">スタッフ（${state.orgMembers.length}）</div>
+    ${state.orgMembers.length ? `<div class="card">
+      ${state.orgMembers.map(mm=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">
+          <div style="flex:1;min-width:0">
+            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(mm.email)}</div>
+            <div class="hint" style="margin:0">${mm.accepted_at?"ログイン済み":"招待中（未ログイン）"}</div>
+          </div>
+          <select class="in" style="max-width:126px" onchange="setMemberRole('${mm.id}',this.value)">
+            <option value="viewer" ${mm.role==="viewer"?"selected":""}>閲覧のみ</option>
+            <option value="admin" ${mm.role==="admin"?"selected":""}>大会管理者</option>
+          </select>
+          <button class="btn ghost sm" onclick="removeMember('${mm.id}')">削除</button>
+        </div>`).join("")}
+    </div>` : `<div class="empty">まだスタッフがいません。</div>`}
+    <button class="btn sec sm" style="width:100%;margin-top:6px" onclick="inviteMember()">＋ スタッフを招待</button>
+    <p class="hint">「大会管理者」は結果入力・台帳編集など、あなたと同じように全て操作できます。「閲覧のみ」は画面を見るだけで変更はできません。招待しただけではメールは届きません。招待したメールアドレスを本人に伝え、ログイン画面の「招待されたスタッフの方はこちら」から本人がログインします。</p>` : ""}
+
     <button class="btn ghost sm" style="width:100%;margin-top:14px" onclick="doBackupExport()">🗄 全データをバックアップ（ダウンロード）</button>
     <p class="hint">大会・チーム・選手・試合結果など、この団体の全データを1つのファイルに書き出します。月に1回など決まったタイミングでダウンロードし、パソコンやクラウドストレージに保存しておくことをおすすめします。<b>選手の氏名・記入コードなど個人情報や秘密情報を含むファイルです。厳重に保管し、他人に渡さないでください。</b></p>
     <button class="btn ghost sm" style="width:100%;margin-top:6px" onclick="doBackupImport()">♻️ バックアップから復元する</button>
@@ -489,6 +508,58 @@ async function removeVenue(id){
     state.venues = state.venues.filter(x=>x.id!==id);
     toast("消しました"); render();
   }catch(e){ toast("消せませんでした: "+(e.message||e)); }
+}
+
+/* --- スタッフ（利用者ごとの権限管理） --- */
+function inviteMember(){
+  if(!DB.online()) return toast("この機能はオンライン専用です（お試し版では使えません）");
+  const el = document.createElement("div"); el.className="modal";
+  el.innerHTML = `<div class="sheet"><h3>スタッフを招待</h3>
+    <label class="f">メールアドレス</label>
+    <input class="in" id="inv-email" type="email" autocapitalize="off" autocorrect="off" placeholder="例）yamada@example.com">
+    <label class="f">権限</label>
+    <div class="seg" id="inv-role">
+      <button class="on" data-v="viewer">閲覧のみ</button>
+      <button data-v="admin">大会管理者（全て操作可）</button>
+    </div>
+    <div class="btnrow"><button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="inv-ok">招待する</button></div>
+    <p class="hint" style="margin-top:8px">招待しただけではメールは届きません。本人にログイン画面の「招待されたスタッフの方はこちら」から、このメールアドレスでログインするよう伝えてください。</p>
+  </div>`;
+  document.body.appendChild(el);
+  let role = "viewer";
+  el.querySelectorAll("#inv-role button").forEach(b=> b.onclick=()=>{
+    el.querySelectorAll("#inv-role button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); role = b.dataset.v;
+  });
+  $("#inv-ok").onclick = async ()=>{
+    const email = $("#inv-email").value.trim().toLowerCase();
+    if(!email || !email.includes("@")) return toast("メールアドレスを入れてください");
+    try{
+      await DB.upsert("gn_org_members", { id:uid(), org_id:state.user.id, email, role,
+        user_id:null, invited_at:new Date().toISOString(), accepted_at:null });
+      el.remove();
+      state.orgMembers = await DB.loadOrgMembers(state.user.id);
+      render(); toast("招待しました");
+    }catch(e){ toast("招待できませんでした: "+(e.message||e)); }
+  };
+}
+async function setMemberRole(id, role){
+  const mm = state.orgMembers.find(x=>x.id===id); if(!mm) return;
+  try{
+    await DB.upsert("gn_org_members", { id:mm.id, org_id:mm.org_id, email:mm.email, role,
+      user_id:mm.user_id||null, invited_at:mm.invited_at, accepted_at:mm.accepted_at||null });
+    mm.role = role; toast("変更しました");
+  }catch(e){ toast("変更できませんでした: "+(e.message||e)); render(); }
+}
+async function removeMember(id){
+  const mm = state.orgMembers.find(x=>x.id===id); if(!mm) return;
+  if(!confirm(`「${mm.email}」をスタッフから削除します。よろしいですか？`)) return;
+  try{
+    await DB.remove("gn_org_members", id);
+    state.orgMembers = state.orgMembers.filter(x=>x.id!==id);
+    toast("削除しました"); render();
+  }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
 }
 
 /* --- まとめて貼り付け --- */

@@ -81,6 +81,14 @@ const DB = {
     return data || [];
   },
 
+  /* --- スタッフ（利用者ごとの権限管理・setup-16） --- */
+  async loadOrgMembers(orgId){
+    if(!sb) return [];
+    const { data, error } = await sb.from("gn_org_members").select("*").eq("org_id", orgId).order("invited_at");
+    if(error) throw error;
+    return data || [];
+  },
+
   /* --- 全データのバックアップ（この団体の全部をまとめて書き出す） --- */
   async exportBackup(orgId){
     if(!sb){

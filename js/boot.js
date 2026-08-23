@@ -5,11 +5,19 @@
     const { data } = await sb.auth.getSession();
     if(data?.session?.user){
       const u = data.session.user;
-      state.user = { id:u.id, code:(u.email||"").split("@")[0] };
+      const email = u.email || "";
+      if(email.endsWith("@"+LOGIN_DOMAIN)){
+        state.user = { id:u.id, code:email.split("@")[0], role:"owner" };
+      }else{
+        await resolveStaffSession(u);   // 招待されたスタッフ（マジックリンク）のログイン
+        if(!state.user && (state.staffLoginError || state.staffOrgChoices)){
+          state.loginMode = "staff"; state.view = "login";
+        }
+      }
     }
   }else{
     const code = localStorage.getItem("taikai_local_user");
-    if(code) state.user = { id:"local", code };
+    if(code) state.user = { id:"local", code, role:"owner" };
   }
   const cm0 = location.hash.match(/croster=([0-9a-f-]{36})/i);
   if(cm0){ state.loading=false; await openClubEntry(cm0[1]); return; }   // 台帳の記入リンク（ログイン不要）

@@ -189,7 +189,7 @@ const state = {
   blockFilter:"",         // 日程・ランキング系タブで選んでいるブロック（カテゴリー）。空="すべて"
   unlockTeams:false,      // 選手登録の締切を過ぎたあと「編集する」で一時的にロック解除したか
 };
-const canEdit = ()=> !!(state.user && state.t && state.t.org_id === state.user.id);
+const canEdit = ()=> !!(state.user && state.t && state.t.org_id === state.user.id && state.user.role!=="viewer");
 const orgYear = ()=> state.org?.year ?? fiscalYear();
 
 /* ==========================================================================
