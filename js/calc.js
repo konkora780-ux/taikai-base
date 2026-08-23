@@ -580,7 +580,7 @@ function standings(grp){
   const cfg = cfgOf(state.t);
   const teams = state.teams.filter(t=> grp ? t.grp===grp : true);
   const rows = teams.map(t=>({
-    id:t.id, name:t.name, pl:0, w:0, d:0, l:0, gf:0, ga:0, pts:0, gd:0,
+    id:t.id, name:t.name, pl:0, w:0, d:0, l:0, gf:0, ga:0, pts:0, gd:0, adj:t.pts_adjust||0,
   }));
   const byId = Object.fromEntries(rows.map(r=>[r.id,r]));
   const played = state.matches.filter(m=> m.stage==="league" && isDone(m) && (!grp || m.grp===grp));
@@ -594,9 +594,15 @@ function standings(grp){
     else if(m.home_score < m.away_score){ A.w++; H.l++; A.pts += cfg.win; H.pts += cfg.lose; }
     else { H.d++; A.d++; H.pts += cfg.draw; A.pts += cfg.draw; }
   });
-  rows.forEach(r=> r.gd = r.gf - r.ga);
+  rows.forEach(r=> { r.gd = r.gf - r.ga; r.pts += r.adj; });
   rows.sort((a,b)=>
       b.pts-a.pts || b.gd-a.gd || b.gf-a.gf || h2h(a,b,played,cfg) || a.name.localeCompare(b.name,"ja"));
+  // 順位の手動並べ替え（大会設定で指定したチームだけ）。未指定なら今までどおりの並び。
+  const order = (cfg.rankOrder||{})[grp];
+  if(order && order.length){
+    const idx = id => { const i = order.indexOf(id); return i<0 ? Infinity : i; };
+    rows.sort((a,b)=> idx(a.id)-idx(b.id));   // Array.sortは安定なので、指定が無いチーム同士は直前の並び順を保つ
+  }
   return rows;
 }
 /* 直接対決（勝った方を上に） */

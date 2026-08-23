@@ -34,6 +34,14 @@ function viewTeams(){
         placeholder="10 山田太郎 6 FW">${esc((t.players||[]).map(p=>
           [p.no??"", p.name, p.grade??"", p.pos??""].filter(x=>x!=="" && x!=null).join(" ")).join("\n"))}</textarea>
       <p class="hint">1行に1人。「背番号 名前 学年 ポジション」の順（無いものは省略できます）。</p>
+      <div class="row2" style="margin-top:10px">
+        <div><label class="f">勝点の加算・減算（任意）</label>
+          <input class="in" type="number" inputmode="numeric" value="${t.pts_adjust??""}" placeholder="例）-3"
+            onchange="editTeam('${t.id}','pts_adjust',this.value===''?null:+this.value)"></div>
+        <div><label class="f">理由（任意）</label>
+          <input class="in" value="${esc(t.pts_adjust_note||"")}" placeholder="例）規律違反による処分"
+            onchange="editTeam('${t.id}','pts_adjust_note',this.value||null)"></div>
+      </div>
     </div>`;}).join("");
     })()}
     <div class="btnrow">
@@ -133,11 +141,13 @@ async function saveTeams(silent){
   try{
     await DB.upsert("gn_teams", dirty.map(t=>{
       const { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest,
-              short_name,kana,rep_name,coach_name,coach2_name,uniform_color,intro,links } = t;
+              short_name,kana,rep_name,coach_name,coach2_name,uniform_color,intro,links,
+              pts_adjust,pts_adjust_note } = t;
       return { id,tournament_id,org_id,name,grp,seed,sort_order,players,club_id,crest:crest||null,
                short_name:short_name||null, kana:kana||null, rep_name:rep_name||null,
                coach_name:coach_name||null, coach2_name:coach2_name||null,
-               uniform_color:uniform_color||null, intro:intro||null, links:links||null };
+               uniform_color:uniform_color||null, intro:intro||null, links:links||null,
+               pts_adjust:pts_adjust??null, pts_adjust_note:pts_adjust_note||null };
     }));
     dirty.forEach(t=>delete t._dirty);
     if(!silent){ toast("保存しました"); go("t"); }

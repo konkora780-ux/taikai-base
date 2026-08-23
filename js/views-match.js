@@ -269,18 +269,74 @@ function tabTable(){
         const wc = (hasWC && !(adv && i<adv)) ? wildcardHit(r.id) : 0;   // 進出枠外だがワイルドカードで勝ち上がり
         if(wc) wcShown = true;
         const wcMark = wc ? `<span title="ワイルドカードで勝ち上がり" style="color:var(--accent);font-weight:800"> ◎${wc}</span>` : "";
+        const adjNote = r.adj ? `<small style="color:var(--accent)"> (${r.adj>0?"+":""}${r.adj})</small>` : "";
         return `<tr class="${(adv&&i<adv)||wc?"adv":""}" style="${bg}">
         <td class="rk">${i+1}</td><td class="nm">${esc(r.name)}${mark}${wcMark}</td>
-        <td class="pt">${r.pts}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
+        <td class="pt">${r.pts}${adjNote}</td><td>${r.pl}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
         <td>${r.gf}</td><td>${r.ga}</td><td>${r.gd>0?"+":""}${r.gd}</td>
       </tr>`;}).join("")}</tbody>
-    </table></div>`;
+    </table></div>`
+    + (canEdit() ? `<div class="btnrow noprint" style="margin:6px 0 14px">
+        <button class="btn ghost sm" onclick="openRankOrderEditor(${b?`'${b.id}'`:"null"})">✏ ${(cfg.rankOrder||{})[b?b.id:null]?.length ? "手動で並べ替え中（変更する）":"順位を手動で並べ替える"}</button>
+      </div>` : "");
   }).join("");
   const legend = ["up","upPo","downPo","down"].filter(z=>usedZones.has(z))
     .map(z=>`<span style="color:${STAND_ZONES[z].col};font-weight:700">${STAND_ZONES[z].mark} ${STAND_ZONES[z].label}</span>`).join("　");
   return body
-  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${isLK?`色つきが決勝トーナメント進出。${esc(advanceSummary())}`:""}${wcShown?`<br>◎ はワイルドカード（各組の同順位どうしを${cfg.wcRule==="avg"?"1試合平均":"合計"}で比べた順）で勝ち上がるチームです。`:""}${legend?`<br>${legend}`:""}</p>`
+  + `<p class="hint">勝ち${cfg.win}点／引き分け${cfg.draw}点／負け${cfg.lose}点。同点のときは 得失点差 → 総得点 → 直接対決 の順で並べます。${isLK?`色つきが決勝トーナメント進出。${esc(advanceSummary())}`:""}${wcShown?`<br>◎ はワイルドカード（各組の同順位どうしを${cfg.wcRule==="avg"?"1試合平均":"合計"}で比べた順）で勝ち上がるチームです。`:""}${legend?`<br>${legend}`:""}<br>( )は勝点の手動調整分です。</p>`
   + (canEdit()?`<div class="btnrow noprint"><button class="btn sec sm" onclick="go('settings')">⚙ リーグごとの昇格・降格・入れ替え戦を設定</button></div>`:"");
+}
+
+/* --- 順位の手動並べ替え（同順位時の運営判断・特別な事情での補正） --- */
+function openRankOrderEditor(blockId){
+  const cfg = cfgOf(state.t);
+  const natural = standings(blockId).map(r=>r.id);   // 現在の計算順（手動指定が既にあればそれも反映された順）
+  const existing = (cfg.rankOrder||{})[blockId];
+  let order = (existing && existing.length) ? existing.slice() : natural.slice();
+  natural.forEach(id=>{ if(!order.includes(id)) order.push(id); });   // 新しく加わったチームなどは末尾に足す
+  order = order.filter(id=> natural.includes(id));                   // 大会から外れたチームは除く
+
+  const el = document.createElement("div"); el.className="modal";
+  const render2 = ()=>{
+    $("#ro-list").innerHTML = order.map((id,i)=>{
+      const nm = teamName(id);
+      return `<div class="lurow">
+        <span class="lunm">${i+1}. ${esc(nm)}</span>
+        <button class="btn ghost sm" style="width:auto" ${i===0?"disabled":""} onclick="roMove(${i},-1)">▲</button>
+        <button class="btn ghost sm" style="width:auto" ${i===order.length-1?"disabled":""} onclick="roMove(${i},1)">▼</button>
+      </div>`;
+    }).join("");
+  };
+  window.roMove = (i,dir)=>{
+    const j = i+dir; if(j<0||j>=order.length) return;
+    [order[i],order[j]] = [order[j],order[i]];
+    render2();
+  };
+  el.innerHTML = `<div class="sheet">
+    <h3>順位を手動で並べ替え</h3>
+    <p class="hint" style="margin-bottom:8px">▲▼で順番を入れ替えられます。同じ勝点・得失点差のチームの最終判断（抽選など）や、特別な事情での補正に使ってください。通常はここを使わなくても、上の自動計算のままで構いません。</p>
+    <div id="ro-list" style="max-height:50vh;overflow-y:auto"></div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="ro-ok">この順番で保存</button>
+    </div>
+    ${existing && existing.length ? `<button class="btn ghost sm" style="width:100%;margin-top:8px;color:var(--bad)" id="ro-clear">手動並べ替えをやめて自動計算に戻す</button>` : ""}
+  </div>`;
+  document.body.appendChild(el);
+  render2();
+  $("#ro-ok").onclick = async ()=>{ await saveRankOrder(blockId, order); el.remove(); };
+  const clearBtn = $("#ro-clear");
+  if(clearBtn) clearBtn.onclick = async ()=>{ await saveRankOrder(blockId, null); el.remove(); };
+}
+async function saveRankOrder(blockId, orderOrNull){
+  const s = state.t.settings = cfgOf(state.t);
+  s.rankOrder = Object.assign({}, s.rankOrder||{});
+  if(orderOrNull) s.rankOrder[blockId] = orderOrNull; else delete s.rankOrder[blockId];
+  try{
+    const { id,org_id,name,sport,format,settings,created_at } = state.t;
+    await DB.upsert("gn_tournaments", { id,org_id,name,sport,format,settings,created_at });
+    toast("保存しました"); render();
+  }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
 }
 
 /* --- 戦績表（星取表） --- */
