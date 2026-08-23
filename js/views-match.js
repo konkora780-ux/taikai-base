@@ -68,6 +68,98 @@ async function saveSchedule(){
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
 }
 
+/* --- お知らせ（テキストのみ・保護者/一般も閲覧） --- */
+function announcementVisible(a){
+  const now = new Date();
+  return a.published
+    && (!a.publish_from  || new Date(a.publish_from)  <= now)
+    && (!a.publish_until || new Date(a.publish_until) >= now);
+}
+function tabNotice(){
+  const list = state.announcements || [];
+  const publicList = list.filter(announcementVisible);
+  const draftList = canEdit() ? list.filter(a=>!announcementVisible(a)) : [];
+  const card = a => `<div class="card" style="margin-bottom:10px${a.pinned?";border-color:var(--gold)":""}">
+    ${a.pinned?`<div class="hint" style="color:var(--gold-text,var(--gold));margin:0 0 4px">📌 固定表示</div>`:""}
+    <div style="font-weight:700">${esc(a.title)}</div>
+    <div class="hint" style="margin:2px 0 8px">${esc(fmtDate(a.created_at))} ${esc(fmtTime(a.created_at))}</div>
+    <div style="white-space:pre-wrap">${esc(a.body||"")}</div>
+    ${canEdit() ? `<div class="btnrow" style="margin-top:10px">
+      <button class="btn ghost sm" style="flex:1" onclick="openAnnouncementEditor('${a.id}')">編集</button>
+      <button class="btn ghost sm" style="flex:1" onclick="toggleAnnouncementPublish('${a.id}')">${a.published?"非公開にする":"公開する"}</button>
+      <button class="btn ghost sm" onclick="removeAnnouncement('${a.id}')">削除</button>
+    </div>` : ""}
+  </div>`;
+  return `
+    ${canEdit() ? `<button class="btn sec sm" style="width:100%;margin-bottom:12px" onclick="openAnnouncementEditor()">＋ お知らせを追加</button>` : ""}
+    ${publicList.length ? publicList.map(card).join("") : `<div class="empty">お知らせはありません。</div>`}
+    ${draftList.length ? `<div class="block-label" style="margin-top:18px">下書き・非公開・公開期間外（運営にだけ見えています）</div>${draftList.map(card).join("")}` : ""}
+  `;
+}
+function openAnnouncementEditor(id){
+  const a = id ? (state.announcements||[]).find(x=>x.id===id) : null;
+  const el = document.createElement("div"); el.className="modal";
+  const toLocal = iso => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16) : "";
+  el.innerHTML = `<div class="sheet"><h3>${a?"お知らせを編集":"お知らせを追加"}</h3>
+    <label class="f">タイトル</label>
+    <input class="in" id="an-title" value="${a?esc(a.title):""}" placeholder="例）雨天のため時間変更">
+    <label class="f">本文</label>
+    <textarea class="in" id="an-body" style="min-height:120px">${a?esc(a.body||""):""}</textarea>
+    <label class="f">固定表示（先頭に常に表示）</label>
+    <div class="seg" id="an-pinned">
+      <button class="${!a?.pinned?"on":""}" data-v="0">しない</button>
+      <button class="${a?.pinned?"on":""}" data-v="1">する</button>
+    </div>
+    <label class="f">公開状態</label>
+    <div class="seg" id="an-published">
+      <button class="${!a||!a.published?"on":""}" data-v="0">下書き（非公開）</button>
+      <button class="${a?.published?"on":""}" data-v="1">公開する</button>
+    </div>
+    <label class="f">公開開始日時（空なら公開後すぐ）</label>
+    <input class="in" id="an-from" type="datetime-local" value="${toLocal(a?.publish_from)}">
+    <label class="f">公開終了日時（空なら無期限）</label>
+    <input class="in" id="an-until" type="datetime-local" value="${toLocal(a?.publish_until)}">
+    <div class="btnrow"><button class="btn ghost" onclick="this.closest('.modal').remove()">やめる</button>
+      <button class="btn" id="an-ok">${a?"保存":"追加"}</button></div>
+  </div>`;
+  document.body.appendChild(el);
+  let pinned = a?.pinned?1:0, published = a?.published?1:0;
+  el.querySelectorAll("#an-pinned button").forEach(b=> b.onclick=()=>{
+    el.querySelectorAll("#an-pinned button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); pinned=+b.dataset.v; });
+  el.querySelectorAll("#an-published button").forEach(b=> b.onclick=()=>{
+    el.querySelectorAll("#an-published button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); published=+b.dataset.v; });
+  $("#an-ok").onclick = async ()=>{
+    const title = $("#an-title").value.trim();
+    if(!title) return toast("タイトルを入れてください");
+    const fromV = $("#an-from").value, untilV = $("#an-until").value;
+    const row = { id: a?a.id:uid(), org_id:state.user.id, tournament_id:state.t.id,
+      title, body: $("#an-body").value, pinned: !!pinned, published: !!published,
+      publish_from: fromV ? new Date(fromV).toISOString() : null,
+      publish_until: untilV ? new Date(untilV).toISOString() : null,
+      created_at: a ? a.created_at : new Date().toISOString(), updated_at: new Date().toISOString() };
+    try{
+      await DB.upsert("gn_announcements", row);
+      state.announcements = await DB.loadAnnouncements(state.t.id);
+      el.remove(); render(); toast(a?"保存しました":"追加しました");
+    }catch(e){ toast("保存できませんでした: "+(e.message||e)); }
+  };
+}
+async function toggleAnnouncementPublish(id){
+  const a = (state.announcements||[]).find(x=>x.id===id); if(!a) return;
+  try{
+    await DB.upsert("gn_announcements", { ...a, published: !a.published, updated_at:new Date().toISOString() });
+    a.published = !a.published; render();
+  }catch(e){ toast("変更できませんでした: "+(e.message||e)); }
+}
+async function removeAnnouncement(id){
+  if(!confirm("このお知らせを削除します。よろしいですか？")) return;
+  try{
+    await DB.remove("gn_announcements", id);
+    state.announcements = (state.announcements||[]).filter(x=>x.id!==id);
+    render(); toast("削除しました");
+  }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
+}
+
 /* --- 順位表 --- */
 /* --- 大会概要（GoalNote風の一覧・保護者/一般も閲覧） --- */
 const nl2br = s => String(s??"").replace(/\n/g,"<br>");

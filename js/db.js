@@ -89,6 +89,19 @@ const DB = {
     return data || [];
   },
 
+  /* --- 大会のお知らせ（setup-18・テキストのみ） --- */
+  async loadAnnouncements(tournamentId){
+    if(!sb){
+      const d = local.read();
+      return d.announcements.filter(a=>a.tournament_id===tournamentId)
+        .sort((a,b)=> (b.pinned?1:0)-(a.pinned?1:0) || (b.created_at||"").localeCompare(a.created_at||""));
+    }
+    const { data, error } = await sb.from("gn_announcements").select("*").eq("tournament_id", tournamentId)
+      .order("pinned",{ascending:false}).order("created_at",{ascending:false});
+    if(error) throw error;
+    return data || [];
+  },
+
   /* --- 全データのバックアップ（この団体の全部をまとめて書き出す） --- */
   async exportBackup(orgId){
     if(!sb){
