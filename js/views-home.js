@@ -230,6 +230,15 @@ function viewHome(){
       <div class="feat-item"><span class="ic"><img src="${FEAT_IC.chart}" alt=""></span><div><b>多彩な集計機能</b><small>順位表・得点ランキングなど多彩な集計が可能</small></div></div>
       <div class="feat-item"><span class="ic"><img src="${FEAT_IC.cloud}" alt=""></span><div><b>公式記録を出力</b><small>公式戦に必要な記録を簡単に出力</small></div></div>
     </div></div>
+    <div class="help-band"><div class="help-band-in">
+      <span class="help-band-title">📖 使い方説明書</span>
+      <div class="help-links">
+        <a href="guide-ops.html" target="_blank" rel="noopener">運営ガイド</a>
+        <a href="guide-staff.html" target="_blank" rel="noopener">スタッフガイド</a>
+        <a href="guide-team.html" target="_blank" rel="noopener">チーム登録ガイド</a>
+        <a href="guide-viewer.html" target="_blank" rel="noopener">観覧ガイド</a>
+      </div>
+    </div></div>
     <div class="home-legal-foot"><a href="javascript:void(0)" onclick="go('terms')">利用規約・プライバシーポリシー</a></div>
   </div>`;
 }
