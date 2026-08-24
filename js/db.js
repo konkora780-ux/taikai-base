@@ -23,9 +23,12 @@ const DB = {
     // 自分の団体の大会を運営者として見ているときだけ生のgn_matches（公式記録の中身も含む）を読む。
     // それ以外（ゲスト・他団体の大会を見ている運営者）は、非公開の公式記録を除いた公開用の窓口(gn_matches_public)を読む。
     const isOwner = !!(state.user && t && t.org_id === state.user.id);
+    const matchesQuery = isOwner
+      ? sb.from("gn_matches").select("*").eq("tournament_id",id)
+      : sb.rpc("gn_matches_public").select("*").eq("tournament_id",id);
     const [rteams, rmatches] = await Promise.all([
       sb.from("gn_teams").select("*").eq("tournament_id",id),
-      sb.from(isOwner ? "gn_matches" : "gn_matches_public").select("*").eq("tournament_id",id),
+      matchesQuery,
     ]);
     if(rteams.error) throw rteams.error;
     if(rmatches.error) throw rmatches.error;
@@ -42,7 +45,7 @@ const DB = {
       const { t, teams, matches } = await this.loadTournament(m.tournament_id);
       return { m, t, teams, matches };
     }
-    const rm = await sb.from("gn_matches_public").select("*").eq("id",matchId).maybeSingle();
+    const rm = await sb.rpc("gn_matches_public").select("*").eq("id",matchId).maybeSingle();
     if(rm.error) throw rm.error;
     const m = rm.data;
     if(!m) return { m:null, t:null, teams:[], matches:[] };

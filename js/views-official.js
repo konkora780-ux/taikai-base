@@ -796,7 +796,7 @@ async function loadHomeStats(){
     if(ids.length){
       if(sb){
         const [rm, rt] = await Promise.all([
-          sb.from("gn_matches_public").select("id,tournament_id,status,kickoff").in("tournament_id", ids),
+          sb.rpc("gn_matches_public").select("id,tournament_id,status,kickoff").in("tournament_id", ids),
           sb.from("gn_teams").select("id,tournament_id").in("tournament_id", ids),
         ]);
         if(rm.error) throw rm.error;
