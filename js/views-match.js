@@ -538,32 +538,63 @@ function koEditBar(cfg){
   return html;
 }
 
-/* --- 櫓レイアウト：フィーダー（W:/L:参照元）の中心の平均に配置。重なりは下へ押し出す --- */
+/* --- 櫓レイアウト：フィーダー（W:/L:参照元）の中心の平均に配置。重なりは下へ押し出す ---
+   1回戦の一部だけが2回戦の途中の枠（例：8・9番目）に食い込むような「シード混じり」の
+   組み合わせだと、1回戦側は参照元（フィーダー）を持たないため、何も考えずに上から詰めて
+   しまうと実際につながる2回戦の枠から離れた位置に浮いてしまう。
+   そこで2パスで計算する：1パス目は今までどおりの単純な配置で「行き先（後の回戦）が
+   どのあたりに落ち着くか」を先に求め、2パス目でフィーダーを持たない枠（＝行き先はあるが
+   元になる前の回戦がない枠）だけ、1パス目で求めた「行き先の中心」に寄せて配置し直す。
+   ふつうの（毎回戦きれいに半分になる）組み合わせでは全マッチにフィーダーがあるので
+   この寄せ処理は働かず、結果は今までと同じになる。 */
 const KO_GAPY = 14;
 function layoutBracket(){
   const canvas = document.getElementById("koCanvas"); if(!canvas) return;
   const rounds = [...canvas.querySelectorAll(".kobk-round")];
-  const center = {};                              // matchId -> 縦中心(px)
-  let globalBottom = 0;
-  rounds.forEach(rd=>{
-    const r = +rd.dataset.r;
-    const ms = koMatchesOf().filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
-    let prevBottom = -Infinity;
-    ms.forEach(m=>{
-      const el = document.getElementById("komt-"+m.id); if(!el) return;
-      const H = el.offsetHeight || 90;
-      const feeders = [];
-      ["home","away"].forEach(sd=>{ const s=m[sd+"_src"]; if(s&&/^(W|L):/.test(s)){ const c=center[s.slice(2)]; if(c!=null) feeders.push(c); } });
-      let c = feeders.length ? feeders.reduce((a,b)=>a+b,0)/feeders.length
-                             : (prevBottom>-Infinity ? prevBottom+KO_GAPY+H/2 : H/2);
-      let top = c - H/2;
-      if(top < prevBottom+KO_GAPY) top = prevBottom+KO_GAPY;   // 重なり回避（単調増加）
-      el.style.top = top+"px";
-      center[m.id] = top+H/2; prevBottom = top+H;
-      if(prevBottom>globalBottom) globalBottom = prevBottom;
+  const all = koMatchesOf();
+  // 逆引き：あるマッチの勝者/敗者を、後の回戦のどのマッチが参照しているか
+  const successorOf = {};
+  all.forEach(m=>{
+    ["home_src","away_src"].forEach(k=>{
+      const s = m[k];
+      if(s && /^(W|L):/.test(s)){
+        const srcId = s.slice(2);
+        if(successorOf[srcId]==null) successorOf[srcId] = m.id;
+      }
     });
   });
-  canvas.querySelectorAll(".kobk-rbody").forEach(b=> b.style.height=(globalBottom+6)+"px");
+  function pass(anchorCenters){
+    const center = {};
+    let globalBottom = 0;
+    rounds.forEach(rd=>{
+      const r = +rd.dataset.r;
+      const ms = all.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
+      let prevBottom = -Infinity;
+      ms.forEach(m=>{
+        const el = document.getElementById("komt-"+m.id); if(!el) return;
+        const H = el.offsetHeight || 90;
+        const feeders = [];
+        ["home","away"].forEach(sd=>{ const s=m[sd+"_src"]; if(s&&/^(W|L):/.test(s)){ const c=center[s.slice(2)]; if(c!=null) feeders.push(c); } });
+        let c;
+        if(feeders.length){
+          c = feeders.reduce((a,b)=>a+b,0)/feeders.length;
+        } else if(anchorCenters && successorOf[m.id]!=null && anchorCenters[successorOf[m.id]]!=null){
+          c = anchorCenters[successorOf[m.id]];               // 行き先の枠に寄せる
+        } else {
+          c = prevBottom>-Infinity ? prevBottom+KO_GAPY+H/2 : H/2;
+        }
+        let top = c - H/2;
+        if(top < prevBottom+KO_GAPY) top = prevBottom+KO_GAPY;   // 重なり回避（単調増加）
+        el.style.top = top+"px";
+        center[m.id] = top+H/2; prevBottom = top+H;
+        if(prevBottom>globalBottom) globalBottom = prevBottom;
+      });
+    });
+    return { center, globalBottom };
+  }
+  const first = pass(null);
+  const final = pass(first.center);
+  canvas.querySelectorAll(".kobk-rbody").forEach(b=> b.style.height=(final.globalBottom+6)+"px");
 }
 /* --- SVG曲線：前の回戦の勝者/敗者を参照する枠へ線を引く（勝者=青 / 敗者=橙） --- */
 function drawLinks(){
