@@ -1076,8 +1076,11 @@ function viewTeamPublic(){
     t.coach2_name?`コーチ：${esc(t.coach2_name)}`:"",
     t.uniform_color?`ユニフォーム：${esc(t.uniform_color)}`:"",
   ].filter(Boolean);
-  return `<div class="tourwrap">`
-  + topbar({ title:t.name, sub:state.t?.name||"", back:"go('t')" })
+  // .tourwrapで包まない＝PC幅(980px以上)ではサイドバーがある前提でtopbarの「戻る」が
+  // CSSで消える仕組みになっている（.tourwrap > .topbar .back{display:none}）。
+  // このページはサイドバーを持たない単独ページなので、包むと「戻る」が消えて
+  // 戻れなくなる（viewOfficialPublicと同じ、あえて包まないパターン）。
+  return topbar({ title:t.name, sub:state.t?.name||"", back:"go('t')" })
   + `<div class="screen">
     <div class="card" style="display:flex;gap:14px;align-items:center">
       ${t.crest?`<img src="${t.crest}" alt="" style="width:64px;height:64px;object-fit:contain;border-radius:10px;background:#fff;border:1px solid var(--line);flex:0 0 auto">`:""}
@@ -1099,7 +1102,7 @@ function viewTeamPublic(){
         ${hasGrade?`<td style="text-align:center">${p.grade?esc(String(p.grade))+"年":""}</td>`:""}
       </tr>`).join("")}</tbody></table></div>`
     : `<div class="empty">選手情報がありません。</div>`}
-  </div></div>`;
+  </div>`;
 }
 const RESULT_TYPE_LABEL = {
   walkover_home:"不戦勝", walkover_away:"不戦勝",
