@@ -963,7 +963,7 @@ function scheduleGroups(ms){
   const multiKo = bracketsOf(state.t).length > 1;   // 櫓が複数あるときは「2位T 準決勝」のように出す
   const groups = [];
   const idxOf = {};
-  ms.forEach(m=>{
+  ms.filter(m=>!isSeedMatch(m)).forEach(m=>{
     const bn = blockName(state.t, m.grp);
     const isLeague = m.stage==="league";
     const key = isLeague ? (bn ? `${bn} 第${m.round}節` : `第${m.round}節`)
