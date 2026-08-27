@@ -620,12 +620,12 @@ function drawLinks(){
       const col = src[0]==="L" ? "#c98a2e" : "#9fb0d6";
       // 直角のカギ線（横→縦→横）＝ふつうのトーナメント表の線。ただし枠がほぼ同じ高さに
       // 揃っている（シード等で1回戦の先が2回戦の途中に食い込む場合など）ときは、
-      // 意味のない小さな段差をつけず素直な直線にする。
+      // 意味のない小さな段差をつけず、完全に水平な1本の直線にする。
       const dy = Math.abs(y1-y2);
       const d = dy<=KO_STRAIGHT_MAXDY
-        ? `M${x1},${Math.round(y1)} L${x2},${Math.round(y2)}`
+        ? `M${x1},${Math.round(y1)} H${x2}`
         : `M${x1},${Math.round(y1)} H${mxx} V${Math.round(y2)} H${x2}`;
-      paths += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".85"${dy<=KO_STRAIGHT_MAXDY?"":' shape-rendering="crispEdges"'}/>`;
+      paths += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".85" shape-rendering="crispEdges"/>`;
     });
   });
   svg.innerHTML = paths;
