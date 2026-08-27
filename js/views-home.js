@@ -30,6 +30,14 @@ function render(){
   // トーナメント表があれば櫓レイアウト＋接続線を描く（DOM確定後）
   if(document.getElementById("koCanvas")){
     requestAnimationFrame(()=>{ layoutBracket(); drawLinks(); });
+    // ページを開いた直後の1回目だけ、フォント確定やレイアウト計算のタイミングのずれで
+    // 枠の高さがまだ正しく測れておらず、線がズレて見えることがある（画面サイズを一度
+    // 変えると直っていたのはこれが原因）。少し時間をおいてもう一度だけ描き直すことで、
+    // 手動でリサイズしなくても最初から正しく見えるようにする。
+    if(document.fonts && document.fonts.ready){
+      document.fonts.ready.then(()=>{ if(document.getElementById("koCanvas")){ layoutBracket(); drawLinks(); } });
+    }
+    setTimeout(()=>{ if(document.getElementById("koCanvas")){ layoutBracket(); drawLinks(); } }, 300);
   }
   // 画面（やタブ）が変わったときだけ先頭へ。同じ画面の描き直しは位置を保つ
   const tmainNew = document.querySelector(".tmain");
