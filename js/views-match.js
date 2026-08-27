@@ -548,6 +548,7 @@ function koEditBar(cfg){
    ふつうの（毎回戦きれいに半分になる）組み合わせでは全マッチにフィーダーがあるので
    この寄せ処理は働かず、結果は今までと同じになる。 */
 const KO_GAPY = 14;
+const KO_STRAIGHT_MAXDY = 20;   // これ以下の高さの差なら、線を段差なしの直線にする
 function layoutBracket(){
   const canvas = document.getElementById("koCanvas"); if(!canvas) return;
   const rounds = [...canvas.querySelectorAll(".kobk-round")];
@@ -617,8 +618,14 @@ function drawLinks(){
       const x2 = tb.left-cb.left, y2 = tb.top+(sd==="home"?tb.height*0.34:tb.height*0.72)-cb.top;
       const mxx = Math.round((x1+x2)/2);
       const col = src[0]==="L" ? "#c98a2e" : "#9fb0d6";
-      // 直角のカギ線（横→縦→横）＝ふつうのトーナメント表の線
-      paths += `<path d="M${x1},${Math.round(y1)} H${mxx} V${Math.round(y2)} H${x2}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".85" shape-rendering="crispEdges"/>`;
+      // 直角のカギ線（横→縦→横）＝ふつうのトーナメント表の線。ただし枠がほぼ同じ高さに
+      // 揃っている（シード等で1回戦の先が2回戦の途中に食い込む場合など）ときは、
+      // 意味のない小さな段差をつけず素直な直線にする。
+      const dy = Math.abs(y1-y2);
+      const d = dy<=KO_STRAIGHT_MAXDY
+        ? `M${x1},${Math.round(y1)} L${x2},${Math.round(y2)}`
+        : `M${x1},${Math.round(y1)} H${mxx} V${Math.round(y2)} H${x2}`;
+      paths += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.5" opacity=".85"${dy<=KO_STRAIGHT_MAXDY?"":' shape-rendering="crispEdges"'}/>`;
     });
   });
   svg.innerHTML = paths;
