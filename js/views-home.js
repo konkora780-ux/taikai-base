@@ -972,6 +972,9 @@ function scheduleGroups(ms){
     groups[idxOf[key]].matches.push(m);
   });
   groups.forEach(g=>{
+    // 同じ節（回戦）の中では、日時でバラバラになっていても組み合わせ（トーナメント表）の並び順に揃える。
+    // 同じ回戦のマッチはgroups分けの時点でround（回戦）が揃っているので、slotだけで並べ替えれば良い。
+    if(g.matches[0] && g.matches[0].stage==="ko") g.matches.sort((a,b)=>a.slot-b.slot);
     g.dateRange = null;
     if(g.matches.length && g.matches.every(m=>m.kickoff)){
       const days = g.matches.map(m=>localDate(m.kickoff)).sort();
