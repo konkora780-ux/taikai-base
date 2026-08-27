@@ -551,6 +551,8 @@ const KO_GAPY = 14;
 function layoutBracket(){
   const canvas = document.getElementById("koCanvas"); if(!canvas) return;
   const rounds = [...canvas.querySelectorAll(".kobk-round")];
+  if(!rounds.length) return;
+  const firstRound = Math.min(...rounds.map(rd=>+rd.dataset.r));
   const all = koMatchesOf();
   // 逆引き：あるマッチの勝者/敗者を、後の回戦のどのマッチが参照しているか
   const successorOf = {};
@@ -578,8 +580,10 @@ function layoutBracket(){
         let c;
         if(feeders.length){
           c = feeders.reduce((a,b)=>a+b,0)/feeders.length;
-        } else if(anchorCenters && successorOf[m.id]!=null && anchorCenters[successorOf[m.id]]!=null){
-          c = anchorCenters[successorOf[m.id]];               // 行き先の枠に寄せる
+        } else if(r===firstRound && anchorCenters && successorOf[m.id]!=null && anchorCenters[successorOf[m.id]]!=null){
+          // 一番最初の回戦（フィーダーを持ちようがない列）だけ、行き先の枠に寄せる。
+          // 2回戦以降のシード／不戦勝枠は自分の位置がそのまま正解なので寄せない。
+          c = anchorCenters[successorOf[m.id]];
         } else {
           c = prevBottom>-Infinity ? prevBottom+KO_GAPY+H/2 : H/2;
         }
