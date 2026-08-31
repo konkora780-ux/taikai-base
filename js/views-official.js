@@ -755,7 +755,20 @@ function openMatch(id){
   state.unlockMatch = (m && !isDone(m)) ? id : null;   // 開いた時点で未終了なら編集可・終了済みはロック
   state.view = "match"; render();
 }
-function unlockMatch(id){ state.unlockMatch = id; render(); }   // 終了した試合の編集ロックを解除
+/* 終了した試合の編集ロックを解除する。「終了」は最終確定という扱いにするため、
+   ただ画面を開けるだけでなく試合の状態そのものを一旦「終了」から外す（試合中に戻す）。
+   出場記録などは終了した試合だけを集計するので、直している間はそちらにも反映されなくなり、
+   もう一度「終了」を押して確定して初めて、直した内容が最終版として反映される。 */
+async function unlockMatch(id){
+  const m = state.matches.find(x=>x.id===id); if(!m) return;
+  if(m.status==="done"){
+    if(!confirm("「終了」を一旦解除して修正します。直し終わったら、もう一度「🏁 終了」を押して確定してください。よろしいですか？")) return;
+    m.status = "live";
+    state.matchId = id;
+    await saveMatch(true);
+  }
+  state.unlockMatch = id; render();
+}
 function openClub(id){ state.clubId = id; state.showGrads = false; state.view = "club"; render(); }
 
 /* 台帳（チーム・選手・年度）を読み込む */
