@@ -204,6 +204,29 @@ function editPlayers(id, text){
              no:r.no, name:r.name, pos:r.pos, grade:r.grade };
   });
   t._dirty = true;
+  // 台帳から消えた選手（＝登録ミスなどで行ごと削除された選手）は、実際にピッチに立った
+  // 記録（先発／途中出場／得点・カード）が無ければ、既存のメンバー表からも一緒に消す。
+  // 実際に出場した記録がある選手は、公式記録を守るためここでは自動的に消さない
+  // （syncLineup()と同じ「エントリーと合わせる」考え方を、削除時にも当てはめている）。
+  const keptIds = new Set(t.players.map(p=>p.id));
+  const removedIds = new Set(old.filter(p=>!keptIds.has(p.id)).map(p=>p.id));
+  if(removedIds.size){
+    state.matches.forEach(m=>{
+      if(!m.lineups) return;
+      ["H","A"].forEach(side=>{
+        const lu = m.lineups[side];
+        if(!lu || !Array.isArray(lu.players)) return;
+        const before = lu.players.length;
+        lu.players = lu.players.filter(p=>{
+          if(!removedIds.has(p.pid)) return true;
+          const played = p.role==="start" || (m.events||[]).some(e=>e.type==="sub"&&e.team===side&&e.playerId===p.pid);
+          const recorded = (m.events||[]).some(e=>e.playerId===p.pid);
+          return played || recorded;
+        });
+        if(lu.players.length!==before) m._sd = true;
+      });
+    });
+  }
 }
 async function saveTeams(silent){
   const dirty = state.teams.filter(t=>t._dirty);
@@ -221,6 +244,13 @@ async function saveTeams(silent){
                withdrawn:!!withdrawn, withdrawn_note:withdrawn_note||null };
     }));
     dirty.forEach(t=>delete t._dirty);
+    // editPlayers()で選手を削除したとき、出場記録の無いメンバー表の行も一緒に消しているので
+    // （台帳の保存と同時に）そのぶんの試合データも保存する
+    const dirtyMatches = state.matches.filter(m=>m._sd);
+    if(dirtyMatches.length){
+      await DB.upsert("gn_matches", dirtyMatches.map(stripMatch));
+      dirtyMatches.forEach(m=>delete m._sd);
+    }
     if(!silent){ toast("保存しました"); go("t"); }
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
 }

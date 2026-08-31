@@ -783,6 +783,7 @@ function tabAppearances(){
       return s;
     };
     state.matches.forEach(m=>{
+      if(!isDone(m)) return;   // 未実施の試合（予定メンバー表だけの状態）は出場記録に数えない
       ["H","A"].forEach(side=>{
         if(resolveSlot(m, side).id !== t.id) return;
         const lu = m.lineups && m.lineups[side];
