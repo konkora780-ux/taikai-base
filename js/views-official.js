@@ -382,6 +382,19 @@ function viewSettings(){
         <input class="in" type="date" value="${esc(cfg.dateEnd||"")}" onchange="cfg_set('dateEnd',this.value)">
       </div>
     </div>
+    <div class="card">
+      <label class="f">👥 登録できる人数（① 選手登録・② メンバー登録・③ スタメン）</label>
+      <div class="row2">
+        <div><div class="hint" style="margin:0 0 4px">① 選手登録</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.registerLimit||""}"
+          onchange="cfg_set('registerLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
+        <div><div class="hint" style="margin:0 0 4px">② メンバー登録</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.matchLimit??""}"
+          onchange="cfg_set('matchLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
+        <div><div class="hint" style="margin:0 0 4px">③ スタメン</div><input class="in" type="number" min="1" value="${startCountOf(t)}"
+          onchange="cfg_set('startCount',this.value===''?null:Math.max(1,+this.value));render()"></div>
+      </div>
+      <p class="hint">① 大会に登録できる選手の人数（例：25名）。② その中から1試合に登録できる人数（例：20名）。③ ②の中からスタメンにする人数（例：11名）。<b>②の残りは自動でサブ</b>になります${subLimitOf(t)!==null?`（いまの設定ではサブ${subLimitOf(t)}名まで）`:""}。空欄は「上限なし」です。</p>
+      ${memberCountWarnings(t).map(w=>`<div class="callout" style="margin-top:6px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ ${esc(w)}</div>`).join("")}
+    </div>
     ${blocksOf(t).length ? `<div class="card">
       <label class="f">リーグ（部・組）ごとの設定</label>
       <p class="hint" style="margin:0 0 10px">各リーグに <b style="color:var(--ok)">▲自動昇格</b> ／ <b style="color:#1c8f6a">△昇格入れ替え戦</b> ／ <b style="color:#b8760a">▽降格入れ替え戦</b> ／ <b style="color:var(--bad)">▼自動降格</b> の数を決められます（0でなし）。1部は降格だけ、2部は昇格だけ、のように別々にできます。自動と入れ替え戦の混在もOK。</p>
@@ -442,19 +455,6 @@ function viewSettings(){
         <div><div class="hint" style="margin:0 0 4px">引分</div><input class="in" type="number" value="${cfg.draw}" onchange="cfg_set('draw',+this.value)"></div>
         <div><div class="hint" style="margin:0 0 4px">負け</div><input class="in" type="number" value="${cfg.lose}" onchange="cfg_set('lose',+this.value)"></div>
       </div>
-    </div>
-    <div class="card">
-      <label class="f">登録できる人数</label>
-      <div class="row2">
-        <div><div class="hint" style="margin:0 0 4px">① 選手登録</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.registerLimit||""}"
-          onchange="cfg_set('registerLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
-        <div><div class="hint" style="margin:0 0 4px">② メンバー登録</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.matchLimit??""}"
-          onchange="cfg_set('matchLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
-        <div><div class="hint" style="margin:0 0 4px">③ スタメン</div><input class="in" type="number" min="1" value="${startCountOf(t)}"
-          onchange="cfg_set('startCount',this.value===''?null:Math.max(1,+this.value));render()"></div>
-      </div>
-      <p class="hint">① 大会に登録できる選手の人数（例：25名）。② その中から1試合に登録できる人数（例：20名）。③ ②の中からスタメンにする人数（例：11名）。<b>②の残りは自動でサブ</b>になります${subLimitOf(t)!==null?`（いまの設定ではサブ${subLimitOf(t)}名まで）`:""}。空欄は「上限なし」です。</p>
-      ${memberCountWarnings(t).map(w=>`<div class="callout" style="margin-top:6px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ ${esc(w)}</div>`).join("")}
     </div>
     <div class="card">
       <label class="f">選手登録の締切（任意）</label>
