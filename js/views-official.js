@@ -256,6 +256,68 @@ async function saveOfficial(silent){
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
 }
 
+/* ---------- 右上のサイン欄：スマホで指（PCはマウス）で手書きする ---------- */
+function openSignPad(key){
+  if(state.officialReadOnly || !state.official) return;
+  const slot = SIGN_SLOTS.find(s=>s[0]===key); if(!slot) return;
+  const had = !!(state.official.signs && state.official.signs[key]);
+  const el = document.createElement("div"); el.className = "modal";
+  el.innerHTML = `<div class="sheet">
+    <h3>✍ ${esc(slot[1])}のサイン</h3>
+    <p class="hint">下の白い枠に、指でサインしてください。書き直すときは「クリア」を押します。</p>
+    <div class="signpad-wrap"><div class="signpad-line"></div><canvas class="signpad"></canvas></div>
+    <div class="btnrow">
+      <button class="btn sec sm" style="flex:1" data-act="clear">クリア</button>
+      ${had?`<button class="btn sec sm" style="flex:1" data-act="del">サインを消す</button>`:""}
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost" style="flex:1" data-act="close">やめる</button>
+      <button class="btn" style="flex:1" data-act="ok">この枠に入れる</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  const cv = el.querySelector("canvas"), ctx = cv.getContext("2d");
+  // 画面の大きさに合わせて描画用の画素数を決める（高精細画面でも線がぼやけないように）
+  const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio||1, 3);
+  cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+  ctx.scale(dpr,dpr); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#000";
+  ctx.lineWidth = Math.max(2.5, r.width/150);
+  let drawing = false, drawn = false, last = null;
+  const at = e=>{ const b = cv.getBoundingClientRect(); return { x:e.clientX-b.left, y:e.clientY-b.top }; };
+  cv.addEventListener("pointerdown", e=>{
+    e.preventDefault(); cv.setPointerCapture(e.pointerId); drawing = true; last = at(e);
+    ctx.beginPath(); ctx.arc(last.x,last.y,ctx.lineWidth/2,0,Math.PI*2); ctx.fillStyle="#000"; ctx.fill(); drawn = true;
+  });
+  cv.addEventListener("pointermove", e=>{
+    if(!drawing) return; e.preventDefault();
+    const p = at(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last = p;
+  });
+  const end = ()=>{ drawing = false; };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  const close = ()=> el.remove();
+  el.addEventListener("click", async e=>{
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if(e.target===el || act==="close") return close();
+    if(act==="clear"){ ctx.clearRect(0,0,cv.width,cv.height); drawn = false; return; }
+    if(act==="del"){
+      if(!confirm(`${slot[1]}のサインを消します。よろしいですか？`)) return;
+      delete state.official.signs[key]; close(); render(); await saveOfficial(true); toast("サインを消しました"); return;
+    }
+    if(act==="ok"){
+      if(!drawn) return toast("枠の中にサインを書いてください");
+      state.official.signs = Object.assign({}, state.official.signs, { [key]: signToPng(cv) });
+      close(); render(); await saveOfficial(true); toast(`${slot[1]}のサインを保存しました`);
+    }
+  });
+}
+/* 保存用に縮小した白抜き(透明背景)PNGにする。保存データを軽くするため最大幅480px */
+function signToPng(cv){
+  const W = Math.min(480, cv.width), H = Math.round(cv.height*W/cv.width);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  c.getContext("2d").drawImage(cv, 0, 0, W, H);
+  return c.toDataURL("image/png");
+}
+
 /* ---------- 大会の設定 ---------- */
 function viewSettings(){
   const t = state.t, cfg = cfgOf(t), sp = sportOf(t);
