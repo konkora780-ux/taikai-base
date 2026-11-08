@@ -1390,7 +1390,13 @@ function stripMatch(m){
 async function openMatchHistory(){
   const m = curMatch(); if(!m) return;
   const el = document.createElement("div"); el.className="modal";
-  el.innerHTML = `<div class="sheet"><h3>変更履歴</h3>
+  /* 履歴が長くても閉じられるよう、上にも「✕ 閉じる」を置き、外側の暗い所を押しても閉じる */
+  el.addEventListener("click", e=>{ if(e.target===el) el.remove(); });
+  el.innerHTML = `<div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+      <h3 style="margin:0">変更履歴</h3>
+      <button class="btn ghost sm" onclick="this.closest('.modal').remove()">✕ 閉じる</button>
+    </div>
     <div id="mh-body" class="hint">読み込み中…</div>
     <div class="btnrow"><button class="btn ghost" onclick="this.closest('.modal').remove()">閉じる</button></div>
   </div>`;

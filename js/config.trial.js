@@ -128,10 +128,15 @@ function toast(msg){
    全モーダルは class="modal" で document.body へappendされ、
    this.closest('.modal').remove() で閉じられる、という統一パターンなので、
    ここ一箇所でフォーカストラップ／Escで閉じる／閉じた後のフォーカス復帰／
-   role="dialog"付与を全モーダル共通で行う。個々のモーダルの記述は変更不要。 */
+   role="dialog"付与を全モーダル共通で行う。個々のモーダルの記述は変更不要。
+   さらに、開くたびにブラウザの履歴へ1つ積み、スマホ・ブラウザの「戻る」で
+   ページごと離れずにモーダルだけが閉じるようにする。 */
 (function(){
   const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   const open = new Map();
+  let seq = 0, skipPop = 0;
+  const pendingPush = [];
+  function pushModal(id){ try{ history.pushState({ tbModal:id }, ""); }catch(_){} }
   function onKeydown(e){
     const el = e.currentTarget;
     if(e.key === "Escape"){ e.stopPropagation(); el.remove(); return; }
@@ -147,13 +152,18 @@ function toast(msg){
     el.setAttribute("aria-modal","true");
     if(!el.hasAttribute("tabindex")) el.setAttribute("tabindex","-1");
     el.addEventListener("keydown", onKeydown);
-    open.set(el, { prevFocus: document.activeElement });
+    const id = ++seq;
+    /* 直前に閉じたモーダルの「履歴の取り消し」が終わる前なら、終わってから積む */
+    if(skipPop > 0) pendingPush.push(id); else pushModal(id);
+    open.set(el, { prevFocus: document.activeElement, id });
     const first = el.querySelector(FOCUSABLE);
     (first || el).focus();
   }
   function onRemoved(el){
     const info = open.get(el); if(!info) return;
     open.delete(el);
+    /* ボタン等で閉じたときは、開いたときに積んだ履歴を取り消す（戻るが1回空振りしないように） */
+    if(!info.byPop && history.state && history.state.tbModal === info.id){ skipPop++; history.back(); }
     const pf = info.prevFocus;
     if(pf && document.body.contains(pf) && typeof pf.focus === "function") pf.focus();
   }
@@ -163,6 +173,22 @@ function toast(msg){
       m.removedNodes.forEach(n=>{ if(n.nodeType===1 && n.classList && n.classList.contains("modal")) onRemoved(n); });
     }
   }).observe(document.body, { childList:true });
+  /* ブラウザの「戻る」→ いちばん上のモーダルを閉じる */
+  window.addEventListener("popstate", ()=>{
+    if(skipPop > 0){
+      skipPop--;
+      if(skipPop === 0){
+        const ids = new Set([...open.values()].map(v=>v.id));
+        pendingPush.splice(0).forEach(id=>{ if(ids.has(id)) pushModal(id); });
+      }
+      return;
+    }
+    const els = [...open.keys()];
+    const top = els[els.length-1];
+    if(!top) return;
+    open.get(top).byPop = true;
+    top.remove();
+  });
 })();
 
 /* ---------- 状態 ---------- */
