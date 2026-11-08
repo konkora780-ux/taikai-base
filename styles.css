@@ -654,6 +654,20 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
   font-size:13px;font-weight:800;color:#c2cbd6;background:#fff;}
 .capbtn.on{background:var(--gold);border-color:var(--gold);color:#fff;}
 
+/* ===== 記入リンク：試合ごとのメンバー ===== */
+.entrymatch{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;
+  background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;margin-bottom:6px;font:inherit;color:inherit;cursor:pointer;}
+.entrymatch small{color:var(--sub);font-size:12px;}
+.entrymatch.on{border-color:var(--accent2);background:var(--accentbg);}
+.entrymatch .tag{flex-shrink:0;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:#f1f3f7;color:var(--sub);}
+.entrymatch .tag.ok{background:#e3f6ea;color:#1c7a43;}
+.rolesel{display:flex;gap:3px;flex-shrink:0;}
+.rolesel button{padding:6px 7px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:#9aa5b4;font-size:12px;font-weight:700;font-family:inherit;}
+.rolesel button.on{background:#f1f3f7;color:var(--sub);}
+.rolesel button.on.st{background:var(--accentbg);border-color:var(--accent2);color:var(--accent);}
+.rolesel button.on.sb{background:#fff7e0;border-color:#f0d9a0;color:#9a6b00;}
+.rolesel button:disabled,.capbtn:disabled{opacity:.5;}
+
 /* ===== 選手をえらぶリスト ===== */
 .picklist{max-height:52vh;overflow-y:auto;margin:4px 0 6px;}
 .pickrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;

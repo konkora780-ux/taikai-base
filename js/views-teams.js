@@ -1121,7 +1121,7 @@ function syncLineup(side){
     pos:p.pos||"", grade:p.grade||null, role:"sub", captain:false, order:lu.players.length }); });
   const keep = new Set(players.map(p=>p.id));
   lu.players = lu.players.filter(p=> keep.has(p.pid));
-  render(); toast("エントリーと合わせました");
+  luTouch(side); render(); toast("エントリーと合わせました");
 }
 function curMatchAny(){ return state.matches.find(x=>x.id===state.matchId); }
 function orderedLineup(lu){
@@ -1141,7 +1141,7 @@ function viewLineup(){
   const lu = m.lineups[side];
   const { starters, subs, out } = orderedLineup(lu);
   const sp = sportOf(state.t);
-  const need = sp===SPORTS.futsal ? 5 : 11;
+  const need = startCountOf(state.t), subMax = subLimitOf(state.t);
 
   const teamId = side==="H" ? H.id : A.id;
   const suspHere = new Set();
@@ -1167,6 +1167,10 @@ function viewLineup(){
   };
   const warn = starters.length!==need
     ? `<span style="color:var(--warn)">スタメン ${starters.length}／${need}</span>` : `スタメン ${starters.length}`;
+  const subWarn = subMax!==null && subs.length>subMax
+    ? `<span style="color:var(--warn)">控え ${subs.length}／上限${subMax}</span>` : `控え ${subs.length}`;
+  const byTeam = lu.by==="team" && lu.submitted_at
+    ? `<div class="callout ok" style="margin-bottom:8px">✅ このメンバーはチームが記入リンクで提出しました（${esc(fmtStamp(lu.submitted_at))}）。直すと運営の内容が優先されます。</div>` : "";
 
   return `<div class="tourwrap">`
   + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"go('t')",
@@ -1178,8 +1182,9 @@ function viewLineup(){
     </div>
     <div class="screen noprint">
       <p class="lead">この試合に出る選手を選びます。ボタンで「スタメン／控え／外す」を切り替え、背番号・位置・キャプテンを決めます。ここで作った顔ぶれは公式記録に取り込めます。</p>
+      ${byTeam}
       <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div><b>${warn}</b> <span style="color:var(--sub)">・控え ${subs.length}</span></div>
+        <div><b>${warn}</b> <span style="color:var(--sub)">・${subWarn}</span></div>
         <button class="btn ghost sm" onclick="syncLineup('${side}')">エントリーと合わせる</button>
       </div>
       <label class="f">監督</label>
@@ -1209,17 +1214,20 @@ function luPlayer(side, pid){
 function cycleRole(side, pid){
   const p = luPlayer(side, pid); if(!p) return;
   p.role = { sub:"start", start:"out", out:"sub" }[p.role] || "start";
+  luTouch(side);
   if(p.role!=="start") p.captain = false;
   render();
 }
-function setLu(side, pid, k, v){ const p = luPlayer(side, pid); if(p){ p[k]=v; } }
-function setCoach(side, v){ const m=curMatchAny(); if(m?.lineups?.[side]) m.lineups[side].coach = v; }
+/* 運営が手で直した印（チームの提出より新しければ、運営の内容を優先する） */
+function luTouch(side){ const lu = curMatchAny()?.lineups?.[side]; if(lu) lu.at = new Date().toISOString(); }
+function setLu(side, pid, k, v){ const p = luPlayer(side, pid); if(p){ p[k]=v; luTouch(side); } }
+function setCoach(side, v){ const m=curMatchAny(); if(m?.lineups?.[side]){ m.lineups[side].coach = v; luTouch(side); } }
 function setCaptain(side, pid){
   const m = curMatchAny(); const lu = m?.lineups?.[side]; if(!lu) return;
   const p = lu.players.find(x=>x.pid===pid); const was = p.captain;
   lu.players.forEach(x=> x.captain=false);
   if(!was){ p.captain = true; if(p.role==="out") p.role="start"; }
-  render();
+  luTouch(side); render();
 }
 function openLineup(id){
   state.matchId = id;
