@@ -1611,7 +1611,32 @@ function sheetFields(){
   // 試合時間・備考
   F.push(box("timeText", 78,568.1, 82,70, {align:"l"}));
   F.push(box("note",     78,568.1, 69,57, {align:"l"}));
+  F.push(signBoxesHTML(o));
   return F.join("");
+}
+/* --- 右上のサイン欄（マッチコミッショナー／主審／運営担当・会場長）。紙の様式と同じく3枠横並び ---
+   サインは指で書いた画像(PNGのdata URL)を official.signs に入れる。枠をタップで手書き画面を開く */
+const SIGN_SLOTS = [["mc","マッチコミッショナー",6],["ref","主審",7.5],["admin","運営担当／会場長",6]];
+const SIGN_BOX = { x1:370, x2:568.1, top:814, mid:802, bot:772 };
+function signBoxesHTML(o){
+  const B = SIGN_BOX, S = SHEET.H, w = (B.x2-B.x1)/3;
+  const signs = (o && o.signs) || {};
+  const ln = (l,t,wd,ht)=> `<i class="ln" style="left:${pt(l)};top:${pt(S-t)};width:${pt(wd)};height:${pt(ht)}"></i>`;
+  let out = ln(B.x1,B.top,B.x2-B.x1,.5) + ln(B.x1,B.mid,B.x2-B.x1,.5) + ln(B.x1,B.bot,B.x2-B.x1,.5);
+  for(let i=0;i<=3;i++) out += ln(B.x1+w*i, B.top, .5, B.top-B.bot);
+  SIGN_SLOTS.forEach(([k,label,size],i)=>{
+    const x = B.x1 + w*i;
+    out += `<span class="lbc" style="left:${pt(x+w/2)};top:${pt(S-(B.top+B.mid)/2-size*0.5)};font-size:${pt(size)}">${esc(label)}</span>`;
+    const img = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(signs[k]||"") ? signs[k] : "";   // 画像データ以外は表示しない
+    const pos = `left:${pt(x+1)};top:${pt(S-B.mid+1)};width:${pt(w-2)};height:${pt(B.mid-B.bot-2)}`;
+    if(state.officialReadOnly){   // 一般公開の閲覧ビューでは、サインの画像そのものは出さない（悪用防止）
+      out += `<div class="signcell ro" style="${pos}">${img?"署名済":""}</div>`;
+    } else {
+      out += `<div class="signcell${img?" has":""}" data-sign="${k}" style="${pos}" onclick="openSignPad('${k}')">`
+        + (img ? `<img src="${esc(img)}" alt="${esc(label)}のサイン">` : `<span class="noprint">タップして<br>サイン</span>`) + `</div>`;
+    }
+  });
+  return out;
 }
 /* --- 2枚目：15点目以降の「得点経過」だけを様式を保って続ける --- */
 const P2_MAX = 28;                 // 1枚目14＋2枚目14

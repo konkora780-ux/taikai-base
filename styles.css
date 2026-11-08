@@ -599,6 +599,16 @@ td.pt{font-weight:800;}
 .sheet-a4 .fx.pickable{cursor:pointer;}
 .sheet-a4 .fx.pickable:hover{background:#fffbe9;}
 .sheet-a4 .kicklab{overflow:hidden;text-overflow:ellipsis;}
+/* 右上のサイン欄：枠をタップで手書き。未記入のときだけ薄い案内を出す（印刷では消える） */
+.sheet-a4 .signcell{position:absolute;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#9aa4b2;font-size:6pt;line-height:1.2;text-align:center;}
+.sheet-a4 .signcell:not(.has):not(.ro){background:#f4f8ff;}
+.sheet-a4 .signcell.ro{cursor:default;color:#000;font-size:7pt;}
+.sheet-a4 .signcell img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;}
+/* 手書きサインの画面 */
+.signpad-wrap{position:relative;border:2px dashed #b9c3d1;border-radius:12px;background:#fff;margin:10px 0;}
+.signpad{display:block;width:100%;aspect-ratio:12/5;touch-action:none;cursor:crosshair;border-radius:10px;}
+.signpad-line{position:absolute;left:8%;right:8%;bottom:22%;border-top:1px solid #e1e6ee;pointer-events:none;}
 .sheet-a4 .fx:focus{outline:none;background:var(--accentbg);overflow:visible;text-overflow:clip;}
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
@@ -675,6 +685,7 @@ td.pt{font-weight:800;}
   .sheetscale{width:595.28pt !important;height:842pt !important;}
   .sheet-a4{transform:none !important;box-shadow:none;}
   .sheet-a4 .fx{background:transparent !important;}
+  .sheet-a4 .signcell{background:transparent !important;}
   .sheetwrap.page2{break-before:page;page-break-before:always;margin-top:0 !important;}
 }
 
