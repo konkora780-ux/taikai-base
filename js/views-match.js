@@ -877,6 +877,18 @@ function viewMatch(){
       - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16) : "";
 
   const periods = PERIOD_REG.concat(matchETPlayed(m)?PERIOD_ET:[]);
+  // 得点者を記録する競技では、スコアは「得点の記録」から自動で増減させる（＋－は出さない）。
+  // ただし不戦勝・没収試合など規定点を入れる決着のときは、記録が無いので＋－を出す。
+  const byEvents = sp.scorers && !m.result_type;
+  const evH = eventScore(m,"H"), evA = eventScore(m,"A");
+  const evMismatch = byEvents && ((m.home_score??0)!==evH || (m.away_score??0)!==evA);
+  const scoreCell = side => byEvents
+    ? `<div class="stepper"><span class="v">${m[side+"_score"]??0}</span></div>`
+    : `<div class="stepper">
+            <button onclick="bump('${side}',-1)">−</button>
+            <span class="v">${m[side+"_score"]??0}</span>
+            <button onclick="bump('${side}',1)">＋</button>
+          </div>`;
   const evList = (m.events||[]).map((ev,i)=>{
     const tid = ev.team==="H" ? H.id : A.id;
     const tn  = ev.team==="H" ? H.label : A.label;
@@ -900,7 +912,7 @@ function viewMatch(){
         <span class="tx">${tx}</span>
         <span class="mi">${mi}</span>
       </button>
-      <button class="del" onclick="delEvent(${i})">削除</button>
+      <button class="del" onclick="delEvent(${i},true)" aria-label="この記録を削除" title="削除">✖</button>
     </div>`;
   }).join("") || `<div class="hint" style="padding:8px 2px">まだ記録がありません。</div>`;
 
@@ -916,26 +928,21 @@ function viewMatch(){
       <div class="scoreline">
         <div class="team">
           <div class="tn">${esc(H.label)}</div>
-          <div class="stepper">
-            <button onclick="bump('home',-1)">−</button>
-            <span class="v">${m.home_score??0}</span>
-            <button onclick="bump('home',1)">＋</button>
-          </div>
+          ${scoreCell('home')}
         </div>
         <div class="vs">－</div>
         <div class="team">
           <div class="tn">${esc(A.label)}</div>
-          <div class="stepper">
-            <button onclick="bump('away',-1)">−</button>
-            <span class="v">${m.away_score??0}</span>
-            <button onclick="bump('away',1)">＋</button>
-          </div>
+          ${scoreCell('away')}
         </div>
       </div>
       <div class="btnrow noprint" style="margin-top:10px">
         <button class="btn sec sm" style="width:auto;margin:0 auto" onclick="saveMatch(true)">💾 ここまでを保存（この画面のまま）</button>
       </div>
-      <p class="hint" style="text-align:center;margin-top:2px">得点の＋－は画面には反映されますが、この保存を押すまでほかの人には伝わりません。</p>
+      ${byEvents ? `<p class="hint" style="text-align:center;margin-top:2px">スコアは下の「⚽ 得点」で追加すると自動で増え、記録の ✖ で消すと減ります。保存を押すまでほかの人には伝わりません。</p>
+      ${evMismatch ? `<div class="hint" style="text-align:center;margin-top:4px;color:var(--bad)">スコアと得点の記録の数が合っていません（記録どおりなら ${evH} － ${evA}）。
+        <button class="btn ghost sm" style="width:auto;margin-top:4px" onclick="syncScoreToEvents()">記録に合わせる</button></div>` : ""}`
+      : `<p class="hint" style="text-align:center;margin-top:2px">得点の＋－は画面には反映されますが、この保存を押すまでほかの人には伝わりません。</p>`}
       <div class="seg" style="margin-top:14px">
         ${[["todo","未実施"],["live","試合中"],["done","🏁 終了"],["postponed","延期"],["cancelled","中止"]].map(([k,l])=>
           `<button class="${m.status===k?"on":""}" onclick="${k==="done"?"setMatchDone()":`setStatus('${k}')`}">${esc(l)}</button>`).join("")}
@@ -1114,9 +1121,20 @@ function editEvent(i){
   if(ev.type==="sub") openSubSheet(i);
   else openEventSheet((ev.type==="goal"||ev.type==="pk"||ev.type==="og") ? "goal" : "card", i);
 }
-function delEvent(i){
+/* 得点の記録から数えたスコア（オウンゴールは相手側の点） */
+function eventScore(m, side){
+  return (m.events||[]).filter(e=>(e.type==="goal"||e.type==="pk"||e.type==="og") && scoringSideOf(e)===side).length;
+}
+/* スコアを得点の記録の数に合わせる（以前に＋－で入れた試合などでずれているとき用） */
+function syncScoreToEvents(){
+  const m = curMatch(); if(!m) return;
+  m.home_score = eventScore(m,"H"); m.away_score = eventScore(m,"A");
+  render();
+}
+function delEvent(i, ask){
   const m = curMatch(); if(!m) return;
   const ev = (m.events||[])[i];
+  if(ask && ev && !confirm("この記録を削除しますか？（得点の場合はスコアも1点減ります）")) return;
   // 得点イベントを消すときは合計点も1つ戻す（前後半スコアと合計をそろえる）
   if(ev && (ev.type==="goal"||ev.type==="pk"||ev.type==="og")){
     const scoringSide = ev.type==="og" ? (ev.team==="H"?"away":"home") : (ev.team==="H"?"home":"away");
