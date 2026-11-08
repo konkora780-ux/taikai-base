@@ -1019,8 +1019,8 @@ function viewMatch(){
 
     ${(()=>{ const of=m.official||{}; const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
       <summary>📋 公式記録の詳細（審判・天候など・あとからでもOK）</summary>
-      <label class="f">試合形式</label>
-      <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）40分ハーフ / 予選リーグ">
+      <label class="f">回戦（大会名の右に入ります）</label>
+      <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）決勝 / 予選リーグ">
       <label class="f">この試合だけ時間が違う場合（決勝だけ40分など・空なら大会の設定${ov.halfMin?"（"+ov.halfMin+"分ハーフ）":""}のまま）</label>
       <div class="row2">
         <div><input class="in" type="number" inputmode="numeric" placeholder="前後半 例）40" value="${meta.halfMin??""}" oninput="setMatchHalfMin('halfMin',this.value)"></div>
@@ -1035,22 +1035,22 @@ function viewMatch(){
         <div><label class="f">副審2</label><input class="in" value="${esc(of.ar2||"")}" oninput="setOfficialField('ar2',this.value)"></div>
       </div>
       <div class="row2">
-        <div><label class="f">運営責任者</label><input class="in" value="${esc(of.admin||"")}" oninput="setOfficialField('admin',this.value)"></div>
-        <div><label class="f">記録担当</label><input class="in" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
+        <div><label class="f">記録員</label><input class="in" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
+        <div><label class="f">観衆（人）</label><input class="in" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
       </div>
       <div class="row2">
         <div><label class="f">天候</label><input class="in" value="${esc(of.weather||"")}" oninput="setOfficialField('weather',this.value)"></div>
-        <div><label class="f">気温</label><input class="in" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)"></div>
+        <div><label class="f">気温（℃）</label><input class="in" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)"></div>
       </div>
       <div class="row2">
-        <div><label class="f">湿度</label><input class="in" value="${esc(of.humid||"")}" oninput="setOfficialField('humid',this.value)"></div>
         <div><label class="f">風</label><input class="in" value="${esc(of.wind||"")}" oninput="setOfficialField('wind',this.value)"></div>
+        <div><label class="f">ピッチ表面</label><input class="in" value="${esc(of.pitch||"")}" oninput="setOfficialField('pitch',this.value)"></div>
       </div>
       <div class="row2">
-        <div><label class="f">観客数</label><input class="in" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
-        <div><label class="f">ピッチ(芝)</label><input class="in" value="${esc(of.pitch||"")}" oninput="setOfficialField('pitch',this.value)"></div>
+        <div><label class="f">ピッチ状態</label><input class="in" value="${esc(of.pitchCond||"")}" oninput="setOfficialField('pitchCond',this.value)"></div>
+        <div><label class="f">主催団体名</label><input class="in" value="${esc(of.org||"")}" oninput="setOfficialField('org',this.value)"></div>
       </div>
-      <p class="hint">ここで入れた内容は公式記録の上部にそのまま入ります。日時・会場・得点・メンバーは下と自動で連動します。</p>
+      <p class="hint">ここで入れた内容は公式記録の上部にそのまま入ります。期日・キックオフ時刻・会場・試合時間・得点・メンバーは自動で入ります。マッチコミッショナーと運営担当／会場長は、公式記録の右上のサイン欄に手書きします。</p>
     </details>`; })()}
 
     </fieldset>
