@@ -545,7 +545,7 @@ td.pt{font-weight:800;}
 .evrow .ic{width:22px;text-align:center;flex-shrink:0;font-size:15px;}
 .evrow .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .evrow .mi{color:var(--sub);font-size:12px;flex-shrink:0;}
-.evrow .del{color:var(--bad);font-size:12px;font-weight:700;padding:4px 6px;flex-shrink:0;}
+.evrow .del{color:var(--bad);font-size:16px;font-weight:700;padding:4px 10px;flex-shrink:0;min-width:36px;min-height:36px;}
 
 /* ===== モーダル ===== */
 .modal{position:fixed;inset:0;z-index:100;background:rgba(15,22,35,.45);
