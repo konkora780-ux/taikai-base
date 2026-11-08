@@ -1141,7 +1141,7 @@ function viewLineup(){
   const lu = m.lineups[side];
   const { starters, subs, out } = orderedLineup(lu);
   const sp = sportOf(state.t);
-  const need = startCountOf(state.t), subMax = subLimitOf(state.t);
+  const need = startCountOf(state.t), memMax = matchLimitOf(state.t);
 
   const teamId = side==="H" ? H.id : A.id;
   const suspHere = new Set();
@@ -1167,8 +1167,9 @@ function viewLineup(){
   };
   const warn = starters.length!==need
     ? `<span style="color:var(--warn)">スタメン ${starters.length}／${need}</span>` : `スタメン ${starters.length}`;
-  const subWarn = subMax!==null && subs.length>subMax
-    ? `<span style="color:var(--warn)">控え ${subs.length}／上限${subMax}</span>` : `控え ${subs.length}`;
+  const memN = starters.length + subs.length;
+  const subWarn = memMax!==null
+    ? `控え ${subs.length} ・ <span style="${memN>memMax?"color:var(--warn)":""}">メンバー ${memN}／${memMax}</span>` : `控え ${subs.length}`;
   const byTeam = lu.by==="team" && lu.submitted_at
     ? `<div class="callout ok" style="margin-bottom:8px">✅ このメンバーはチームが記入リンクで提出しました（${esc(fmtStamp(lu.submitted_at))}）。直すと運営の内容が優先されます。</div>` : "";
 

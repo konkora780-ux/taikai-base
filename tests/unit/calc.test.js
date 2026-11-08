@@ -183,13 +183,19 @@ test("お知らせの公開期間：公開状態と開始・終了日時の組�
 // このテストはJSのロジックだけを検証するため対象外。setup-14.sqlの確認クエリで
 // トリガー作成済みであることを確認済み（実データでの記録はSupabase側の責務）。
 
-test("試合メンバーの人数：未設定ならサッカー11名・サブ無制限、設定すればその人数", ()=>{
+test("試合メンバーの人数：未設定ならスタメン11名・メンバー無制限。サブは「メンバー登録－スタメン」で決まる", ()=>{
   const ctx = setup();
   assert.equal(ctx.startCountOf(ctx.state.t), 11);
+  assert.equal(ctx.matchLimitOf(ctx.state.t), null);
   assert.equal(ctx.subLimitOf(ctx.state.t), null);
-  ctx.state.t.settings.startCount = 8; ctx.state.t.settings.subLimit = 9;
-  assert.equal(ctx.startCountOf(ctx.state.t), 8);
+  ctx.state.t.settings.registerLimit = 25; ctx.state.t.settings.matchLimit = 20;
   assert.equal(ctx.subLimitOf(ctx.state.t), 9);
+  assert.equal(ctx.memberCountWarnings(ctx.state.t).length, 0);
+  ctx.state.t.settings.matchLimit = 30;                     // 選手登録より多い
+  assert.equal(ctx.memberCountWarnings(ctx.state.t).length, 1);
+  ctx.state.t.settings.startCount = 8; ctx.state.t.settings.matchLimit = 18;
+  assert.equal(ctx.startCountOf(ctx.state.t), 8);
+  assert.equal(ctx.subLimitOf(ctx.state.t), 10);
   ctx.state.t = freshTournament(ctx, { sport:"futsal" });
   assert.equal(ctx.startCountOf(ctx.state.t), 5);
 });

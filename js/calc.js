@@ -28,18 +28,27 @@ function startCountOf(t){
   const n = num(cfgOf(t).startCount);
   return n>0 ? n : (sportOf(t)===SPORTS.futsal ? 5 : 11);
 }
-function subLimitOf(t){
-  const v = cfgOf(t).subLimit;
+/* メンバー登録（1試合に登録できる人数）。未設定なら上限なし（null）。サブは「メンバー登録－スタメン」で自動で決まる */
+function matchLimitOf(t){
+  const v = cfgOf(t).matchLimit;
   return (v===null || v===undefined || v==="") ? null : Math.max(0, num(v));
+}
+function subLimitOf(t){
+  const m = matchLimitOf(t);
+  return m===null ? null : Math.max(0, m - startCountOf(t));
 }
 /* 日時を「11/8(日) 10:30」の形に */
 function fmtStamp(iso){
   const d = new Date(iso); if(!iso || isNaN(d)) return "";
   return `${d.getMonth()+1}/${d.getDate()}(${"日月火水木金土"[d.getDay()]}) ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
-function lineupLimitText(t){
-  const s = startCountOf(t), b = subLimitOf(t);
-  return b===null ? `スタメン${s}名＋サブ（人数の上限なし）` : `${s+b}名（スタメン${s}名＋サブ${b}名まで）`;
+/* 人数の設定が食い違っていないか（運営の設定画面で注意を出す） */
+function memberCountWarnings(t){
+  const reg = Math.max(0, num(cfgOf(t).registerLimit)||0), m = matchLimitOf(t), s = startCountOf(t);
+  const w = [];
+  if(m!==null && reg>0 && m>reg) w.push(`メンバー登録（${m}名）が選手登録（${reg}名）より多くなっています`);
+  if(m!==null && m<s) w.push(`メンバー登録（${m}名）がスタメン（${s}名）より少なくなっています`);
+  return w;
 }
 /* チームが記入リンクで提出した試合メンバー（entry_lineups）を、運営のメンバー表（lineups）へ反映する。
    運営があとから手で直した側（lu.at が提出より新しい）はそのまま。運営の古い画面で上書きされても、次に読み込んだときに戻る */

@@ -3,7 +3,8 @@
 --
 -- 目的：
 --   各チームが、大会の記入リンク（チームごとのリンク＋6文字の記入コード）から、
---   大会登録メンバーの中で「この試合のスタメン・サブ」を選んで提出できるようにする。
+--   選手登録（大会）の中から「この試合のメンバー」を選び、さらにその中から
+--   スタメンを選んで提出できるようにする（メンバーのうちスタメン以外は自動でサブ）。
 --   提出した内容は運営の「メンバー表」に入り、公式記録の「メンバー表から取り込む」で使える。
 --
 -- 安全のしくみ（他チームに書き換えられないように）：
@@ -13,8 +14,8 @@
 --     サーバー側で確かめた、その1チーム分の欄だけ。相手チームの欄や
 --     得点・結果・公式記録には触れない。
 --   ・試合が「未実施」「延期」のときだけ受け付ける（試合中・終了後は運営だけが直せる）。
---   ・大会登録メンバーにいない選手は入れられない。人数は大会設定
---     （スタメン人数・サブの上限）と合っているかも確かめる。
+--   ・選手登録にいない選手は入れられない。人数は大会設定
+--     （メンバー登録の人数・スタメン人数）と合っているかも確かめる。
 --
 -- 実行方法：Supabase の SQL Editor にこのファイルの中身を全部貼り付けて「Run」。
 --   何度実行しても大丈夫です（同じ内容で上書きされるだけ）。
@@ -83,7 +84,7 @@ revoke all on function public.gn_slot_team(uuid, text, int) from public, anon, a
 
 -- ③ チームが試合メンバーを提出する関数
 --    返り値：'ok' / 'code'（コード違い・期限切れ・ロック中）/ 'notyours'（このチームの試合でない・対戦未確定）
---            / 'started'（試合が始まった・終わった）/ 'roster'（大会登録にいない選手）/ 'count'（人数が設定と合わない）
+--            / 'started'（試合が始まった・終わった）/ 'roster'（選手登録にいない選手）/ 'count'（人数が設定と合わない）
 create or replace function public.submit_match_lineup(p_team uuid, p_code text, p_match uuid, p_lineup jsonb)
  returns text
  language plpgsql
@@ -102,7 +103,7 @@ declare
   v_sport text;
   v_side text;
   v_need int;
-  v_sub_max int;
+  v_mem_max int;
   v_start int;
   v_sub int;
   v_rec jsonb;
@@ -137,7 +138,7 @@ begin
 
   if v_status is not null and v_status not in ('todo', 'postponed') then return 'started'; end if;
 
-  -- 中身の確認：選手の配列があり、全員が大会登録メンバーにいること
+  -- 中身の確認：選手の配列があり、全員が選手登録にいること
   if jsonb_typeof(p_lineup -> 'players') is distinct from 'array'
      or jsonb_array_length(p_lineup -> 'players') > 100 then return 'roster'; end if;
   if exists (
@@ -145,17 +146,18 @@ begin
     where not exists (select 1 from jsonb_array_elements(v_players) y where y ->> 'id' = x ->> 'pid')
   ) then return 'roster'; end if;
 
-  -- 人数：スタメンは設定どおり（未設定ならサッカー11・フットサル5）、サブは上限以下
+  -- 人数：メンバー登録（スタメン＋サブ）は設定の人数以下、スタメンは設定どおり（未設定ならサッカー11・フットサル5）。
+  --       サブは「メンバーのうちスタメン以外」なので、サブだけの上限は持たない
   select coalesce(settings, '{}'::jsonb), sport into v_settings, v_sport from gn_tournaments where id = v_match_tid;
   v_need := case when coalesce(v_settings ->> 'startCount', '') ~ '^[0-9]+$' and (v_settings ->> 'startCount')::int > 0
                  then (v_settings ->> 'startCount')::int
                  when v_sport = 'futsal' then 5 else 11 end;
-  v_sub_max := case when coalesce(v_settings ->> 'subLimit', '') ~ '^[0-9]+$' then (v_settings ->> 'subLimit')::int else null end;
+  v_mem_max := case when coalesce(v_settings ->> 'matchLimit', '') ~ '^[0-9]+$' then (v_settings ->> 'matchLimit')::int else null end;
   select count(*) filter (where x ->> 'role' = 'start'), count(*) filter (where x ->> 'role' = 'sub')
     into v_start, v_sub
     from jsonb_array_elements(p_lineup -> 'players') x;
   if v_start <> v_need then return 'count'; end if;
-  if v_sub_max is not null and v_sub > v_sub_max then return 'count'; end if;
+  if v_mem_max is not null and v_start + v_sub > v_mem_max then return 'count'; end if;
 
   -- 自チーム側の欄だけを書き換える（相手側・_meta（延長/PKの設定）はそのまま）
   v_rec := jsonb_build_object(

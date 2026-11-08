@@ -444,18 +444,17 @@ function viewSettings(){
       </div>
     </div>
     <div class="card">
-      <label class="f">登録人数の上限（任意）</label>
-      <input class="in" type="number" min="0" placeholder="空欄なら無制限" value="${cfg.registerLimit||""}"
-        onchange="cfg_set('registerLimit',this.value===''?null:Math.max(0,+this.value))">
-      <p class="hint">大会登録メンバーの上限です（例：25名）。台帳から選ぶときも、記入リンクで手入力するときも、この人数までになります。</p>
-      <label class="f">1試合のメンバー（スタメン／サブ）</label>
+      <label class="f">登録できる人数</label>
       <div class="row2">
-        <div><div class="hint" style="margin:0 0 4px">スタメン</div><input class="in" type="number" min="1" value="${startCountOf(t)}"
+        <div><div class="hint" style="margin:0 0 4px">① 選手登録</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.registerLimit||""}"
+          onchange="cfg_set('registerLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
+        <div><div class="hint" style="margin:0 0 4px">② メンバー登録</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.matchLimit??""}"
+          onchange="cfg_set('matchLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
+        <div><div class="hint" style="margin:0 0 4px">③ スタメン</div><input class="in" type="number" min="1" value="${startCountOf(t)}"
           onchange="cfg_set('startCount',this.value===''?null:Math.max(1,+this.value));render()"></div>
-        <div><div class="hint" style="margin:0 0 4px">サブの上限</div><input class="in" type="number" min="0" placeholder="無制限" value="${cfg.subLimit??""}"
-          onchange="cfg_set('subLimit',this.value===''?null:Math.max(0,+this.value));render()"></div>
       </div>
-      <p class="hint">試合登録は${lineupLimitText(t)}です。チームは記入リンクの「試合ごとのメンバー」で、大会登録メンバーの中からこの人数を選んで提出します。</p>
+      <p class="hint">① 大会に登録できる選手の人数（例：25名）。② その中から1試合に登録できる人数（例：20名）。③ ②の中からスタメンにする人数（例：11名）。<b>②の残りは自動でサブ</b>になります${subLimitOf(t)!==null?`（いまの設定ではサブ${subLimitOf(t)}名まで）`:""}。空欄は「上限なし」です。</p>
+      ${memberCountWarnings(t).map(w=>`<div class="callout" style="margin-top:6px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ ${esc(w)}</div>`).join("")}
     </div>
     <div class="card">
       <label class="f">選手登録の締切（任意）</label>
@@ -1107,7 +1106,7 @@ async function submitEntry(){
       no:(p.no===""||p.no==null)?null:num(p.no), name:(p.name||"").trim(),
       pos:p.pos||"", grade:p.grade?num(p.grade):null })).filter(p=>p.name);
   const limit = Math.max(0, num(cfgOf(e.t).registerLimit)||0);
-  if(limit>0 && players.length>limit){ toast(`大会登録は${limit}名までです（いま${players.length}名）`); return; }
+  if(limit>0 && players.length>limit){ toast(`選手登録は${limit}名までです（いま${players.length}名）`); return; }
   if(!players.length && !confirm("選手が1人も入力されていません。このまま提出しますか？")) return;
   try{
     const ok = await DB.submitRoster(e.team.id, code, players);
@@ -1140,14 +1139,24 @@ function entryPickMatch(id){
                role: c ? (c.role==="start"||c.role==="sub" ? c.role : "out") : "out", captain: !!(c && c.captain), order:i }; }) };
   render();
 }
-function entrySetRole(pid, role){
-  const p = state.entry?.lu?.players.find(x=>x.pid===pid); if(!p) return;
-  const t = state.entry.t, need = startCountOf(t), subMax = subLimitOf(t);
-  const cnt = r=> state.entry.lu.players.filter(x=>x.role===r && x.pid!==pid).length;
-  if(role==="start" && p.role!=="start" && cnt("start")>=need) return toast(`スタメンは${need}名までです`);
-  if(role==="sub" && p.role!=="sub" && subMax!==null && cnt("sub")>=subMax) return toast(`サブは${subMax}名までです`);
-  p.role = role; if(role!=="start") p.captain = false;
+/* メンバー（この試合に登録）に入れる／外す。スタメンでないメンバーは自動でサブ */
+function entryToggleMember(pid){
+  const lu = state.entry?.lu; const p = lu?.players.find(x=>x.pid===pid); if(!p) return;
+  if(p.role==="out"){
+    const max = matchLimitOf(state.entry.t);
+    if(max!==null && lu.players.filter(x=>x.role!=="out").length>=max) return toast(`メンバー登録は${max}名までです`);
+    p.role = "sub";
+  } else { p.role = "out"; p.captain = false; }
   render();
+}
+/* メンバーの中からスタメンにする／サブに戻す（メンバーでない選手を押すと、メンバーにしてからスタメンに） */
+function entryToggleStart(pid){
+  const lu = state.entry?.lu; const p = lu?.players.find(x=>x.pid===pid); if(!p) return;
+  const t = state.entry.t, need = startCountOf(t), max = matchLimitOf(t);
+  if(p.role==="start"){ p.role = "sub"; p.captain = false; return render(); }
+  if(lu.players.filter(x=>x.role==="start").length>=need) return toast(`スタメンは${need}名までです`);
+  if(p.role==="out" && max!==null && lu.players.filter(x=>x.role!=="out").length>=max) return toast(`メンバー登録は${max}名までです`);
+  p.role = "start"; render();
 }
 function entrySetCaptain(pid){
   const lu = state.entry?.lu; if(!lu) return;
@@ -1158,18 +1167,18 @@ async function submitEntryLineup(){
   const e = state.entry; if(!e || !e.lu || !e.matchId) return;
   const code = (document.getElementById("entrycode")?.value||"").trim().toUpperCase();
   if(!code) return toast("上の「記入コード」を入れてください");
-  const need = startCountOf(e.t), subMax = subLimitOf(e.t);
-  const st = e.lu.players.filter(p=>p.role==="start").length, sb2 = e.lu.players.filter(p=>p.role==="sub").length;
-  if(st!==need) return toast(`スタメンを${need}名にしてください（いま${st}名）`);
-  if(subMax!==null && sb2>subMax) return toast(`サブは${subMax}名までです（いま${sb2}名）`);
+  const need = startCountOf(e.t), max = matchLimitOf(e.t);
+  const st = e.lu.players.filter(p=>p.role==="start").length, mem = e.lu.players.filter(p=>p.role!=="out").length;
+  if(max!==null && mem>max) return toast(`メンバー登録は${max}名までです（いま${mem}名）`);
+  if(st!==need) return toast(`メンバーの中からスタメンを${need}名えらんでください（いま${st}名）`);
   const lineup = { coach:(e.lu.coach||"").trim(), players:e.lu.players.map(p=>({...p})) };
   try{
     const r = await DB.submitMatchLineup(e.team.id, code, e.matchId, lineup);
     const msg = { code:"記入コードが違うか、提出期限を過ぎています",
       notyours:"この試合は、まだ対戦チームが決まっていないか、このチームの試合ではありません",
       started:"試合が始まったため提出できません。変更は本部に伝えてください",
-      roster:"大会登録メンバーにいない選手が含まれています。先に「大会登録メンバー」を提出してください",
-      count:"人数が大会の設定と合いません" }[r];
+      roster:"選手登録にいない選手が含まれています。先に「① 選手登録」を提出してください",
+      count:"人数が大会の設定（メンバー登録・スタメン）と合いません" }[r];
     if(r!=="ok") return toast(msg || "提出できませんでした");
     const m = state.matches.find(x=>x.id===e.matchId), side = m && lineupSideOf(m, e.team.id);
     if(m && side){ const rec = Object.assign({}, lineup, { by:"team", submitted_at:new Date().toISOString() });
@@ -1180,9 +1189,9 @@ async function submitEntryLineup(){
 function entryMatchesHTML(){
   const e = state.entry;
   const list = entryTeamMatches();
-  const need = startCountOf(e.t), subMax = subLimitOf(e.t);
-  const head = `<div class="card"><div class="lead" style="margin:0">試合を選び、<b>大会登録メンバー</b>の中から<b>スタメン${need}名</b>と<b>サブ${subMax===null?"":subMax+"名まで"}</b>を選んで提出してください。試合が始まるまでは何度でも出し直せます。</div></div>`;
-  if(!(e.team.players||[]).length) return head + `<div class="empty">先に「大会登録メンバー」を提出してください。</div>`;
+  const need = startCountOf(e.t), max = matchLimitOf(e.t);
+  const head = `<div class="card"><div class="lead" style="margin:0">試合を選び、<b>選手登録</b>の中から<b>この試合のメンバー${max===null?"":`（${max}名まで）`}</b>を「メンバー」で選びます。次にメンバーの中から<b>スタメン${need}名</b>を「スタメン」で選んでください。<b>残りのメンバーは自動でサブ</b>になります。試合が始まるまでは何度でも出し直せます。</div></div>`;
+  if(!(e.team.players||[]).length) return head + `<div class="empty">先に「① 選手登録」を提出してください。</div>`;
   if(!list.length) return head + `<div class="empty">このチームの試合はまだありません。<br>トーナメントの2回戦以降は、前の試合が終わって対戦が決まると出てきます。</div>`;
   const lu = e.lu, sel = list.find(x=>x.m.id===e.matchId);
   const rowsList = list.map(({m,side})=>{
@@ -1198,23 +1207,22 @@ function entryMatchesHTML(){
   if(sel && lu){
     const open = lineupOpen(sel.m);
     const st = lu.players.filter(p=>p.role==="start").length, sb2 = lu.players.filter(p=>p.role==="sub").length;
-    const ok = st===need && (subMax===null || sb2<=subMax);
+    const mem = st + sb2;
+    const ok = st===need && (max===null || mem<=max);
     const row = p=>`<div class="lurow">
       <span class="lunm">${p.no!==""&&p.no!=null?`<b>${esc(String(p.no))}</b> `:""}${esc(p.name)}${p.pos?` <small>${esc(p.pos)}</small>`:""}</span>
       <div class="rolesel">
-        <button class="${p.role==="start"?"on st":""}" ${open?"":"disabled"} onclick="entrySetRole('${p.pid}','start')">スタメン</button>
-        <button class="${p.role==="sub"?"on sb":""}" ${open?"":"disabled"} onclick="entrySetRole('${p.pid}','sub')">サブ</button>
-        <button class="${p.role==="out"?"on":""}" ${open?"":"disabled"} onclick="entrySetRole('${p.pid}','out')">－</button>
+        <button class="${p.role!=="out"?"on sb":""}" ${open?"":"disabled"} onclick="entryToggleMember('${p.pid}')">${p.role!=="out"?"✓ ":""}メンバー</button>
+        <button class="${p.role==="start"?"on st":""}" ${open?"":"disabled"} onclick="entryToggleStart('${p.pid}')">${p.role==="start"?"✓ ":""}スタメン</button>
       </div>
       <button class="capbtn ${p.captain?"on":""}" ${open?"":"disabled"} onclick="entrySetCaptain('${p.pid}')" title="キャプテン">C</button>
     </div>`;
     body = `<div class="card">
-      <div class="callout ${ok?"ok":""}" style="margin-bottom:8px">スタメン <b>${st} / ${need}</b> ・ サブ <b>${sb2}${subMax===null?"":" / "+subMax}</b>
-        ${subMax!==null?`（試合登録 ${st+sb2} / ${need+subMax}名）`:""}</div>
+      <div class="callout ${ok?"ok":""}" style="margin-bottom:8px">メンバー <b>${mem}${max===null?"":" / "+max}</b> ・ そのうちスタメン <b>${st} / ${need}</b> ・ サブ <b>${sb2}</b></div>
       ${open?"":`<div class="callout" style="margin-bottom:8px">この試合は始まっているため、ここからは変更できません。変更は本部に伝えてください。</div>`}
       <label class="f" style="margin-top:0">監督</label>
       <input class="in" value="${esc(lu.coach||"")}" ${open?"":"disabled"} oninput="state.entry.lu.coach=this.value" placeholder="監督名">
-      <div class="block-label">大会登録メンバー（${lu.players.length}名）</div>
+      <div class="block-label">選手登録（${lu.players.length}名）</div>
       ${lu.players.map(row).join("")}
       ${open?`<button class="btn" style="margin-top:12px" onclick="submitEntryLineup()">この試合のメンバーを提出する</button>`:""}
     </div>`;
@@ -1234,7 +1242,7 @@ function viewEntry(){
   const nOver = limit>0 && e.players.filter(p=>(p.name||"").trim()).length>limit;
   const tab = e.tab||"roster";
   const rosterHTML = `<div class="card">
-      ${limit>0?`<p class="hint" style="margin:0 0 8px;${nOver?"color:var(--bad);font-weight:700":""}">大会登録：${e.players.filter(p=>(p.name||"").trim()).length} / 上限${limit}名</p>`:""}
+      ${limit>0?`<p class="hint" style="margin:0 0 8px;${nOver?"color:var(--bad);font-weight:700":""}">選手登録：${e.players.filter(p=>(p.name||"").trim()).length} / 上限${limit}名</p>`:""}
       <div class="tblwrap"><table class="rostertbl">
         <thead><tr><th style="width:52px">番号</th><th style="text-align:left">氏名</th><th style="width:76px">学年</th><th style="width:70px">位置</th><th style="width:48px"></th></tr></thead>
         <tbody>${e.players.map((p,i)=>`<tr>
@@ -1266,8 +1274,8 @@ function viewEntry(){
       <input id="entrycode" class="in" style="text-transform:uppercase;letter-spacing:3px;font-size:18px" placeholder="ABC123" maxlength="6" value="${esc(e.code||"")}" oninput="this.value=this.value.toUpperCase();state.entry.code=this.value">
     </div>
     <div class="seg" style="margin-bottom:10px">
-      <button class="${tab==="roster"?"on":""}" onclick="state.entry.tab='roster';render()">① 大会登録メンバー</button>
-      <button class="${tab==="match"?"on":""}" onclick="state.entry.tab='match';render()">② 試合ごとのメンバー</button>
+      <button class="${tab==="roster"?"on":""}" onclick="state.entry.tab='roster';render()">① 選手登録（大会）</button>
+      <button class="${tab==="match"?"on":""}" onclick="state.entry.tab='match';render()">② 試合のメンバー・スタメン</button>
     </div>
     ${tab==="match" ? entryMatchesHTML() : rosterHTML}
   </div>`;
@@ -1311,7 +1319,7 @@ function viewEntryLinks(){
   const exp = entryExpiryInfo(map);
   return topbar({ title:"記入リンクを配る", sub:state.t.name, back:"go('t')" })
   + `<div class="screen">
-    <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分の<b>大会登録メンバー</b>と、試合ごとの<b>スタメン・サブ</b>だけを入力・提出できます（他チームや結果は触れません）。提出された試合メンバーは、その試合の「メンバー表」に入り、公式記録の「メンバー表から取り込む」で使えます。</p>
+    <p class="lead">各チームに下の<b>リンク</b>と<b>記入コード</b>を配ってください。チームはログイン不要で、自分の<b>選手登録</b>と、試合ごとの<b>メンバー登録・スタメン</b>だけを入力・提出できます（他チームや結果は触れません）。提出された試合メンバーは、その試合の「メンバー表」に入り、公式記録の「メンバー表から取り込む」で使えます。</p>
     <div class="callout ${done===total&&total?"ok":""}" style="margin-bottom:10px">提出状況：<b>${done} / ${total}</b> チーム${done===total&&total?"（全チーム提出ずみ）":"が提出ずみ"}</div>
     <div class="card" style="margin-bottom:10px">
       <div class="lbl" style="margin:0 0 6px">提出期限（任意・全チーム共通）</div>
