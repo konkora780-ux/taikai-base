@@ -261,60 +261,106 @@ function openSignPad(key){
   if(state.officialReadOnly || !state.official) return;
   const slot = SIGN_SLOTS.find(s=>s[0]===key); if(!slot) return;
   const had = !!(state.official.signs && state.official.signs[key]);
-  const el = document.createElement("div"); el.className = "modal";
+  const el = document.createElement("div"); el.className = "modal signmodal";
   el.innerHTML = `<div class="sheet">
     <h3>✍ ${esc(slot[1])}のサイン</h3>
-    <p class="hint">下の白い枠に、指でサインしてください。書き直すときは「クリア」を押します。</p>
+    <p class="hint sp-hint">白い枠に指でサインしてください。スマホは縦でも横でも書けます（横向きにすると枠が大きくなります）。</p>
     <div class="signpad-wrap"><div class="signpad-line"></div><canvas class="signpad"></canvas></div>
-    <div class="btnrow">
-      <button class="btn sec sm" style="flex:1" data-act="clear">クリア</button>
-      ${had?`<button class="btn sec sm" style="flex:1" data-act="del">サインを消す</button>`:""}
-    </div>
-    <div class="btnrow">
-      <button class="btn ghost" style="flex:1" data-act="close">やめる</button>
-      <button class="btn" style="flex:1" data-act="ok">この枠に入れる</button>
+    <div class="sp-btns">
+      <button class="btn sec sm" data-act="clear">クリア</button>
+      ${had?`<button class="btn sec sm" data-act="del">サインを消す</button>`:""}
+      <button class="btn ghost sm" data-act="close">やめる</button>
+      <button class="btn sm" data-act="ok">この枠に入れる</button>
     </div>
   </div>`;
   document.body.appendChild(el);
+  document.body.classList.add("sp-lock");   // 書いている間に後ろの画面がスクロールしないように
+  const sheet = el.querySelector(".sheet"), wrap = el.querySelector(".signpad-wrap");
   const cv = el.querySelector("canvas"), ctx = cv.getContext("2d");
-  // 画面の大きさに合わせて描画用の画素数を決める（高精細画面でも線がぼやけないように）
-  const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio||1, 3);
-  cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
-  ctx.scale(dpr,dpr); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#000";
-  ctx.lineWidth = Math.max(2.5, r.width/150);
-  let drawing = false, drawn = false, last = null;
-  const at = e=>{ const b = cv.getBoundingClientRect(); return { x:e.clientX-b.left, y:e.clientY-b.top }; };
+  const RATIO = 12/5;                        // 枠の縦横比は固定（向きを変えても線の位置がずれない）
+  /* 線は「枠に対する割合(0〜1)」で覚えておく → 画面を回転して枠の大きさが変わっても描き直せる */
+  const strokes = []; let cur = null, activeId = null, W = 0, H = 0;
+  const lw = w => Math.max(2.5, w/110);      // 枠の幅に比例した線の太さ
+  // 点を2つずつの中点でつなぐ（2次ベジェ曲線）と、カクカクせず滑らかな線になる
+  function drawStroke(c, s, w, h){
+    if(!s.length) return;
+    const P = s.map(p=>[p[0]*w, p[1]*h]);
+    c.lineWidth = lw(w); c.lineCap = "round"; c.lineJoin = "round"; c.strokeStyle = "#000"; c.fillStyle = "#000";
+    if(P.length===1){ c.beginPath(); c.arc(P[0][0],P[0][1],c.lineWidth/2,0,Math.PI*2); c.fill(); return; }
+    c.beginPath(); c.moveTo(P[0][0],P[0][1]);
+    for(let i=1;i<P.length-1;i++){
+      const mx=(P[i][0]+P[i+1][0])/2, my=(P[i][1]+P[i+1][1])/2;
+      c.quadraticCurveTo(P[i][0],P[i][1],mx,my);
+    }
+    const L = P[P.length-1]; c.lineTo(L[0],L[1]); c.stroke();
+  }
+  function redraw(){ ctx.clearRect(0,0,W,H); strokes.forEach(s=>drawStroke(ctx,s,W,H)); if(cur) drawStroke(ctx,cur,W,H); }
+  // 画面の向き・大きさに合わせて、はみ出さない最大の枠にする
+  function layout(){
+    const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+    wrap.style.width = "0px"; wrap.style.height = "0px";
+    const availW = sheet.clientWidth - 32;            // 左右の余白と点線の枠の分を引く
+    const other = sheet.offsetHeight;                  // 枠以外（見出し・ボタン）の高さ
+    const availH = Math.max(80, vh - other - 24);
+    let w = availW, h = w/RATIO;
+    if(h > availH){ h = availH; w = h*RATIO; }
+    W = Math.floor(w); H = Math.floor(h);
+    wrap.style.width = W+"px"; wrap.style.height = H+"px";
+    const dpr = Math.min(window.devicePixelRatio||1, 3);
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    redraw();
+  }
+  let raf = 0;
+  const onResize = ()=>{ cancelAnimationFrame(raf); raf = requestAnimationFrame(layout); };
+  window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
+  if(window.visualViewport) window.visualViewport.addEventListener("resize", onResize);
+  layout();
+
+  const at = e=>{ const b = cv.getBoundingClientRect();
+    return [Math.min(1,Math.max(0,(e.clientX-b.left)/b.width)), Math.min(1,Math.max(0,(e.clientY-b.top)/b.height))]; };
   cv.addEventListener("pointerdown", e=>{
-    e.preventDefault(); cv.setPointerCapture(e.pointerId); drawing = true; last = at(e);
-    ctx.beginPath(); ctx.arc(last.x,last.y,ctx.lineWidth/2,0,Math.PI*2); ctx.fillStyle="#000"; ctx.fill(); drawn = true;
+    if(activeId!==null) return;                        // 2本目の指（手のひら等）は無視
+    e.preventDefault(); activeId = e.pointerId;
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+    cur = [at(e)]; redraw();
   });
   cv.addEventListener("pointermove", e=>{
-    if(!drawing) return; e.preventDefault();
-    const p = at(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last = p;
+    if(e.pointerId!==activeId || !cur) return; e.preventDefault();
+    // 速く動かしたときの途中の点（coalesced events）も拾って、線が途切れないようにする
+    const evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+    evs.forEach(ev=> cur.push(at(ev)));
+    redraw();
   });
-  const end = ()=>{ drawing = false; };
+  const end = e=>{ if(e.pointerId!==activeId) return; if(cur && cur.length) strokes.push(cur); cur = null; activeId = null; redraw(); };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
-  const close = ()=> el.remove();
+  ["touchstart","touchmove"].forEach(t=> cv.addEventListener(t, e=> e.preventDefault(), {passive:false}));   // iPhoneのスクロール・拡大を止める
+
+  const close = ()=>{
+    window.removeEventListener("resize", onResize); window.removeEventListener("orientationchange", onResize);
+    if(window.visualViewport) window.visualViewport.removeEventListener("resize", onResize);
+    document.body.classList.remove("sp-lock"); el.remove();
+  };
   el.addEventListener("click", async e=>{
     const act = e.target.closest("[data-act]")?.dataset.act;
     if(e.target===el || act==="close") return close();
-    if(act==="clear"){ ctx.clearRect(0,0,cv.width,cv.height); drawn = false; return; }
+    if(act==="clear"){ strokes.length = 0; cur = null; redraw(); return; }
     if(act==="del"){
       if(!confirm(`${slot[1]}のサインを消します。よろしいですか？`)) return;
       delete state.official.signs[key]; close(); render(); await saveOfficial(true); toast("サインを消しました"); return;
     }
     if(act==="ok"){
-      if(!drawn) return toast("枠の中にサインを書いてください");
-      state.official.signs = Object.assign({}, state.official.signs, { [key]: signToPng(cv) });
+      if(!strokes.length) return toast("枠の中にサインを書いてください");
+      state.official.signs = Object.assign({}, state.official.signs, { [key]: signToPng(strokes, drawStroke) });
       close(); render(); await saveOfficial(true); toast(`${slot[1]}のサインを保存しました`);
     }
   });
 }
-/* 保存用に縮小した白抜き(透明背景)PNGにする。保存データを軽くするため最大幅480px */
-function signToPng(cv){
-  const W = Math.min(480, cv.width), H = Math.round(cv.height*W/cv.width);
-  const c = document.createElement("canvas"); c.width = W; c.height = H;
-  c.getContext("2d").drawImage(cv, 0, 0, W, H);
+/* 保存用の画像は、画面の大きさ・向きに関係なく同じ大きさ（480×200・透明背景）で描き直して作る */
+function signToPng(strokes, drawStroke){
+  const c = document.createElement("canvas"); c.width = 480; c.height = 200;
+  const x = c.getContext("2d"); strokes.forEach(s=> drawStroke(x, s, 480, 200));
   return c.toDataURL("image/png");
 }
 
