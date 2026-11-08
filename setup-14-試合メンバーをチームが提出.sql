@@ -176,4 +176,4 @@ $function$;
 
 grant execute on function public.submit_match_lineup(uuid, text, uuid, jsonb) to anon, authenticated;
 
--- index.html（js/）の対応する変更もあわせて反映してください（版番号 20261108e）。
+-- index.html（js/）の対応する変更もあわせて反映してください（版番号 20261108f）。
