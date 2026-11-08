@@ -686,6 +686,7 @@ td.pt{font-weight:800;}
   .sheet-a4{transform:none !important;box-shadow:none;}
   .sheet-a4 .fx{background:transparent !important;}
   .sheet-a4 .signcell{background:transparent !important;}
+  .sheet-a4 .fx::placeholder{color:transparent !important;}   /* 入力例は印刷しない */
   .sheetwrap.page2{break-before:page;page-break-before:always;margin-top:0 !important;}
 }
 
@@ -737,3 +738,6 @@ td.pt{font-weight:800;}
   body.pbk .kobk .kobk-canvas{ transform:scale(var(--ks));transform-origin:top left; }
   body.pbk .kobk .kobk-svg svg{ overflow:visible; }
 }
+/* 公式記録のkick offチェック欄 */
+.sheet-a4 .kochk{position:absolute;border:.75pt solid #000;box-sizing:border-box;display:flex;align-items:center;
+  justify-content:center;font-size:9pt;line-height:1;font-weight:700;color:#000;}
