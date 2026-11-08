@@ -14,7 +14,7 @@ const DB = {
       return {
         t: d.t.find(x=>x.id===id) || null,
         teams: d.teams.filter(x=>x.tournament_id===id),
-        matches: d.matches.filter(x=>x.tournament_id===id),
+        matches: mergeEntryLineups(d.matches.filter(x=>x.tournament_id===id).map(x=>JSON.parse(JSON.stringify(x)))),
       };
     }
     const rt = await sb.from("gn_tournaments").select("*").eq("id",id).maybeSingle();
@@ -32,7 +32,7 @@ const DB = {
     ]);
     if(rteams.error) throw rteams.error;
     if(rmatches.error) throw rmatches.error;
-    return { t, teams:rteams.data||[], matches:rmatches.data||[] };
+    return { t, teams:rteams.data||[], matches:mergeEntryLineups(rmatches.data||[]) };
   },
 
   /* 公式記録の公開リンク：試合idだけで匿名に読む（大会・チームは所属大会を丸ごと読んで補う＝トーナメント枠の勝者参照も解決できるように）
@@ -290,6 +290,29 @@ const DB = {
     const { data, error } = await sb.rpc("submit_team_roster", { p_team:teamId, p_code:code, p_players:players });
     if(error) throw error;
     return data === true;
+  },
+
+  // チーム側：コードを添えて、1試合の自チームのメンバー（スタメン・サブ）を提出（サーバー側で照合）
+  // 返り値 "ok" / "code"(コード違い・期限切れ・ロック中) / "notyours"(このチームの試合でない・相手が未確定) /
+  //        "started"(試合が始まった・終わった) / "roster"(大会登録にいない選手) / "count"(人数が設定と合わない)
+  async submitMatchLineup(teamId, code, matchId, lineup){
+    if(!sb){
+      const d = local.read();
+      const e = d.entry.find(x=>x.team_id===teamId);
+      if(!e || e.code!==code) return "code";
+      const m = d.matches.find(x=>x.id===matchId);
+      const team = d.teams.find(x=>x.id===teamId);
+      if(!m || !team) return "notyours";
+      const side = lineupSideOf(m, teamId); if(!side) return "notyours";
+      if(m.status && m.status!=="todo" && m.status!=="postponed") return "started";
+      const rec = Object.assign({}, lineup, { by:"team", submitted_at:new Date().toISOString() });
+      m.entry_lineups = Object.assign({}, m.entry_lineups||{}, { [side]:rec });
+      m.lineups = Object.assign({}, m.lineups||{}, { [side]:JSON.parse(JSON.stringify(rec)) });
+      local.write(d); return "ok";
+    }
+    const { data, error } = await sb.rpc("submit_match_lineup", { p_team:teamId, p_code:code, p_match:matchId, p_lineup:lineup });
+    if(error) throw error;
+    return data || "code";
   },
 
   /* --- 台帳の記入リンク（年度初めの登録） --- */

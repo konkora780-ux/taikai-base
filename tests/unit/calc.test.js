@@ -182,3 +182,41 @@ test("お知らせの公開期間：公開状態と開始・終了日時の組�
 // 「変更履歴」（gn_match_history）はPostgresのトリガーで記録される仕組みで、
 // このテストはJSのロジックだけを検証するため対象外。setup-14.sqlの確認クエリで
 // トリガー作成済みであることを確認済み（実データでの記録はSupabase側の責務）。
+
+test("試合メンバーの人数：未設定ならスタメン11名・メンバー無制限。サブは「メンバー登録－スタメン」で決まる", ()=>{
+  const ctx = setup();
+  assert.equal(ctx.startCountOf(ctx.state.t), 11);
+  assert.equal(ctx.matchLimitOf(ctx.state.t), null);
+  assert.equal(ctx.subLimitOf(ctx.state.t), null);
+  ctx.state.t.settings.registerLimit = 25; ctx.state.t.settings.matchLimit = 20;
+  assert.equal(ctx.subLimitOf(ctx.state.t), 9);
+  assert.equal(ctx.memberCountWarnings(ctx.state.t).length, 0);
+  ctx.state.t.settings.matchLimit = 30;                     // 選手登録より多い
+  assert.equal(ctx.memberCountWarnings(ctx.state.t).length, 1);
+  ctx.state.t.settings.startCount = 8; ctx.state.t.settings.matchLimit = 18;
+  assert.equal(ctx.startCountOf(ctx.state.t), 8);
+  assert.equal(ctx.subLimitOf(ctx.state.t), 10);
+  ctx.state.t = freshTournament(ctx, { sport:"futsal" });
+  assert.equal(ctx.startCountOf(ctx.state.t), 5);
+});
+
+test("lineupSideOf：トーナメントの勝者枠も、前の試合の結果から自チームの側を判定できる", ()=>{
+  const ctx = setup();
+  const m1 = doneMatch("m1","A","B",2,1,{ stage:"ko", grp:null });
+  const m2 = { id:"m2", tournament_id:"t1", stage:"ko", home_team:null, away_team:"C", home_src:"W:m1", away_src:null, status:"todo", events:[] };
+  ctx.state.matches = [m1, m2];
+  assert.equal(ctx.lineupSideOf(m2, "A"), "H");
+  assert.equal(ctx.lineupSideOf(m2, "C"), "A");
+  assert.equal(ctx.lineupSideOf(m2, "B"), null);   // 負けたチームは出せない
+});
+
+test("mergeEntryLineups：チームの提出を反映し、提出後に運営が直した側はそのまま", ()=>{
+  const ctx = setup();
+  const sub = { by:"team", submitted_at:"2026-11-08T01:00:00.000Z", coach:"監督", players:[{ pid:"p1", role:"start" }] };
+  const a = { id:"x1", lineups:{ H:{ players:[{ pid:"p1", role:"sub" }] } }, entry_lineups:{ H:sub } };
+  const b = { id:"x2", lineups:{ H:{ at:"2026-11-08T02:00:00.000Z", players:[{ pid:"p1", role:"out" }] } }, entry_lineups:{ H:sub } };
+  ctx.mergeEntryLineups([a, b]);
+  assert.equal(a.lineups.H.players[0].role, "start");
+  assert.equal(a.lineups.H.coach, "監督");
+  assert.equal(b.lineups.H.players[0].role, "out");
+});

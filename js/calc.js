@@ -23,6 +23,50 @@ const cfgOf   = t => Object.assign({ win:3, draw:1, lose:0, groups:["A"], advanc
                                      advanceBy:{}, wildcards:[], wcRule:"total", brackets:null,
                                      venues:[], koSize:8, thirdPlace:false, duration:20 }, t?.settings||{});
 
+/* --- 1試合のメンバー人数（大会設定）。スタメンは未設定ならサッカー11・フットサル5、サブは未設定なら無制限 --- */
+function startCountOf(t){
+  const n = num(cfgOf(t).startCount);
+  return n>0 ? n : (sportOf(t)===SPORTS.futsal ? 5 : 11);
+}
+/* メンバー登録（1試合に登録できる人数）。未設定なら上限なし（null）。サブは「メンバー登録－スタメン」で自動で決まる */
+function matchLimitOf(t){
+  const v = cfgOf(t).matchLimit;
+  return (v===null || v===undefined || v==="") ? null : Math.max(0, num(v));
+}
+function subLimitOf(t){
+  const m = matchLimitOf(t);
+  return m===null ? null : Math.max(0, m - startCountOf(t));
+}
+/* 日時を「11/8(日) 10:30」の形に */
+function fmtStamp(iso){
+  const d = new Date(iso); if(!iso || isNaN(d)) return "";
+  return `${d.getMonth()+1}/${d.getDate()}(${"日月火水木金土"[d.getDay()]}) ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+/* 人数の設定が食い違っていないか（運営の設定画面で注意を出す） */
+function memberCountWarnings(t){
+  const reg = Math.max(0, num(cfgOf(t).registerLimit)||0), m = matchLimitOf(t), s = startCountOf(t);
+  const w = [];
+  if(m!==null && reg>0 && m>reg) w.push(`メンバー登録（${m}名）が選手登録（${reg}名）より多くなっています`);
+  if(m!==null && m<s) w.push(`メンバー登録（${m}名）がスタメン（${s}名）より少なくなっています`);
+  return w;
+}
+/* チームが記入リンクで提出した試合メンバー（entry_lineups）を、運営のメンバー表（lineups）へ反映する。
+   運営があとから手で直した側（lu.at が提出より新しい）はそのまま。運営の古い画面で上書きされても、次に読み込んだときに戻る */
+function mergeEntryLineups(matches){
+  (matches||[]).forEach(m=>{
+    const el = m && m.entry_lineups; if(!el) return;
+    ["H","A"].forEach(side=>{
+      const e = el[side]; if(!e || !e.submitted_at || !Array.isArray(e.players)) return;
+      const cur = m.lineups && m.lineups[side];
+      if(cur && cur.submitted_at===e.submitted_at) return;             // 反映ずみ
+      if(cur && cur.at && cur.at > e.submitted_at) return;              // 提出のあとに運営が直した
+      m.lineups = m.lineups || {};
+      m.lineups[side] = JSON.parse(JSON.stringify(e));
+    });
+  });
+  return matches;
+}
+
 /* ブロック（部・組）: 新形式 settings.blocks=[{id,name}]。旧 groups(文字)も読めるように */
 function blocksOf(t){
   const s = t?.settings || {};
@@ -533,6 +577,14 @@ function resolveSlot(m, side, seen){
     return row ? { id:row.id, label:row.name, kind:"team" } : { id:null, label, kind:"from" };
   }
   return { id:null, label:"—", kind:"tbd" };
+}
+
+/* このチームがこの試合のどちら側か（"H"/"A"/null）。トーナメントの勝者枠も解決して判定する */
+function lineupSideOf(m, teamId){
+  if(!m || !teamId) return null;
+  if(resolveSlot(m,"H").id===teamId) return "H";
+  if(resolveSlot(m,"A").id===teamId) return "A";
+  return null;
 }
 
 function isDone(m){ return m.status==="done" && m.home_score!=null && m.away_score!=null; }
