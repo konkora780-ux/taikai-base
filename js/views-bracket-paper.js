@@ -197,15 +197,36 @@ function paperBracketHTML(bid, edit){
   });
   // チームの番号と名前（名前もSVGの中に縦書きで描く＝印刷でも1枚の絵として縮小できる）
   const lbl = leaves.map(l=> l.sd ? resolveSlot(l.m, l.sd) : { label:"—", kind:"tbd" });
-  const maxLen = Math.max(4, ...lbl.map(r=>[...String(r.label)].length));
-  const NH = Math.min(190, Math.max(96, maxLen*12+12));   // 名前の枠の高さ
+  // 長い名前（合同チームなど）は枠の幅のまま縦書き2行に折り返す。区切り（・/／、）があればそこで分ける
+  const PB_FS = 11.5, PB_LINE1 = 13;               // 1行のときの文字の大きさ・1文字の高さの目安
+  const split = t=>{
+    const cs = [...String(t)];
+    if(cs.length*PB_LINE1 <= 150) return [cs.join("")];
+    const mid = Math.ceil(cs.length/2);
+    let cut = -1;
+    cs.forEach((c,k)=>{ if(/[・\/／、,，]/.test(c) && k>0 && k<cs.length-1 && (cut<0 || Math.abs(k+1-mid) < Math.abs(cut-mid))) cut = k+1; });
+    if(cut<0 || Math.abs(cut-mid) > cs.length/4) cut = mid;
+    return [cs.slice(0,cut).join(""), cs.slice(cut).join("")];
+  };
+  const parts = lbl.map(r=>split(r.label));
+  const need = Math.max(...parts.map(p=>Math.max(...p.map(x=>[...x].length))*PB_LINE1));
+  const NH = Math.min(170, Math.max(96, need+12));   // 名前の枠の高さ
   const ny = base + 20;
   leaves.forEach((l,i)=>{
-    const x = X(l.x), r = lbl[i], len = [...String(r.label)].length || 1;
-    const fs = Math.min(11.5, (NH-10)/len);
+    const x = X(l.x), r = lbl[i], ps = parts[i];
+    const cls = `pb-nm ${r.kind==="team"?"":"tbd"}`;
     svg += `<text x="${x}" y="${base+14}" class="pb-num">${i+1}</text>`;
     svg += `<rect x="${x-PB_COLW/2}" y="${ny}" width="${PB_COLW}" height="${NH}" fill="#fff" stroke="#333" stroke-width="1"/>`;
-    svg += `<text x="${x}" y="${ny+5}" class="pb-nm ${r.kind==="team"?"":"tbd"}" writing-mode="tb" style="font-size:${fs.toFixed(1)}px">${esc(r.label)}</text>`;
+    const fs0 = ps.length>1 ? 10 : PB_FS;
+    ps.forEach((t,k)=>{
+      const n = [...t].length || 1, avail = NH-10;
+      const fs = Math.min(fs0, avail/n/1.08);
+      // 縦書きは右の列から読むので、1行目を右、2行目を左に置く
+      const cx = ps.length>1 ? x + (k===0 ? 7 : -7) : x;
+      // 文字の大きさを下げても枠をこえる環境向けに、長さを枠の高さに合わせて詰める保険
+      const fit = n*fs > avail*0.9 ? ` textLength="${(avail*0.95).toFixed(1)}" lengthAdjust="spacingAndGlyphs"` : "";
+      svg += `<text x="${cx}" y="${ny+5}" class="${cls}" writing-mode="tb" font-size="${fs.toFixed(1)}" style="font-size:${fs.toFixed(1)}px"${fit}>${esc(t)}</text>`;
+    });
   });
   const svgH = ny + NH + 2;
 
