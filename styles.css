@@ -770,3 +770,38 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
 /* 公式記録のkick offチェック欄 */
 .sheet-a4 .kochk{position:absolute;border:.75pt solid #000;box-sizing:border-box;display:flex;align-items:center;
   justify-content:center;font-size:9pt;line-height:1;font-weight:700;color:#000;}
+
+/* ===== 紙様式の縦型トーナメント表（views-bracket-paper.js） ===== */
+.ppb{overflow:auto;margin-bottom:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;}
+.ppb-in{position:relative;}
+.ppb-title{display:none;font-weight:800;font-size:16px;background:#000;color:#fff;padding:6px 10px;margin-bottom:8px;}
+.pb-svg{display:block;}
+.pb-svg text{font-family:inherit;text-anchor:middle;fill:#222;}
+.pb-svg .pb-day{font-size:12px;font-weight:700;}
+.pb-svg .pb-day.sm{font-size:10px;}
+.pb-svg .pb-t{font-size:9.5px;}
+.pb-svg .pb-no{font-weight:800;}
+.pb-svg .pb-sc{font-weight:800;fill:#d32f2f;}
+.pb-svg .pb-num{font-size:11px;font-weight:700;}
+.pb-names{display:flex;}
+.pb-name{box-sizing:border-box;border:1px solid #333;border-left-width:0;min-height:96px;padding:4px 0;
+  writing-mode:vertical-rl;text-orientation:upright;font-size:11px;font-weight:600;letter-spacing:.5px;
+  display:flex;align-items:center;justify-content:flex-start;line-height:1.1;word-break:break-all;}
+.pb-name:first-child{border-left-width:1px;}
+.pb-name.tbd{color:var(--na);font-weight:500;}
+.pb-note{font-size:11px;color:var(--sub);margin:4px 0 0;}
+.pb-venues{margin-top:10px;border:1px solid #333;font-size:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}
+.pb-vh{grid-column:1/-1;background:#000;color:#fff;text-align:center;font-weight:700;padding:3px;}
+.pb-v{display:flex;gap:8px;padding:3px 8px;border-top:1px solid #ccc;}
+.pb-v b{flex:0 0 auto;min-width:3em;}
+@media print{
+  @page ppbracket{ size:A4 landscape; margin:8mm; }
+  body.ppbk .screen > *{ display:none !important; }
+  body.ppbk .screen > .ppb{ display:block !important; page:ppbracket; overflow:hidden;
+    border:0;box-shadow:none;padding:0;margin:0;background:#fff;
+    width:calc(var(--pw) * var(--ps));height:calc(var(--ph) * var(--ps)); }
+  body.ppbk .ppb .ppb-in{ transform:scale(var(--ps));transform-origin:top left; }
+  body.ppbk .ppb-title{ display:block; }
+  body.ppbk .pb-svg rect{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body.ppbk .ppb *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
