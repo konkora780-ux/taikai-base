@@ -784,7 +784,7 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
 .pb-svg .pb-no{font-weight:800;}
 .pb-svg .pb-sc{font-weight:800;fill:#d32f2f;}
 .pb-svg .pb-num{font-size:11px;font-weight:700;}
-.pb-svg .pb-nm{text-anchor:start;font-weight:600;fill:#222;letter-spacing:.5px;text-orientation:upright;writing-mode:vertical-rl;}
+.pb-svg .pb-nm{text-anchor:start;font-weight:600;fill:#222;text-orientation:upright;writing-mode:vertical-rl;}
 .pb-svg .pb-nm.tbd{fill:#999;font-weight:500;}
 .pb-note{font-size:11px;color:var(--sub);margin:4px 0 0;}
 .pb-venues{margin-top:10px;border:1px solid #333;font-size:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}
