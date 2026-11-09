@@ -723,7 +723,8 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
 .kobk{overflow:auto;position:relative;margin-bottom:14px;padding:12px;
   background:radial-gradient(circle at 1px 1px,#e3e7ef 1px,transparent 0) 0 0/22px 22px,#fff;
   border:1.5px solid var(--line);border-radius:14px;box-shadow:var(--shadow);}
-.kobk-canvas{position:relative;min-height:140px;}
+/* 幅は「中身（全回戦）の幅」に合わせる。画面より狭いと線を描くSVGも狭くなり、右側の線が切れて消えるため */
+.kobk-canvas{position:relative;min-height:140px;width:max-content;min-width:100%;}
 .kobk-svg{position:absolute;inset:0;pointer-events:none;z-index:1;}
 .kobk-rounds{position:relative;z-index:2;display:flex;gap:42px;align-items:flex-start;padding:4px;}
 .kobk-round{display:flex;flex-direction:column;min-width:148px;width:148px;}
