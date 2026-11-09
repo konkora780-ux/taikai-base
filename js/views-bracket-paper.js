@@ -195,14 +195,19 @@ function paperBracketHTML(bid, edit){
     const won = isDone(r.m) && winnerOf(r.m);
     svg += `<line x1="${X(r.x)}" y1="${barY(r.h)}" x2="${X(r.x)}" y2="${barY(r.h)-PB_TOP+6}" stroke="${won?PB_WIN:PB_LINE}" stroke-width="${won?3:1.2}"/>`;
   });
-  // チームの番号
-  leaves.forEach((l,i)=>{ svg += `<text x="${X(l.x)}" y="${base+14}" class="pb-num">${i+1}</text>`; });
-  const svgH = base + 20;
-
-  const names = leaves.map(l=>{
-    const r = l.sd ? resolveSlot(l.m, l.sd) : { label:"—", kind:"tbd" };
-    return `<div class="pb-name ${r.kind==="team"?"":"tbd"}" style="width:${PB_COLW}px">${esc(r.label)}</div>`;
-  }).join("");
+  // チームの番号と名前（名前もSVGの中に縦書きで描く＝印刷でも1枚の絵として縮小できる）
+  const lbl = leaves.map(l=> l.sd ? resolveSlot(l.m, l.sd) : { label:"—", kind:"tbd" });
+  const maxLen = Math.max(4, ...lbl.map(r=>[...String(r.label)].length));
+  const NH = Math.min(190, Math.max(96, maxLen*12+12));   // 名前の枠の高さ
+  const ny = base + 20;
+  leaves.forEach((l,i)=>{
+    const x = X(l.x), r = lbl[i], len = [...String(r.label)].length || 1;
+    const fs = Math.min(11.5, (NH-10)/len);
+    svg += `<text x="${x}" y="${base+14}" class="pb-num">${i+1}</text>`;
+    svg += `<rect x="${x-PB_COLW/2}" y="${ny}" width="${PB_COLW}" height="${NH}" fill="#fff" stroke="#333" stroke-width="1"/>`;
+    svg += `<text x="${x}" y="${ny+5}" class="pb-nm ${r.kind==="team"?"":"tbd"}" writing-mode="tb" style="font-size:${fs.toFixed(1)}px">${esc(r.label)}</text>`;
+  });
+  const svgH = ny + NH + 2;
 
   const vlist = venues.length ? `<div class="pb-venues"><div class="pb-vh">会場一覧</div>
     ${venues.map(n=>`<div class="pb-v"><b>${esc(vs[n])}</b><span>${esc(n)}</span></div>`).join("")}</div>` : "";
@@ -218,25 +223,40 @@ function paperBracketHTML(bid, edit){
     <div class="ppb-in" id="paperBracketIn" style="width:${W}px">
       <div class="ppb-title">${esc(state.t.name)}${multi?` ${esc(bracketName(state.t,bid))}`:""} 組み合わせ</div>
       <svg width="${W}" height="${svgH}" viewBox="0 0 ${W} ${svgH}" class="pb-svg">${svg}</svg>
-      <div class="pb-names" style="padding-left:${PB_LABELW}px">${names}</div>
       ${anyNo || nodes.length ? `<div class="pb-note">【　】は試合番号</div>` : ""}
       ${vlist}
     </div></div>${tools}${cons}`;
 }
 
-/* A4横1枚に収まるよう縮小して印刷 */
+/* A4横1枚で印刷する。
+   表を丸ごと印刷用の入れ物(#ppPrint)に写し、SVGを「用紙の幅いっぱい・高さは上限まで」に
+   伸び縮みさせる。画面の大きさ（スマホ/PC）に左右されず1枚に収まる。
+   スマホのブラウザは名前付きの用紙設定(@page 名前)を無視することがあるので、
+   印刷の間だけ用紙をA4横にする<style>を差し込む。 */
+let _ppPrinting = false;
+function ppPrintCleanup(){
+  document.body.classList.remove("ppbk");
+  document.getElementById("ppPrint")?.remove();
+  document.getElementById("ppPrintPage")?.remove();
+}
+window.addEventListener("beforeprint", ()=>{ if(!_ppPrinting) ppPrintCleanup(); _ppPrinting = false; });
+window.addEventListener("afterprint", ()=>{ if(!_ppPrinting) ppPrintCleanup(); });
 function printPaperBracket(){
-  const bk = document.getElementById("paperBracket"), inn = document.getElementById("paperBracketIn");
-  if(!bk || !inn){ window.print(); return; }
-  const w = inn.scrollWidth, h = inn.scrollHeight + 44;   // 印刷時だけ出る見出しのぶんを足す
-  const PW = 1040, PH = 700;                       // A4横 印刷可能領域の目安(px・余白8mm)
-  const scale = Math.min(PW/w, PH/h, 1);
-  bk.style.setProperty("--pw", w+"px");
-  bk.style.setProperty("--ph", h+"px");
-  bk.style.setProperty("--ps", scale);
-  const done = ()=>{ document.body.classList.remove("ppbk"); ["--pw","--ph","--ps"].forEach(k=>bk.style.removeProperty(k)); window.removeEventListener("afterprint", done); };
-  window.addEventListener("afterprint", done);
+  const inn = document.getElementById("paperBracketIn");
+  if(!inn){ window.print(); return; }
+  ppPrintCleanup();
+  const box = document.createElement("div");
+  box.id = "ppPrint";
+  box.innerHTML = inn.innerHTML;
+  const sv = box.querySelector("svg");
+  if(sv){ sv.removeAttribute("width"); sv.removeAttribute("height"); sv.setAttribute("preserveAspectRatio","xMidYMin meet"); }
+  box.querySelectorAll("rect[onclick]").forEach(r=>r.removeAttribute("onclick"));
+  document.body.appendChild(box);
+  const st = document.createElement("style");
+  st.id = "ppPrintPage";
+  st.textContent = "@page{size:A4 landscape;margin:8mm;}";
+  document.head.appendChild(st);
   document.body.classList.add("ppbk");
+  _ppPrinting = true;
   setTimeout(()=>window.print(), 60);
-  setTimeout(done, 4000);
 }
