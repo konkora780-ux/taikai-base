@@ -106,12 +106,14 @@ function paperBracketHTML(bid, edit){
   const forest = pbBuildForest(bid);
   if(!forest.length) return `<div class="empty">このトーナメントにはまだマッチがありません。</div>`;
   // 横位置（葉＝チームを左から順に）と段（下から何段目か）を決める
+  // 段は「何回戦か」で決める（シード同士の2回戦も2回戦の段に置き、1回戦の段と混ざらないように）
+  const minRound = Math.min(...koMatchesOf(bid).map(m=>m.round));
   const leaves = [], nodes = [];
   const place = n=>{
     if(n.leaf){ n.x = leaves.length; n.h = 0; leaves.push(n); return; }
     n.kids.forEach(place);
     n.x = (n.kids[0].x + n.kids[1].x) / 2;
-    n.h = 1 + Math.max(n.kids[0].h, n.kids[1].h);
+    n.h = Math.max(n.m.round - minRound + 1, 1 + Math.max(n.kids[0].h, n.kids[1].h));
     nodes.push(n);
   };
   forest.forEach(place);
