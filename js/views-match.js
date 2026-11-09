@@ -378,12 +378,14 @@ function tabBracket(){
   const bid = curBracketId();
   const ko  = koMatchesOf(bid);
   const edit = canEdit();
-  const head = bracketSwitcher(bid, edit);
+  const head = bracketSwitcher(bid, edit) + (ko.length ? bracketViewToggle() : "");
   if(!ko.length){
     let e = head + `<div class="empty">このトーナメントにはまだマッチがありません。</div>`;
     if(edit) e += koEditBar(cfg);
     return e;
   }
+  // 縦型（紙の組み合わせ表ふう）は views-bracket-paper.js で描く
+  if(curBracketView()==="tate") return head + paperBracketHTML(bid, edit) + (edit ? koEditBar(cfg) : "");
   const rounds = Math.max(...ko.map(m=>m.round));
   // 櫓メーカーと同じ描画（フィーダー中間配置＋SVG曲線）。作ったとおりに一般の方も見える。
   let html = head + `<div class="kobk" id="koBracket"><div class="kobk-canvas" id="koCanvas">
