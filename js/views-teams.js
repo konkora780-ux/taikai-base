@@ -7,8 +7,9 @@ function viewTeams(){
   const deadline = cfg.rosterDeadline;
   const locked = !!(deadline && localDate(new Date().toISOString()) > deadline && !state.unlockTeams);
   return `<div class="tourwrap">`
-  + topbar({ title:"チーム・選手", sub:state.t.name, back:"go('t')" })
+  + topbar({ title:"チーム・選手", sub:state.t.name, back:"pageBack()" })
   + `<div class="twrap">${tournamentSidebar("team")}<div class="tmain">
+    ${subBackBar("pageBack()", pageBackLabel(), true)}
     <div class="screen">
     <p class="lead">この大会にエントリーするチームと選手です。台帳から入れると、背番号ごとそのまま入ります（この大会だけ番号を書き換えることもできます）。</p>
     ${locked?`<div class="lockmsg">🔒 選手登録の締切（${esc(fmtDate(deadline))}）を過ぎています。内容は変更できません。直すときは下の「✏ 編集する」を押してください。</div>`:""}
@@ -1173,9 +1174,10 @@ function viewLineup(){
     ? `<div class="callout ok" style="margin-bottom:8px">✅ このメンバーはチームが記入リンクで提出しました（${esc(fmtStamp(lu.submitted_at))}）。直すと運営の内容が優先されます。</div>` : "";
 
   return `<div class="tourwrap">`
-  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"go('t')",
+  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"subBack()",
       act:`<button class="act" onclick="saveLineup()">保存</button>` })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="team-switch">
       <button class="${side==="H"?"on":""}" onclick="state.lineupSide='H';render()">${esc(H.label||"ホーム")}</button>
       <button class="${side==="A"?"on":""}" onclick="state.lineupSide='A';render()">${esc(A.label||"アウェイ")}</button>
@@ -1202,6 +1204,8 @@ function viewLineup(){
         <button class="btn sec sm" style="flex:1" onclick="window.print()">🖨 メンバー表を印刷</button>
         <button class="btn sec sm" style="flex:1" onclick="saveLineup(true).then(()=>openOfficial('${m.id}'))">📄 公式記録へ</button>
       </div>
+      <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に戻る</button></div>
+      <p class="hint" style="text-align:center">選び直した内容は、戻るときに自動で保存されます。</p>
     </div>
     ${lineupSheetHTML(m)}
   </div></div></div>`;
@@ -1230,10 +1234,11 @@ function setCaptain(side, pid){
   luTouch(side); render();
 }
 function openLineup(id){
+  enterSubView("lineup");
   state.matchId = id;
   const m = state.matches.find(x=>x.id===id);
   ensureLineups(m);
-  state.lineupSide = "H"; state.view = "lineup"; render();
+  state.lineupSide = "H"; state.view = "lineup"; snapSubView(); render();
 }
 async function saveLineup(stay){
   const m = curMatchAny(); if(!m) return false;

@@ -919,9 +919,10 @@ function viewMatch(){
   }).join("") || `<div class="hint" style="padding:8px 2px">まだ記録がありません。</div>`;
 
   return `<div class="tourwrap">`
-  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:"go('t')",
+  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:"subBack()",
       act: canEdit() ? `<button class="btn ghost sm" onclick="openMatchHistory()">🕘 履歴</button>` : "" })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="screen">
     ${venueDatalistHTML()}
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
@@ -1070,7 +1071,7 @@ function viewMatch(){
       <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openLineup('${m.id}'))">👥 メンバー表</button>
       <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openOfficial('${m.id}'))">📄 公式記録</button>
     </div>
-    <div class="btnrow"><button class="btn ghost" onclick="go('t')">${locked?"戻る":"保存せずに戻る"}</button></div>
+    <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に${locked?"戻る":"保存せずに戻る"}</button></div>
     </div>
   </div></div></div>`;
 }
