@@ -314,6 +314,8 @@ function doBackupImport(){
 }
 
 function viewRoster(){
+  // ログインが切れた状態で台帳の画面に来たとき（別タブでログアウトした等）は、止まらずにログイン画面を出す
+  if(!state.user){ state.view = "login"; return viewLogin(); }
   const year = orgYear();
   return topbar({ title:"チーム・選手の台帳", sub:`${year}年度`, back:"go('home')" })
   + `<div class="screen">
@@ -1246,6 +1248,7 @@ async function saveLineup(stay){
   try{
     await DB.upsert("gn_matches", stripMatch(m));
     if(!stay) toast("メンバー表を保存しました");
+    if(state.view==="lineup") snapSubView();
     return true;
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); return false; }
 }

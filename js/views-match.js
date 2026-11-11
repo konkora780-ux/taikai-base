@@ -32,7 +32,9 @@ function setSched(id, part, val){
   const m = state.matches.find(x=>x.id===id); if(!m) return;
   let d = localDate(m.kickoff), t = localTime(m.kickoff);
   if(part==="date") d=val; else t=val;
-  m.kickoff = d ? new Date(`${d}T${t||"00:00"}`).toISOString() : null;
+  const k = d ? new Date(`${d}T${t||"00:00"}`) : null;
+  if(k && isNaN(k)) return toast("日付を正しく入れてください");   // 年が5けたなど、日時として読めない入力で止まらないように
+  m.kickoff = k ? k.toISOString() : null;
   m._sd = true;
 }
 function setSchedVenue(id, v){ const m=state.matches.find(x=>x.id===id); if(m){ m.venue=v; m._sd=true; } }
@@ -51,6 +53,7 @@ function openBulkDay(){
   document.body.appendChild(el);
   $("#bd-ok").onclick=()=>{
     const d=$("#bd-date").value, v=$("#bd-venue").value.trim();
+    if(d && isNaN(new Date(`${d}T00:00`))) return toast("日付を正しく入れてください");
     state.matches.forEach(m=>{
       if(d && !m.kickoff){ m.kickoff=new Date(`${d}T00:00`).toISOString(); m._sd=true; }
       if(v && !m.venue){ m.venue=v; m._sd=true; }
@@ -1177,7 +1180,9 @@ function setKickoffTeam(v){
 }
 function setKickoff(v){
   const m = curMatch(); if(!m) return;
-  m.kickoff = v ? new Date(v).toISOString() : null;
+  const k = v ? new Date(v) : null;
+  if(k && isNaN(k)) return toast("日時を正しく入れてください");
+  m.kickoff = k ? k.toISOString() : null;
 }
 /* 記録の行をタップ → 種類に応じた編集シートを開く（得点者を空欄にする、時間を直すなどいろいろ変更できる） */
 function editEvent(i){
@@ -1456,6 +1461,7 @@ async function saveMatch(stay){
   try{
     await DB.upsert("gn_matches", stripMatch(m));
     toast("保存しました");
+    if(state.view==="match") snapSubView();   // 保存した内容を「書き込みなし」の基準にする
     if(!stay) go("t");
     return true;
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); return false; }

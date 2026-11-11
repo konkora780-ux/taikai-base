@@ -53,6 +53,7 @@ function memberCountWarnings(t){
 /* チームが記入リンクで提出した試合メンバー（entry_lineups）を、運営のメンバー表（lineups）へ反映する。
    運営があとから手で直した側（lu.at が提出より新しい）はそのまま。運営の古い画面で上書きされても、次に読み込んだときに戻る */
 function mergeEntryLineups(matches){
+  normalizeMatchRows(matches);
   (matches||[]).forEach(m=>{
     const el = m && m.entry_lineups; if(!el) return;
     ["H","A"].forEach(side=>{
@@ -63,6 +64,27 @@ function mergeEntryLineups(matches){
       m.lineups = m.lineups || {};
       m.lineups[side] = JSON.parse(JSON.stringify(e));
     });
+  });
+  return matches;
+}
+
+/* 読み込んだ試合データの形をそろえる（古い版・途中で止まった保存・バックアップ復元などで欄が欠けていても、
+   どの画面も止まらないようにする）。記録(events)の中の空の行は捨て、メンバー表の選手一覧が無ければ空にし、
+   日時として読めないキックオフは「未定」扱いにする */
+function normalizeMatchRows(matches){
+  (matches||[]).forEach(m=>{
+    if(!m || typeof m!=="object") return;
+    if(!Array.isArray(m.events)) m.events = [];
+    else m.events = m.events.filter(ev=> ev && typeof ev==="object");
+    if(m.lineups && typeof m.lineups==="object"){
+      ["H","A"].forEach(side=>{
+        const lu = m.lineups[side];
+        if(lu==null) return;
+        if(typeof lu!=="object"){ delete m.lineups[side]; return; }
+        lu.players = Array.isArray(lu.players) ? lu.players.filter(p=> p && typeof p==="object") : [];
+      });
+    }else if(m.lineups!=null) m.lineups = null;
+    if(m.kickoff && isNaN(new Date(m.kickoff))) m.kickoff = null;
   });
   return matches;
 }
