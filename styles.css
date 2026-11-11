@@ -385,6 +385,13 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .ofcard>summary::before{content:"▸";color:var(--accent);font-size:12px;}
 .ofcard[open]>summary::before{content:"▾";}
 .ofcard[open]>summary{margin-bottom:8px;}
+/* 公式記録の詳細：天候などをボタンで選ぶ（タブレットで横に2列） */
+.ofpicks{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));column-gap:14px;}
+.ofseg button{flex:0 1 auto;min-width:64px;padding:10px 12px;}
+.ofpick .in{margin-top:6px;}
+.ofstep{display:flex;gap:6px;align-items:center;}
+.ofstep .in{text-align:center;}
+.ofstep .btn{width:48px;flex:0 0 48px;font-size:20px;padding:8px 0;}
 
 /* ===== タブ ===== */
 .tabs,.team-switch{position:sticky;top:0;z-index:40;background:var(--paper);
