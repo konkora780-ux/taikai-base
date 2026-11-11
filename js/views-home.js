@@ -98,22 +98,28 @@ function subBackLabel(){
   return tab ? tab[1] : "大会のページ";
 }
 async function subBack(){
+  // 結果入力・公式記録・メンバー表で書き込んだ内容は、前へ進むボタンと同じく自動で保存してから戻る。
+  // 保存に失敗したとき（通信が切れた等）は、書いた内容を失わないよう画面を移らずにとどまる
+  if(canEdit() && !(state.view==="official" && state.officialReadOnly) && state.subSnap != null && state.subSnap !== subViewSnapshot()){
+    const ok = state.view === "official" ? await saveOfficial()
+             : state.view === "lineup"   ? await saveLineup()
+             : state.view === "match"    ? await saveMatch(true) : true;
+    if(ok === false) return;
+  }
   const st = state.subStack || [];
   const prev = st.pop(); state.subStack = st;
-  // 公式記録・メンバー表で書き込んだ内容は、前へ進むボタンと同じく自動で保存してから戻る
-  if(state.view === "official" && state.official && state.subSnap !== JSON.stringify(state.official)) await saveOfficial();
-  if(state.view === "lineup"){ const m = state.matches.find(x=>x.id===state.matchId);
-    if(m && state.subSnap !== JSON.stringify(m.lineups||null)) await saveLineup(); }
   if(state.view === "official") state.official = null;
   if(prev === "official") return reopenOfficial();
-  if(prev === "match" || prev === "lineup"){ state.view = prev; snapSubView(); return render(); }
+  if(prev === "match" || prev === "lineup"){ state.view = prev; render(); snapSubView(); return; }
   state.subStack = []; go("t");
 }
 /* 開いた時点の内容を控えておく（戻るときに書き込みがあったか比べる） */
-function snapSubView(){
+function snapSubView(){ state.subSnap = subViewSnapshot(); }
+function subViewSnapshot(){
   const m = state.matches.find(x=>x.id===state.matchId);
-  state.subSnap = state.view === "official" ? JSON.stringify(state.official||null)
-    : state.view === "lineup" ? JSON.stringify(m?.lineups||null) : null;
+  return state.view === "official" ? JSON.stringify(state.official||null)
+    : state.view === "lineup" ? JSON.stringify(m?.lineups||null)
+    : state.view === "match" && m ? JSON.stringify(stripMatch(m)) : null;
 }
 /* 「大会の設定」「チーム・選手（編集）」の戻る：相手の画面から来たらそこへ、そうでなければ大会のページ（開いていたタブ）へ */
 function pageBackLabel(){ return state.pageFrom==="settings" ? "大会の設定" : state.pageFrom==="teams" ? "チーム・選手の編集" : subBackLabel(); }

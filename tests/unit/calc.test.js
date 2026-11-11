@@ -220,3 +220,21 @@ test("mergeEntryLineups：チームの提出を反映し、提出後に運営が
   assert.equal(a.lineups.H.coach, "監督");
   assert.equal(b.lineups.H.players[0].role, "out");
 });
+
+test("古い/欠けた試合データを読み込んでも、得点ランキングや出場記録の計算で止まらない（normalizeMatchRows）", () => {
+  const ctx = setup();
+  const ms = [
+    doneMatch("m1","A","B",1,0,{ events:[null, {}, { type:"goal", team:"H", playerId:"p1" }],
+      lineups:{ H:{ coach:"" }, A:"old", _meta:{ pk:null } }, kickoff:"xx" }),
+    doneMatch("m2","B","C",0,0,{ events:null, lineups:null }),
+  ];
+  ctx.mergeEntryLineups(ms);
+  assert.equal(ms[0].events.length, 2);               // 空の行(null)だけ捨てる
+  assert.deepEqual(Array.from(ms[0].lineups.H.players), []);  // 選手一覧が無ければ空に
+  assert.equal(ms[0].lineups.A, undefined);           // 読めない形のメンバー表は無しに
+  assert.ok(ms[0].lineups._meta);                     // PKなどの付帯情報は残す
+  assert.equal(ms[0].kickoff, null);                  // 日時として読めないキックオフは未定に
+  assert.deepEqual(Array.from(ms[1].events), []);
+  ctx.state.matches = ms;
+  assert.doesNotThrow(() => ctx.scorerRanking(null));
+});
