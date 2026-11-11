@@ -26,7 +26,17 @@ function render(){
   const tabsOld = document.querySelector(".tabs");
   const tx = tabsOld ? tabsOld.scrollLeft : 0;
   const changed = state.view!==_lastView || (state.view==="t" && state.tab!==_lastTab);
-  $("#app").innerHTML = v();
+  // 画面の組み立てで失敗したら、元の画面のまま固まらないよう前の画面に戻し、理由を表示する
+  // （以前は失敗しても見た目だけ前の画面が残り、「勝手に戻った」ように見えていた可能性がある）
+  let html;
+  try{ html = v(); }
+  catch(e){
+    console.error(e);
+    toast("画面を表示できませんでした（"+(e && e.message || e)+"）");
+    if(_lastView && _lastView!==state.view){ state.view = _lastView; return; }
+    throw e;
+  }
+  $("#app").innerHTML = html;
   // トーナメント表があれば櫓レイアウト＋接続線を描く（DOM確定後）
   if(document.getElementById("koCanvas")){
     requestAnimationFrame(()=>{ layoutBracket(); drawLinks(); });

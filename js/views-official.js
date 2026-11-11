@@ -27,7 +27,7 @@ function viewOfficial(){
         公開・非公開の切り替えは、日程・結果の試合カードから行えます。
       </div>
       <div class="btnrow">
-        <button class="btn sec sm" style="flex:1" onclick="saveOfficial(true).then(()=>openLineup(state.matchId))">👥 メンバー表を編集</button>
+        <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveOfficial(true).then(()=>openLineup(state.matchId))">👥 メンバー表を編集</button>
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
       </div>
       <div class="btnrow">

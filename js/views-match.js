@@ -1068,8 +1068,8 @@ function viewMatch(){
       ? `<button class="btn" onclick="unlockMatch('${m.id}')">✏ 修正する</button>`
       : `<button class="btn" onclick="saveMatch()">保存する</button>`}
     <div class="btnrow">
-      <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openLineup('${m.id}'))">👥 メンバー表</button>
-      <button class="btn sec sm" style="flex:1" onclick="saveMatch(true).then(()=>openOfficial('${m.id}'))">📄 公式記録</button>
+      <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveMatch(true).then(()=>openLineup('${m.id}'))">👥 メンバー表</button>
+      <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveMatch(true).then(()=>openOfficial('${m.id}'))">📄 公式記録</button>
     </div>
     <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に${locked?"戻る":"保存せずに戻る"}</button></div>
     </div>
