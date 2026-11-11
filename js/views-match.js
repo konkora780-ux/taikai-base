@@ -1027,38 +1027,42 @@ function viewMatch(){
       <p class="hint">試合の連絡に。保存すると、結果を見ている人の画面にも 📣 で出ます。</p>
     </div>
 
-    ${(()=>{ const of=m.official||{}; const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
+    ${(()=>{ const of=m.official||ofPreview(m); const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
       <summary>📋 公式記録の詳細（審判・天候など・あとからでもOK）</summary>
-      <label class="f">回戦（大会名の右に入ります）</label>
-      <input class="in" value="${esc(of.format||"")}" oninput="setOfficialField('format',this.value)" placeholder="例）決勝 / 予選リーグ">
+      ${ofPickHtml("format","回戦（大会名の右に入ります）",of)}
       <label class="f">この試合だけ時間が違う場合（決勝だけ40分など・空なら大会の設定${ov.halfMin?"（"+ov.halfMin+"分ハーフ）":""}のまま）</label>
       <div class="row2">
         <div><input class="in" type="number" inputmode="numeric" placeholder="前後半 例）40" value="${meta.halfMin??""}" oninput="setMatchHalfMin('halfMin',this.value)"></div>
         <div><input class="in" type="number" inputmode="numeric" placeholder="延長 例）10" value="${meta.etHalfMin??""}" oninput="setMatchHalfMin('etHalfMin',this.value)"></div>
       </div>
+      ${ofNameDatalist()}
       <div class="row2">
-        <div><label class="f">主審</label><input class="in" value="${esc(of.referee||"")}" oninput="setOfficialField('referee',this.value)"></div>
-        <div><label class="f">第4審判</label><input class="in" value="${esc(of.fourth||"")}" oninput="setOfficialField('fourth',this.value)"></div>
+        <div><label class="f">主審</label><input class="in" list="ofNameList" value="${esc(of.referee||"")}" oninput="setOfficialField('referee',this.value)"></div>
+        <div><label class="f">第4審判</label><input class="in" list="ofNameList" value="${esc(of.fourth||"")}" oninput="setOfficialField('fourth',this.value)"></div>
       </div>
       <div class="row2">
-        <div><label class="f">副審1</label><input class="in" value="${esc(of.ar1||"")}" oninput="setOfficialField('ar1',this.value)"></div>
-        <div><label class="f">副審2</label><input class="in" value="${esc(of.ar2||"")}" oninput="setOfficialField('ar2',this.value)"></div>
+        <div><label class="f">副審1</label><input class="in" list="ofNameList" value="${esc(of.ar1||"")}" oninput="setOfficialField('ar1',this.value)"></div>
+        <div><label class="f">副審2</label><input class="in" list="ofNameList" value="${esc(of.ar2||"")}" oninput="setOfficialField('ar2',this.value)"></div>
       </div>
       <div class="row2">
-        <div><label class="f">記録員</label><input class="in" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
-        <div><label class="f">観衆（人）</label><input class="in" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
+        <div><label class="f">記録員</label><input class="in" list="ofNameList" value="${esc(of.recorder||"")}" oninput="setOfficialField('recorder',this.value)"></div>
+        <div><label class="f">主催団体名</label><input class="in" list="ofOrgList" value="${esc(of.org||"")}" oninput="setOfficialField('org',this.value)"></div>
+      </div>
+      <p class="hint">審判・記録員・主催団体名は、この大会のほかの試合で入れた名前が候補に出ます（タップで入ります）。</p>
+      <div class="ofpicks">
+        ${ofPickHtml("weather","天候",of)}
+        ${ofPickHtml("wind","風",of)}
+        ${ofPickHtml("pitch","ピッチ表面",of)}
+        ${ofPickHtml("pitchCond","ピッチ状態",of)}
       </div>
       <div class="row2">
-        <div><label class="f">天候</label><input class="in" value="${esc(of.weather||"")}" oninput="setOfficialField('weather',this.value)"></div>
-        <div><label class="f">気温（℃）</label><input class="in" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">風</label><input class="in" value="${esc(of.wind||"")}" oninput="setOfficialField('wind',this.value)"></div>
-        <div><label class="f">ピッチ表面</label><input class="in" value="${esc(of.pitch||"")}" oninput="setOfficialField('pitch',this.value)"></div>
-      </div>
-      <div class="row2">
-        <div><label class="f">ピッチ状態</label><input class="in" value="${esc(of.pitchCond||"")}" oninput="setOfficialField('pitchCond',this.value)"></div>
-        <div><label class="f">主催団体名</label><input class="in" value="${esc(of.org||"")}" oninput="setOfficialField('org',this.value)"></div>
+        <div><label class="f">気温（℃）</label>
+          <div class="ofstep">
+            <button type="button" class="btn sec sm" onclick="stepOfficialTemp(this,-1)" aria-label="気温を1度下げる">−</button>
+            <input class="in" inputmode="decimal" placeholder="例）18" value="${esc(of.temp||"")}" oninput="setOfficialField('temp',this.value)">
+            <button type="button" class="btn sec sm" onclick="stepOfficialTemp(this,1)" aria-label="気温を1度上げる">＋</button>
+          </div></div>
+        <div><label class="f">観衆（人）</label><input class="in" inputmode="numeric" placeholder="例）350" value="${esc(of.crowd||"")}" oninput="setOfficialField('crowd',this.value)"></div>
       </div>
       <p class="hint">ここで入れた内容は公式記録の上部にそのまま入ります。期日・キックオフ時刻・会場・試合時間・得点・メンバーは自動で入ります。マッチコミッショナーと運営担当／会場長は、公式記録の右上のサイン欄に手書きします。</p>
     </details>`; })()}
@@ -1106,6 +1110,64 @@ function setField(k,v){
 /* 結果入力画面から公式記録のヘッダー項目（審判・天候など）を直接入れる */
 function ensureMatchOfficial(m){ if(!m.official) m.official = draftOfficial(m); return m.official; }
 function setOfficialField(path, v){ const m = curMatch(); if(!m) return; pset(ensureMatchOfficial(m), path, v); }
+/* 公式記録の詳細のうち、決まった言葉を入れる欄はボタンで選べるようにする（タブレットで文字を打たずに済む）。
+   ボタンにない言い方は下の欄に手入力できる。もう一度押すと空に戻る */
+const KO_ROUND_PICKS = ["1回戦","2回戦","3回戦","準々決勝","準決勝","3位決定戦","決勝"];
+function officialPicks(key){
+  const fmt = state.t && state.t.format;
+  if(key==="format") return fmt==="ko" ? KO_ROUND_PICKS
+    : fmt==="league_ko" ? ["予選リーグ", ...KO_ROUND_PICKS]
+    : ["リーグ戦","予選リーグ","決勝リーグ","順位決定戦"];
+  return ({
+    weather:   ["晴","曇","雨","小雨","雪","屋内"],
+    wind:      ["無風","微風","弱風","強風"],
+    pitch:     ["天然芝","人工芝","土","フロア"],
+    pitchCond: ["良","普通","不良","水含み"],
+  })[key] || [];
+}
+function ofPickHtml(key, label, of){
+  const cur = String(of[key]||"").trim();
+  return `<div class="ofpick" data-ofkey="${key}">
+    <label class="f">${esc(label)}</label>
+    <div class="seg ofseg">${officialPicks(key).map(o=>
+      `<button type="button" class="${o===cur?"on":""}" data-v="${esc(o)}" onclick="pickOfficial(this)">${esc(o)}</button>`).join("")}</div>
+    <input class="in" placeholder="ボタンにないときはここに入力" value="${esc(of[key]||"")}" oninput="typeOfficial(this)">
+  </div>`;
+}
+function syncOfPick(wrap){
+  const v = wrap.querySelector("input").value.trim();
+  wrap.querySelectorAll(".ofseg button").forEach(b=>b.classList.toggle("on", b.dataset.v===v));
+}
+/* 画面を描き直さずにその場で反映する（描き直すと「公式記録の詳細」の開閉やスクロール位置が戻ってしまうため） */
+function pickOfficial(btn){
+  const wrap = btn.closest(".ofpick"), inp = wrap.querySelector("input");
+  const v = inp.value.trim()===btn.dataset.v ? "" : btn.dataset.v;
+  inp.value = v; setOfficialField(wrap.dataset.ofkey, v); syncOfPick(wrap);
+}
+function typeOfficial(inp){
+  const wrap = inp.closest(".ofpick");
+  setOfficialField(wrap.dataset.ofkey, inp.value); syncOfPick(wrap);
+}
+/* 気温は −／＋ で1度ずつ。空のときは20℃から始める */
+function stepOfficialTemp(btn, d){
+  const inp = btn.parentNode.querySelector("input");
+  const n = parseFloat(String(inp.value).replace(/[−ー－]/g,"-"));
+  const v = isNaN(n) ? 20 : Math.round((n+d)*10)/10;
+  inp.value = String(v); setOfficialField("temp", inp.value);
+}
+/* まだ公式記録を作っていない試合でも、自動で入る回戦・主催団体名を先に見せる（最初の入力で同じ内容が保存される） */
+function ofPreview(m){ try{ return draftOfficial(m); }catch(e){ return {}; } }
+/* 審判・記録員・主催団体名の候補（この大会のほかの試合で入れた名前） */
+function ofNameDatalist(){
+  const names = new Set(), orgs = new Set();
+  (state.matches||[]).forEach(x=>{
+    const o = x.official; if(!o) return;
+    ["referee","fourth","ar1","ar2","recorder","commissioner"].forEach(k=>{ const v=String(o[k]||"").trim(); if(v) names.add(v); });
+    const g = String(o.org||"").trim(); if(g) orgs.add(g);
+  });
+  const opts = s => [...s].sort((a,b)=>a.localeCompare(b,"ja")).map(v=>`<option value="${esc(v)}">`).join("");
+  return `<datalist id="ofNameList">${opts(names)}</datalist><datalist id="ofOrgList">${opts(orgs)}</datalist>`;
+}
 /* キックオフ＝コイントスで決めたチーム。もう一度押すと解除（結果を入れる画面から決める。公式記録は表示だけ） */
 function setKickoffTeam(v){
   const m = curMatch(); if(!m) return;
