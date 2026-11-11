@@ -26,7 +26,17 @@ function render(){
   const tabsOld = document.querySelector(".tabs");
   const tx = tabsOld ? tabsOld.scrollLeft : 0;
   const changed = state.view!==_lastView || (state.view==="t" && state.tab!==_lastTab);
-  $("#app").innerHTML = v();
+  // 画面の組み立てで失敗したら、元の画面のまま固まらないよう前の画面に戻し、理由を表示する
+  // （以前は失敗しても見た目だけ前の画面が残り、「勝手に戻った」ように見えていた可能性がある）
+  let html;
+  try{ html = v(); }
+  catch(e){
+    console.error(e);
+    toast("画面を表示できませんでした（"+(e && e.message || e)+"）");
+    if(_lastView && _lastView!==state.view){ state.view = _lastView; return; }
+    throw e;
+  }
+  $("#app").innerHTML = html;
   // トーナメント表があれば櫓レイアウト＋接続線を描く（DOM確定後）
   if(document.getElementById("koCanvas")){
     requestAnimationFrame(()=>{ layoutBracket(); drawLinks(); });
@@ -65,6 +75,57 @@ function topbar({title, sub, back, act}){
     <div class="ttl"><h1>${esc(title)}</h1>${sub?`<div class="sub">${esc(sub)}</div>`:""}</div>
     ${act || ""}
   </div>`;
+}
+
+/* ---------- 試合まわりの画面（結果を入れる・メンバー表・公式記録）の「戻る」 ----------
+   この3画面は互いに行き来できるので、来た順を覚えておき「戻る」で1つ前の画面に戻す。
+   （以前は どこから来ても大会のページへ戻っていた＝結果入力→公式記録→戻るで結果入力に戻れなかった）
+   大会のページ（タブ）から入ったときは覚えている順を空にする。 */
+const SUB_VIEW_LABEL = { match:"結果を入れる画面", lineup:"メンバー表", official:"公式記録" };
+function enterSubView(next){
+  const cur = state.view;
+  if(!SUB_VIEW_LABEL[cur]){ state.subStack = []; return; }
+  if(cur === next) return;
+  const st = state.subStack || [];
+  const i = st.indexOf(next);   // すでに通ってきた画面へ進むときは、そこまで巻き戻す（行ったり来たりで積み上がらないように）
+  state.subStack = i >= 0 ? st.slice(0, i) : [...st, cur];
+}
+/* 戻り先の名前（例：「結果を入れる画面」「日程・結果」） */
+function subBackLabel(){
+  const st = state.subStack || [];
+  if(st.length) return SUB_VIEW_LABEL[st[st.length-1]];
+  const tab = state.t ? tournamentTabs(state.t, cfgOf(state.t)).find(([k])=>k===state.tab) : null;
+  return tab ? tab[1] : "大会のページ";
+}
+async function subBack(){
+  const st = state.subStack || [];
+  const prev = st.pop(); state.subStack = st;
+  // 公式記録・メンバー表で書き込んだ内容は、前へ進むボタンと同じく自動で保存してから戻る
+  if(state.view === "official" && state.official && state.subSnap !== JSON.stringify(state.official)) await saveOfficial();
+  if(state.view === "lineup"){ const m = state.matches.find(x=>x.id===state.matchId);
+    if(m && state.subSnap !== JSON.stringify(m.lineups||null)) await saveLineup(); }
+  if(state.view === "official") state.official = null;
+  if(prev === "official") return reopenOfficial();
+  if(prev === "match" || prev === "lineup"){ state.view = prev; snapSubView(); return render(); }
+  state.subStack = []; go("t");
+}
+/* 開いた時点の内容を控えておく（戻るときに書き込みがあったか比べる） */
+function snapSubView(){
+  const m = state.matches.find(x=>x.id===state.matchId);
+  state.subSnap = state.view === "official" ? JSON.stringify(state.official||null)
+    : state.view === "lineup" ? JSON.stringify(m?.lineups||null) : null;
+}
+/* 「大会の設定」「チーム・選手（編集）」の戻る：相手の画面から来たらそこへ、そうでなければ大会のページ（開いていたタブ）へ */
+function pageBackLabel(){ return state.pageFrom==="settings" ? "大会の設定" : state.pageFrom==="teams" ? "チーム・選手の編集" : subBackLabel(); }
+function pageBack(){
+  const p = state.pageFrom; state.pageFrom = null;
+  if(p){ state.view = p; return render(); }
+  go("t");
+}
+/* 画面の上に出す「‹ ○○に戻る」（PCではヘッダーの戻るが隠れるので、どの幅でも見えるここを使う）
+   pcOnly：スマホではヘッダーの「‹ 戻る」で足りる画面用 */
+function subBackBar(onclick, label, pcOnly){
+  return `<div class="subback noprint${pcOnly?" pconly":""}"><button type="button" onclick="${onclick}">‹ ${esc(label)}に戻る</button></div>`;
 }
 
 /* ---------- ホーム ---------- */

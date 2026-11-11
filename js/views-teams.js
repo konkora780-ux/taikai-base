@@ -7,8 +7,9 @@ function viewTeams(){
   const deadline = cfg.rosterDeadline;
   const locked = !!(deadline && localDate(new Date().toISOString()) > deadline && !state.unlockTeams);
   return `<div class="tourwrap">`
-  + topbar({ title:"チーム・選手", sub:state.t.name, back:"go('t')" })
+  + topbar({ title:"チーム・選手", sub:state.t.name, back:"pageBack()" })
   + `<div class="twrap">${tournamentSidebar("team")}<div class="tmain">
+    ${subBackBar("pageBack()", pageBackLabel(), true)}
     <div class="screen">
     <p class="lead">この大会にエントリーするチームと選手です。台帳から入れると、背番号ごとそのまま入ります（この大会だけ番号を書き換えることもできます）。</p>
     ${locked?`<div class="lockmsg">🔒 選手登録の締切（${esc(fmtDate(deadline))}）を過ぎています。内容は変更できません。直すときは下の「✏ 編集する」を押してください。</div>`:""}
@@ -1173,9 +1174,10 @@ function viewLineup(){
     ? `<div class="callout ok" style="margin-bottom:8px">✅ このメンバーはチームが記入リンクで提出しました（${esc(fmtStamp(lu.submitted_at))}）。直すと運営の内容が優先されます。</div>` : "";
 
   return `<div class="tourwrap">`
-  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"go('t')",
+  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"subBack()",
       act:`<button class="act" onclick="saveLineup()">保存</button>` })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="team-switch">
       <button class="${side==="H"?"on":""}" onclick="state.lineupSide='H';render()">${esc(H.label||"ホーム")}</button>
       <button class="${side==="A"?"on":""}" onclick="state.lineupSide='A';render()">${esc(A.label||"アウェイ")}</button>
@@ -1200,8 +1202,10 @@ function viewLineup(){
       <button class="btn" style="margin-top:14px" onclick="saveLineup()">保存する</button>
       <div class="btnrow">
         <button class="btn sec sm" style="flex:1" onclick="window.print()">🖨 メンバー表を印刷</button>
-        <button class="btn sec sm" style="flex:1" onclick="saveLineup(true).then(()=>openOfficial('${m.id}'))">📄 公式記録へ</button>
+        <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveLineup(true).then(()=>openOfficial('${m.id}'))">📄 公式記録へ</button>
       </div>
+      <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に戻る</button></div>
+      <p class="hint" style="text-align:center">選び直した内容は、戻るときに自動で保存されます。</p>
     </div>
     ${lineupSheetHTML(m)}
   </div></div></div>`;
@@ -1230,10 +1234,11 @@ function setCaptain(side, pid){
   luTouch(side); render();
 }
 function openLineup(id){
+  enterSubView("lineup");
   state.matchId = id;
   const m = state.matches.find(x=>x.id===id);
   ensureLineups(m);
-  state.lineupSide = "H"; state.view = "lineup"; render();
+  state.lineupSide = "H"; state.view = "lineup"; snapSubView(); render();
 }
 async function saveLineup(stay){
   const m = curMatchAny(); if(!m) return false;
@@ -1295,8 +1300,37 @@ function applyLineupToOfficial(o, m, side, force){
     s.lineup[i].pos  = p ? (p.pos||"") : (force?"":s.lineup[i].pos);
   }
 }
+/* 保存済みの公式記録に欠けている欄を、空の様式で補う。
+   古い版で保存した記録や、途中までしか作られていない記録でも、公式記録の画面が開けなくなる
+   （開こうとすると結果入力の画面に残ったままになる）のを防ぐ */
+function normalizeOfficial(o){
+  const E = emptyOfficial();
+  if(!o || typeof o!=="object") return E;
+  Object.keys(E).forEach(k=>{ if(o[k]==null) o[k] = E[k]; });
+  const fillRows = (arr, n, mk)=>{
+    const a = Array.isArray(arr) ? arr : [];
+    for(let i=0;i<a.length;i++){ a[i] = Object.assign(mk(), (a[i] && typeof a[i]==="object") ? a[i] : {}); }
+    while(a.length<n) a.push(mk());
+    return a;
+  };
+  ["H","A"].forEach(side=>{
+    const D = emptySide();
+    if(!o[side] || typeof o[side]!=="object") o[side] = D;
+    const s = o[side];
+    Object.keys(D).forEach(k=>{ if(s[k]==null && D[k]!=null) s[k] = D[k]; });
+    s.lineup = fillRows(s.lineup, D.lineup.length, ()=>Object.assign({}, D.lineup[0]));
+    s.lineup.forEach(r=>{ ["no","name","pos"].forEach(k=>{ if(r[k]==null) r[k] = ""; else r[k] = String(r[k]); }); });
+    s.cards  = fillRows(s.cards, D.cards.length, ()=>Object.assign({}, D.cards[0]));
+    ["scores","pks"].forEach(k=>{ const a = Array.isArray(s[k]) ? s[k] : []; while(a.length<D[k].length) a.push(D[k][a.length]); s[k] = a; });
+    if(!s.tot || typeof s.tot!=="object") s.tot = D.tot;
+    Object.keys(D.tot).forEach(k=>{ if(!Array.isArray(s.tot[k])) s.tot[k] = D.tot[k]; });
+  });
+  o.goals = fillRows(o.goals, 7, emptyGoalRow);
+  o.goals.forEach(g=>{ if(!Array.isArray(g.seq)) g.seq = Array(10).fill(""); });
+  return o;
+}
 function draftOfficial(m){
-  const o = m.official ? JSON.parse(JSON.stringify(m.official)) : emptyOfficial();
+  const o = normalizeOfficial(m.official ? JSON.parse(JSON.stringify(m.official)) : emptyOfficial());
   const cfg = cfgOf(state.t);
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
   if(!o.title)    o.title = state.t.name || "";

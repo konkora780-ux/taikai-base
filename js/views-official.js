@@ -6,6 +6,7 @@ function viewOfficial(){
   + topbar({ title:"公式記録", sub:state.t.name, back:"backFromOfficial()",
       act:`<button class="act" onclick="saveOfficial()">保存</button>` })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="sheetbar noprint">
       <span>表示の大きさ</span>
       ${[0.6,0.8,1,1.4].map(v=>`<button class="${z===v?"on":""}" onclick="state.sheetZoom=${v};render()">${Math.round(v*100)}%</button>`).join("")}
@@ -26,7 +27,7 @@ function viewOfficial(){
         公開・非公開の切り替えは、日程・結果の試合カードから行えます。
       </div>
       <div class="btnrow">
-        <button class="btn sec sm" style="flex:1" onclick="saveOfficial(true).then(()=>go('lineup'))">👥 メンバー表を編集</button>
+        <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveOfficial(true).then(()=>openLineup(state.matchId))">👥 メンバー表を編集</button>
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
       </div>
       <div class="btnrow">
@@ -34,6 +35,8 @@ function viewOfficial(){
       </div>
       <p class="hint" style="margin-top:2px">得点・スコア・PKは、公式記録を開くたび試合結果から自動で入れ直します（審判名・メンバー・シュート・経過記号などの手入力は残ります）。</p>
       <button class="btn" onclick="saveOfficial()">保存する</button>
+      <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に戻る</button></div>
+      <p class="hint" style="text-align:center">書き込んだ内容は、戻るときに自動で保存されます。</p>
     </div>
   </div></div></div>`;
 }
@@ -53,14 +56,19 @@ async function toggleMatchPublic(id){
     render();
   }catch(e){ console.error(e); toast("できませんでした: "+(e.message||e)); }
 }
-function backFromOfficial(){ state.official = null; go("t"); }
+function backFromOfficial(){ return subBack(); }
 function openOfficial(id){
+  enterSubView("official");
   state.matchId = id;
+  reopenOfficial();
+}
+/* 公式記録の画面を（戻り先の記録を変えずに）開き直す */
+function reopenOfficial(){
   state.officialReadOnly = false;
-  const m = state.matches.find(x=>x.id===id);
+  const m = state.matches.find(x=>x.id===state.matchId);
   state.official = draftOfficial(m);
   state.sheetZoom = state.sheetZoom || 0.8;
-  state.view = "official"; render();
+  state.view = "official"; snapSubView(); render();
 }
 
 /* --- 公式記録の一般公開リンク（ログイン不要・#om=試合id） --- */
@@ -368,8 +376,9 @@ function signToPng(strokes, drawStroke){
 function viewSettings(){
   const t = state.t, cfg = cfgOf(t), sp = sportOf(t);
   return `<div class="tourwrap">`
-  + topbar({ title:"大会の設定", sub:t.name, back:"go('t')" })
+  + topbar({ title:"大会の設定", sub:t.name, back:"pageBack()" })
   + `<div class="twrap">${tournamentSidebar("settings")}<div class="tmain">
+    ${subBackBar("pageBack()", pageBackLabel(), true)}
     <div class="screen">
     <div class="card">
       <label class="f">大会名</label>
@@ -844,6 +853,9 @@ async function deleteTournament(){
    画面遷移・読み込み
    ========================================================================== */
 function go(v){
+  // 「大会の設定」⇔「チーム・選手（編集）」を行き来したときは、戻るで来た画面へ戻す
+  if(v==="settings" || v==="teams") state.pageFrom = (["settings","teams"].includes(state.view) && state.view!==v) ? state.view : null;
+  if(!SUB_VIEW_LABEL[v]) state.subStack = [];   // 試合まわり以外の画面へ移ったら、戻り先の記録は捨てる
   state.view = v;
   if(v==="home"){ location.hash = ""; loadHomeStats(); }
   if(v==="t" && state.t) location.hash = "t=" + state.t.id;
@@ -865,6 +877,7 @@ async function openTournament(id){
   state.loading = false; render();
 }
 function openMatch(id){
+  enterSubView("match");
   state.matchId = id;
   const m = state.matches.find(x=>x.id===id);
   state.unlockMatch = (m && !isDone(m)) ? id : null;   // 開いた時点で未終了なら編集可・終了済みはロック
