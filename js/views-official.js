@@ -255,13 +255,15 @@ function refreshTotals(){
   if(els[1]) els[1].textContent = sideTotal("A");
 }
 async function saveOfficial(silent){
-  const m = state.matches.find(x=>x.id===state.matchId); if(!m) return;
+  const m = state.matches.find(x=>x.id===state.matchId); if(!m) return false;
   m.official = state.official;
   m.updated_at = new Date().toISOString();
   try{
     await DB.upsert("gn_matches", stripMatch(m));
     if(!silent) toast("公式記録を保存しました");
-  }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
+    if(state.view==="official") snapSubView();
+    return true;
+  }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); return false; }
 }
 
 /* ---------- 右上のサイン欄：スマホで指（PCはマウス）で手書きする ---------- */
@@ -881,7 +883,7 @@ function openMatch(id){
   state.matchId = id;
   const m = state.matches.find(x=>x.id===id);
   state.unlockMatch = (m && !isDone(m)) ? id : null;   // 開いた時点で未終了なら編集可・終了済みはロック
-  state.view = "match"; render();
+  state.view = "match"; render(); snapSubView();   // 戻るときに書き込みがあったか比べるための控え
 }
 /* 終了した試合の編集ロックを解除する。「終了」は最終確定という扱いにするため、
    ただ画面を開けるだけでなく試合の状態そのものを一旦「終了」から外す（試合中に戻す）。
