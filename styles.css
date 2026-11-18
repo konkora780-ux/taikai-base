@@ -18,7 +18,8 @@ html,body{margin:0;padding:0;}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
   background:var(--paper); color:var(--ink); line-height:1.5;
-  -webkit-text-size-adjust:100%; padding-bottom:40px;
+  -webkit-text-size-adjust:100%;
+  padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 48px);  /* 右下の更新日時（.app-stamp）に最後の行が隠れないよう余白 */
 }
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
 input,select,textarea{font-family:inherit;font-size:16px;}
@@ -429,7 +430,7 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
     padding-top:16px;border-top:1px solid var(--line);}
   .tsb-foot .linkbtn{padding:0;font-size:12.5px;}
   .tsb-foot .linkbtn.on{text-decoration:underline;}
-  .tmain{flex:1;min-width:0;height:100%;overflow-y:auto;}
+  .tmain{flex:1;min-width:0;height:100%;overflow-y:auto;padding-bottom:40px;}  /* 右下の更新日時に重ならない余白 */
   .tmain > .tabs{display:none;}           /* 横タブはサイドバーのnavに置き換え */
   .tmain > .screen{max-width:900px;padding:24px;}
 }
@@ -566,6 +567,15 @@ td.pt{font-weight:800;}
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);
   background:rgba(23,33,47,.94);color:#fff;padding:11px 20px;border-radius:999px;
   font-size:13.5px;font-weight:600;z-index:200;box-shadow:var(--shadow);}
+
+/* 右下の「更新 YYYY/MM/DD HH:MM」。端すぎて隠れないよう安全領域（ノッチ・丸い角・ホームバー）＋14px内側に置く。
+   押せない飾り扱い（pointer-events:none）なので、下に重なったボタンもそのまま押せる。 */
+.app-stamp{position:fixed;z-index:60;pointer-events:none;
+  right:calc(env(safe-area-inset-right, 0px) + 14px);bottom:calc(env(safe-area-inset-bottom, 0px) + 14px);
+  padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.88);border:1px solid var(--line);
+  color:var(--sub);font-size:10.5px;font-weight:600;line-height:1.4;letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 4px rgba(15,22,35,.08);}
+@media print{ .app-stamp{display:none !important;} }
 
 .sb-fail-banner{position:fixed;left:0;right:0;top:0;z-index:9999;
   background:var(--bad);color:#fff;padding:10px 14px;font-size:13px;font-weight:700;
