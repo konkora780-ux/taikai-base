@@ -872,11 +872,11 @@ function formatUniform(o){
   return s || null;
 }
 
-/* コーチ（最大3人）：保存先は従来どおり coach2_name の1列。「佐藤、鈴木、田中」のように「、」区切りで入れる */
-const COACH_SLOTS = 3;
+/* コーチ（最大6人）：保存先は従来どおり coach2_name の1列。「佐藤、鈴木、田中」のように「、」区切りで入れる */
+const COACH_SLOTS = 6;
 function parseCoaches(str){
   const a = String(str||"").split(/\s*[、，,\n]\s*/).map(x=>x.trim()).filter(Boolean);
-  if(a.length > COACH_SLOTS) a.splice(COACH_SLOTS-1, a.length, a.slice(COACH_SLOTS-1).join("、"));  // 4人目以降は3つ目の欄にまとめて残す
+  if(a.length > COACH_SLOTS) a.splice(COACH_SLOTS-1, a.length, a.slice(COACH_SLOTS-1).join("、"));  // 上限を超えた分は最後の欄にまとめて残す
   while(a.length < COACH_SLOTS) a.push("");
   return a;
 }
@@ -893,7 +893,7 @@ function formatCoaches(arr){
 const SHEET_LABELS = {
   "チーム名":"name", "区分":"category", "読み仮名":"kana", "よみがな":"kana", "略称":"short_name",
   "代表者":"rep_name", "監督":"coach_name", "コーチ":"coach2_name", "大会の規模":"regions",
-  "コーチ1":"coach_1", "コーチ2":"coach_2", "コーチ3":"coach_3",
+  "コーチ1":"coach_1", "コーチ2":"coach_2", "コーチ3":"coach_3", "コーチ4":"coach_4", "コーチ5":"coach_5", "コーチ6":"coach_6",
   "FP正":"fp1", "FP副":"fp2", "GK正":"gk1", "GK副":"gk2",
   "チーム紹介":"intro", "公式サイト・SNS":"links",
 };
@@ -928,7 +928,7 @@ function parseTeamSheet(rows){
     if(/地域|地区/.test(raw.regions)) rg.push("local");
     if(rg.length) profile.regions = rg;
   }
-  const coaches = formatCoaches([raw.coach_1, raw.coach_2, raw.coach_3]);
+  const coaches = formatCoaches([1,2,3,4,5,6].map(i=>raw["coach_"+i]));
   if(coaches) profile.coach2_name = coaches;
   const uni = formatUniform({ fp1:raw.fp1, fp2:raw.fp2, gk1:raw.gk1, gk2:raw.gk2 });
   if(uni) profile.uniform_color = uni;

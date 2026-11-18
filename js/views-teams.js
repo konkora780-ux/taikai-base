@@ -494,7 +494,7 @@ function viewClub(){
       </div>
       ${(()=>{ const co = parseCoaches(c.coach2_name);
         const box = i=>`<div><label class="f">コーチ${i+1}</label><input class="in" value="${esc(co[i])}" onchange="editClubCoach('${c.id}',${i},this.value)"></div>`;
-        return `<div class="row2">${box(0)}${box(1)}</div><div class="row2">${box(2)}<div></div></div>`; })()}
+        return [0,2,4].map(i=>`<div class="row2">${box(i)}${box(i+1)}</div>`).join(""); })()}
       <label class="f">ユニフォームの色</label>
       ${(()=>{ const u = parseUniform(c.uniform_color);
         const box = (k,lb,ph)=>`<div><div class="hint" style="margin:0 0 4px">${lb}</div><input class="in" value="${esc(u[k])}" placeholder="${ph}" onchange="editClubUniform('${c.id}','${k}',this.value)"></div>`;
@@ -531,7 +531,7 @@ function editClub(id,k,v){
   const c = clubById(id); if(!c) return;
   c[k] = v; c._dirty = true;
 }
-/* コーチ1〜3の1欄だけを書きかえる */
+/* コーチ1〜6の1欄だけを書きかえる */
 function editClubCoach(id,i,v){
   const c = clubById(id); if(!c) return;
   const co = parseCoaches(c.coach2_name); co[i] = String(v||"").trim();
