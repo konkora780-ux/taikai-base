@@ -238,3 +238,44 @@ test("古い/欠けた試合データを読み込んでも、得点ランキン�
   ctx.state.matches = ms;
   assert.doesNotThrow(() => ctx.scorerRanking(null));
 });
+
+test("ユニフォーム：FP正・副／GK正・副を1つの文字列に入れて読み戻せる（以前の「赤/白」も読める）", ()=>{
+  const ctx = setup();
+  const s = ctx.formatUniform({ fp1:"赤", fp2:"白", gk1:"黄", gk2:"" });
+  assert.equal(s, "FP正:赤 / FP副:白 / GK正:黄");
+  assert.deepEqual({ ...ctx.parseUniform(s) }, { fp1:"赤", fp2:"白", gk1:"黄", gk2:"" });
+  assert.deepEqual({ ...ctx.parseUniform("赤/白") }, { fp1:"赤", fp2:"白", gk1:"", gk2:"" });
+  assert.deepEqual({ ...ctx.parseUniform("青") }, { fp1:"青", fp2:"", gk1:"", gk2:"" });
+  assert.equal(ctx.formatUniform({}), null);
+});
+
+test("選手登録票（エクセル）の読み取り：見出しの右の値と、番号・氏名の見出しより下の選手", ()=>{
+  const ctx = setup();
+  const rows = [
+    ["選手登録票（1チーム1枚）"], [],
+    ["チーム名","一関工業","","区分","高校生"],
+    ["読み仮名","いちのせき","","略称","一関工"],
+    ["代表者","","","監督","監督 二郎"],
+    ["コーチ","コーチ 三郎","","大会の規模","全国・都道府県"],
+    ["FP（正）","赤","","FP（副）","白"],
+    ["GK（正）","黄","","GK（副）",""],
+    ["チーム紹介","明るいチーム"],
+    ["10","山田 太郎","さくら","6","FW"],               // 記入例（見出しより上）は選手にしない
+    ["番号","氏名","前所属","学年","位置","よみがな","身長","体重"],
+    ["7","鈴木 一郎","","2","fw","すずき","170","60"],
+    ["","","","","","","",""],
+    ["x","佐藤 花子","","","監督"],
+  ];
+  const r = ctx.parseTeamSheet(rows);
+  assert.equal(r.profile.name, "一関工業");
+  assert.equal(r.profile.category, "hs");
+  assert.deepEqual(Array.from(r.profile.regions), ["national","pref"]);
+  assert.equal(r.profile.rep_name, undefined);       // 空欄は上書きしない
+  assert.equal(r.profile.coach2_name, "コーチ 三郎");
+  assert.equal(r.profile.uniform_color, "FP正:赤 / FP副:白 / GK正:黄");
+  assert.equal(r.players.length, 2);
+  assert.deepEqual({ ...r.players[0] }, { no:7, name:"鈴木 一郎", prev_team:null, grade:2, pos:"FW", kana:"すずき", height:"170", weight:"60" });
+  assert.equal(r.players[1].no, null);
+  assert.equal(r.players[1].pos, null);
+  assert.equal(ctx.parseTeamSheet([["チーム名","A"]]).hasRoster, false);
+});
