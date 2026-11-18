@@ -842,6 +842,100 @@ function summarizeMatchDiff(before, after){
 }
 
 /* ==========================================================================
+   ユニフォーム（FP正・副／GK正・副）
+   保存先は従来どおり uniform_color の1列（文字列）。新しい列を足さずに済むよう
+   「FP正:赤 / FP副:白 / GK正:黄 / GK副:緑」の形で入れる。以前の「赤/白」も読める。
+   ========================================================================== */
+const UNIFORM_KEYS = [["fp1","FP正"],["fp2","FP副"],["gk1","GK正"],["gk2","GK副"]];
+function parseUniform(str){
+  const o = { fp1:"", fp2:"", gk1:"", gk2:"" };
+  const s = String(str||"").trim();
+  if(!s) return o;
+  if(/(FP|GK)\s*[正副]\s*[:：]/i.test(s)){
+    s.split(/\s*[\/／]\s*(?=(?:FP|GK)\s*[正副]\s*[:：])/i).forEach(part=>{
+      const m = part.match(/^(FP|GK)\s*([正副])\s*[:：]\s*(.*)$/i);
+      if(!m) return;
+      const k = (m[1].toUpperCase()==="FP"?"fp":"gk") + (m[2]==="正"?"1":"2");
+      o[k] = m[3].trim();
+    });
+    return o;
+  }
+  const p = s.split(/\s*[\/／]\s*/);                     // 以前の書き方「赤/白」＝FPの正/副とみなす
+  if(p.length===2){ o.fp1 = p[0]; o.fp2 = p[1]; } else o.fp1 = s;
+  return o;
+}
+function formatUniform(o){
+  const s = UNIFORM_KEYS.map(([k,lb])=>{
+    const v = String((o&&o[k])||"").trim();
+    return v ? `${lb}:${v}` : "";
+  }).filter(Boolean).join(" / ");
+  return s || null;
+}
+
+/* ==========================================================================
+   登録用エクセル（選手登録票・1チーム用）の読み取り
+   rows はシートの2次元配列（文字列）。「チーム名」などの見出しのすぐ右のセルを値として読み、
+   「番号・氏名」の見出し行より下を選手名簿として読む（見出しの位置がずれても読める）。
+   ========================================================================== */
+const SHEET_LABELS = {
+  "チーム名":"name", "区分":"category", "読み仮名":"kana", "よみがな":"kana", "略称":"short_name",
+  "代表者":"rep_name", "監督":"coach_name", "コーチ":"coach2_name", "大会の規模":"regions",
+  "FP正":"fp1", "FP副":"fp2", "GK正":"gk1", "GK副":"gk2",
+  "チーム紹介":"intro", "公式サイト・SNS":"links",
+};
+function _sheetCell(v){ return String(v==null?"":v).replace(/\r\n?/g,"\n").trim(); }
+function _sheetLabel(v){ return _sheetCell(v).replace(/[\s（）()]/g,"").toUpperCase().replace("ＦＰ","FP").replace("ＧＫ","GK"); }
+function parseTeamSheet(rows){
+  rows = Array.isArray(rows) ? rows : [];
+  const hdr = rows.findIndex(r=>Array.isArray(r) && _sheetLabel(r[0])==="番号" && _sheetLabel(r[1])==="氏名");
+  const top = hdr>=0 ? rows.slice(0,hdr) : rows;
+  const raw = {};
+  top.forEach(r=>{
+    if(!Array.isArray(r)) return;
+    r.forEach((v,c)=>{
+      const key = SHEET_LABELS[_sheetLabel(v)];
+      if(key && raw[key]===undefined) raw[key] = _sheetCell(r[c+1]);
+    });
+  });
+  const profile = {};
+  ["name","kana","short_name","rep_name","coach_name","coach2_name","intro","links"].forEach(k=>{
+    if(raw[k]) profile[k] = raw[k];
+  });
+  if(raw.category){
+    const hit = Object.entries(CATEGORIES).find(([,v])=>v.label===raw.category);
+    profile.category = hit ? hit[0] : (/一般|なし/.test(raw.category) ? "none" : undefined);
+    if(!profile.category) delete profile.category;
+  }
+  if(raw.regions){
+    const rg = [];
+    if(/全国/.test(raw.regions)) rg.push("national");
+    if(/都道府県|県/.test(raw.regions)) rg.push("pref");
+    if(/地域|地区/.test(raw.regions)) rg.push("local");
+    if(rg.length) profile.regions = rg;
+  }
+  const uni = formatUniform({ fp1:raw.fp1, fp2:raw.fp2, gk1:raw.gk1, gk2:raw.gk2 });
+  if(uni) profile.uniform_color = uni;
+
+  const players = [];
+  if(hdr>=0) rows.slice(hdr+1).forEach(r=>{
+    if(!Array.isArray(r)) return;
+    const p = r.slice(0,8).map(_sheetCell);
+    const name = p[1];
+    if(!name) return;
+    const pos = String(p[4]||"").toUpperCase();
+    const g = String(p[3]||"").match(/^\d+/);
+    players.push({
+      no: /^\d{1,3}$/.test(p[0]) ? parseInt(p[0],10) : null,
+      name, prev_team: p[2]||null,
+      grade: g ? parseInt(g[0],10) : null,
+      pos: POSITIONS.includes(pos) ? pos : null,
+      kana: p[5]||null, height: p[6]||null, weight: p[7]||null,
+    });
+  });
+  return { profile, players, hasRoster: hdr>=0 };
+}
+
+/* ==========================================================================
    画面
    ========================================================================== */
 let _lastView = null, _lastTab = null;
