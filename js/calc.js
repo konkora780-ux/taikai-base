@@ -952,6 +952,12 @@ function parseTeamSheet(rows){
   return { profile, players, hasRoster: hdr>=0 };
 }
 
+/* 区分（小学生＝1〜6年 など）に合わない学年の選手を返す。読み込むと学年は空欄になるので、事前に知らせる用 */
+function playersWithBadGrade(players, categoryKey){
+  const cat = CATEGORIES[categoryKey] || CATEGORIES.none;
+  return (players||[]).filter(p=> p.grade!=null && p.grade!=="" && (!cat.max || p.grade<1 || p.grade>cat.max));
+}
+
 /* ==========================================================================
    画面
    ========================================================================== */

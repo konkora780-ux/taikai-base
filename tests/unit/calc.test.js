@@ -289,3 +289,11 @@ test("コーチ：6人まで別々の欄に入れ、「、」区切りの1つの
   const r = ctx.parseTeamSheet([["コーチ１","佐藤","","コーチ2","鈴木"],["コーチ3","田中"],["コーチ6","高橋"],["番号","氏名"]]);
   assert.equal(r.profile.coach2_name, "佐藤、鈴木、田中、高橋");
 });
+
+test("区分に合わない学年の選手を見つける（読み込み前の注意用）", ()=>{
+  const ctx = setup();
+  const ps = [{ name:"A", grade:3 }, { name:"B", grade:4 }, { name:"C", grade:null }, { name:"D", grade:0 }];
+  assert.deepEqual(ctx.playersWithBadGrade(ps, "jhs").map(p=>p.name), ["B","D"]);
+  assert.deepEqual(ctx.playersWithBadGrade(ps, "elem").map(p=>p.name), ["D"]);
+  assert.deepEqual(ctx.playersWithBadGrade(ps, "none").map(p=>p.name), ["A","B","D"]);
+});

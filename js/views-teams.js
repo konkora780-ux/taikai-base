@@ -1898,7 +1898,17 @@ function openExcelImport(clubId){
           : state.clubs.find(c=>String(c.name).trim()===nm);
         if(!clubId && !nm){ items.push({ file:f.name, error:"チーム名が書かれていません" }); continue; }
         if(!r.hasRoster){ items.push({ file:f.name, error:"選手名簿の見出し（番号・氏名）が見つかりません" }); continue; }
-        items.push({ file:f.name, name: clubId ? club.name : nm, club, r });
+        const warns = [];
+        if(clubId && nm && nm!==String(club.name).trim())
+          warns.push(`ファイルのチーム名は「${nm}」です。「${club.name}」に読み込んでよいか確認してください（プロフィールと選手が上書きされます）。`);
+        const catKey = r.profile.category || club?.category || "elem";
+        const bad = playersWithBadGrade(r.players, catKey);
+        if(bad.length){
+          const cat = CATEGORIES[catKey] || CATEGORIES.none;
+          const range = cat.max ? `1〜${cat.max}年` : "学年なし";
+          warns.push(`学年が区分（${cat.label}：${range}）に合わない選手が${bad.length}名います（${bad.slice(0,3).map(p=>`${p.name} ${p.grade}`).join("、")}${bad.length>3?" など":""}）。この選手の学年は空欄で登録されます。`);
+        }
+        items.push({ file:f.name, name: clubId ? club.name : nm, club, r, warns });
       }catch(e){ items.push({ file:f.name, error: e.message||String(e) }); }
     }
     showExcelImportSheet(items);
@@ -1914,7 +1924,8 @@ function showExcelImportSheet(items){
       ? `<div class="card" style="padding:10px 12px;margin-bottom:8px"><b>${esc(x.file)}</b><div class="hint" style="color:var(--bad);margin:2px 0 0">読めませんでした：${esc(x.error)}</div></div>`
       : `<div class="card" style="padding:10px 12px;margin-bottom:8px"><b>${esc(x.name)}</b>
           <span class="hint" style="margin:0 0 0 6px">${x.club?"台帳のチームを更新":"新しいチームとして登録"}</span>
-          <div class="hint" style="margin:2px 0 0">選手 ${x.r.players.length}名${x.r.profile.uniform_color?`・ユニフォーム ${esc(x.r.profile.uniform_color)}`:""}　<span style="opacity:.7">（${esc(x.file)}）</span></div></div>`).join("")}
+          <div class="hint" style="margin:2px 0 0">選手 ${x.r.players.length}名${x.r.profile.uniform_color?`・ユニフォーム ${esc(x.r.profile.uniform_color)}`:""}　<span style="opacity:.7">（${esc(x.file)}）</span></div>
+          ${(x.warns||[]).map(w=>`<div class="hint" style="color:var(--bad);margin:4px 0 0">⚠ ${esc(w)}</div>`).join("")}</div>`).join("")}
     ${ok.length?`<label class="f">選手の入れ方</label>
     <div class="seg" id="xi-mode">
       <button class="on" data-v="replace">名簿を入れ替える</button>
