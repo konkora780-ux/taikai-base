@@ -492,10 +492,9 @@ function viewClub(){
         <div><label class="f">代表者</label><input class="in" value="${esc(c.rep_name||"")}" onchange="editClub('${c.id}','rep_name',this.value||null)"></div>
         <div><label class="f">監督</label><input class="in" value="${esc(c.coach_name||"")}" onchange="editClub('${c.id}','coach_name',this.value||null)"></div>
       </div>
-      <div class="row2">
-        <div><label class="f">コーチ</label><input class="in" value="${esc(c.coach2_name||"")}" onchange="editClub('${c.id}','coach2_name',this.value||null)"></div>
-        <div></div>
-      </div>
+      ${(()=>{ const co = parseCoaches(c.coach2_name);
+        const box = i=>`<div><label class="f">コーチ${i+1}</label><input class="in" value="${esc(co[i])}" onchange="editClubCoach('${c.id}',${i},this.value)"></div>`;
+        return `<div class="row2">${box(0)}${box(1)}</div><div class="row2">${box(2)}<div></div></div>`; })()}
       <label class="f">ユニフォームの色</label>
       ${(()=>{ const u = parseUniform(c.uniform_color);
         const box = (k,lb,ph)=>`<div><div class="hint" style="margin:0 0 4px">${lb}</div><input class="in" value="${esc(u[k])}" placeholder="${ph}" onchange="editClubUniform('${c.id}','${k}',this.value)"></div>`;
@@ -531,6 +530,12 @@ function viewClub(){
 function editClub(id,k,v){
   const c = clubById(id); if(!c) return;
   c[k] = v; c._dirty = true;
+}
+/* コーチ1〜3の1欄だけを書きかえる */
+function editClubCoach(id,i,v){
+  const c = clubById(id); if(!c) return;
+  const co = parseCoaches(c.coach2_name); co[i] = String(v||"").trim();
+  c.coach2_name = formatCoaches(co); c._dirty = true;
 }
 /* ユニフォーム（FP正・副／GK正・副）の1欄だけを書きかえる */
 function editClubUniform(id,k,v){

@@ -279,3 +279,13 @@ test("選手登録票（エクセル）の読み取り：見出しの右の値�
   assert.equal(r.players[1].pos, null);
   assert.equal(ctx.parseTeamSheet([["チーム名","A"]]).hasRoster, false);
 });
+
+test("コーチ：3人まで別々の欄に入れ、「、」区切りの1つの文字列で保存する", ()=>{
+  const ctx = setup();
+  assert.equal(ctx.formatCoaches(["佐藤","","鈴木"]), "佐藤、鈴木");
+  assert.equal(ctx.formatCoaches(["","",""]), null);
+  assert.deepEqual(Array.from(ctx.parseCoaches("佐藤、鈴木")), ["佐藤","鈴木",""]);
+  assert.deepEqual(Array.from(ctx.parseCoaches("A,B、C、D")), ["A","B","C、D"]);   // 4人目以降も消さずに残す
+  const r = ctx.parseTeamSheet([["コーチ１","佐藤","","コーチ2","鈴木"],["コーチ3","田中"],["番号","氏名"]]);
+  assert.equal(r.profile.coach2_name, "佐藤、鈴木、田中");
+});
