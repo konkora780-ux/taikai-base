@@ -872,6 +872,19 @@ function formatUniform(o){
   return s || null;
 }
 
+/* コーチ（最大3人）：保存先は従来どおり coach2_name の1列。「佐藤、鈴木、田中」のように「、」区切りで入れる */
+const COACH_SLOTS = 3;
+function parseCoaches(str){
+  const a = String(str||"").split(/\s*[、，,\n]\s*/).map(x=>x.trim()).filter(Boolean);
+  if(a.length > COACH_SLOTS) a.splice(COACH_SLOTS-1, a.length, a.slice(COACH_SLOTS-1).join("、"));  // 4人目以降は3つ目の欄にまとめて残す
+  while(a.length < COACH_SLOTS) a.push("");
+  return a;
+}
+function formatCoaches(arr){
+  const s = (arr||[]).map(x=>String(x||"").trim()).filter(Boolean).join("、");
+  return s || null;
+}
+
 /* ==========================================================================
    登録用エクセル（選手登録票・1チーム用）の読み取り
    rows はシートの2次元配列（文字列）。「チーム名」などの見出しのすぐ右のセルを値として読み、
@@ -880,11 +893,13 @@ function formatUniform(o){
 const SHEET_LABELS = {
   "チーム名":"name", "区分":"category", "読み仮名":"kana", "よみがな":"kana", "略称":"short_name",
   "代表者":"rep_name", "監督":"coach_name", "コーチ":"coach2_name", "大会の規模":"regions",
+  "コーチ1":"coach_1", "コーチ2":"coach_2", "コーチ3":"coach_3",
   "FP正":"fp1", "FP副":"fp2", "GK正":"gk1", "GK副":"gk2",
   "チーム紹介":"intro", "公式サイト・SNS":"links",
 };
 function _sheetCell(v){ return String(v==null?"":v).replace(/\r\n?/g,"\n").trim(); }
-function _sheetLabel(v){ return _sheetCell(v).replace(/[\s（）()]/g,"").toUpperCase().replace("ＦＰ","FP").replace("ＧＫ","GK"); }
+function _sheetLabel(v){ return _sheetCell(v).replace(/[\s（）()]/g,"").replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0))
+  .toUpperCase().replace("ＦＰ","FP").replace("ＧＫ","GK"); }
 function parseTeamSheet(rows){
   rows = Array.isArray(rows) ? rows : [];
   const hdr = rows.findIndex(r=>Array.isArray(r) && _sheetLabel(r[0])==="番号" && _sheetLabel(r[1])==="氏名");
@@ -913,6 +928,8 @@ function parseTeamSheet(rows){
     if(/地域|地区/.test(raw.regions)) rg.push("local");
     if(rg.length) profile.regions = rg;
   }
+  const coaches = formatCoaches([raw.coach_1, raw.coach_2, raw.coach_3]);
+  if(coaches) profile.coach2_name = coaches;
   const uni = formatUniform({ fp1:raw.fp1, fp2:raw.fp2, gk1:raw.gk1, gk2:raw.gk2 });
   if(uni) profile.uniform_color = uni;
 
