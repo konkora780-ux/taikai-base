@@ -23,6 +23,13 @@ const DB = {
     // 自分の団体の大会を運営者として見ているときだけ生のgn_matches（公式記録の中身も含む）を読む。
     // それ以外（ゲスト・他団体の大会を見ている運営者）は、非公開の公式記録を除いた公開用の窓口(gn_matches_public)を読む。
     const isOwner = !!(state.user && t && t.org_id === state.user.id);
+    state.heavyFailed = false;
+    if(!isOwner && t){
+      // 一般の閲覧：まず軽い列だけ読む（名簿・試合メンバー・公式記録は、その画面を開いたときに loadHeavy で読む）
+      const lite = await this.loadGuestLite(t).catch(e=>{ console.warn("軽い読み込みに失敗。従来の読み込みに切り替えます", e); return null; });
+      if(lite){ state.lazyGuest = true; state.heavyLoaded = false; return lite; }
+    }
+    state.lazyGuest = false; state.heavyLoaded = true;
     const matchesQuery = isOwner
       ? sb.from("gn_matches").select("*").eq("tournament_id",id)
       : sb.rpc("gn_matches_public").select("*").eq("tournament_id",id);
@@ -33,6 +40,65 @@ const DB = {
     if(rteams.error) throw rteams.error;
     if(rmatches.error) throw rmatches.error;
     return { t, teams:rteams.data||[], matches:mergeEntryLineups(rmatches.data||[]) };
+  },
+
+  /* --- 一般の閲覧向けの軽い読み込み（setup-30 の gn_matches_open・gn_teams_crest を使う） ---
+     ・試合は gn_matches_open（公式記録の指サインを含まない窓口）から、メンバー表・公式記録を除いた列だけ
+     ・チームは名簿・校章を除いた列だけ。校章はスマホに覚えておき、変わったチームの分だけ読む
+     setup-30 が未実行（窓口が無い）ときは null を返し、呼ぶ側は従来の読み込みに戻る */
+  _openMissing: false,
+  openMatches(cols){ return sb.rpc("gn_matches_open").select(cols); },
+  async loadGuestLite(t){
+    if(this._openMissing) return null;
+    const [rm, rteams] = await Promise.all([
+      this.openMatches(GUEST_MATCH_COLS).eq("tournament_id", t.id),
+      sb.from("gn_teams").select(GUEST_TEAM_COLS).eq("tournament_id", t.id),
+    ]);
+    if(rm.error){ this._openMissing = true; return null; }
+    if(rteams.error) throw rteams.error;
+    const teams = rteams.data || [];
+    await this.attachCrests(t.id, teams);
+    return { t, teams, matches:mergeEntryLineups(rm.data||[]), lazy:true };
+  },
+  /* 校章：チームごとの「画像の指紋」（md5）だけ読み、スマホに覚えている画像と同じなら読まない */
+  async attachCrests(tournamentId, teams){
+    if(!teams.length) return;
+    const cache = crestCacheRead();
+    const rh = await sb.from("gn_teams_crest").select("id,crest_hash").eq("tournament_id", tournamentId);
+    let need;
+    if(rh.error){ need = teams.map(x=>x.id); }   // 指紋の窓口が無いときは毎回読む
+    else{
+      const hashOf = new Map((rh.data||[]).map(r=>[r.id, r.crest_hash]));
+      need = [];
+      teams.forEach(x=>{
+        const h = hashOf.get(x.id), c = cache[x.id];
+        if(h === EMPTY_MD5){ x.crest = null; }
+        else if(c && c.h === h){ x.crest = c.c; c.at = Date.now(); }
+        else need.push(x.id);
+      });
+      teams._hash = hashOf;
+    }
+    for(let i=0; i<need.length; i+=50){
+      const { data, error } = await sb.from("gn_teams").select("id,crest").in("id", need.slice(i, i+50));
+      if(error) throw error;
+      (data||[]).forEach(r=>{
+        const x = teams.find(y=>y.id===r.id); if(!x) return;
+        x.crest = r.crest || null;
+        const h = teams._hash && teams._hash.get(r.id);
+        if(h && r.crest) cache[r.id] = { h, c:r.crest, at:Date.now() };
+      });
+    }
+    delete teams._hash;
+    crestCacheWrite(cache);
+  },
+  /* 試合メンバー・公式記録（サインなし）を読んで、手元の大会データに足す */
+  async loadHeavy(t, teams, matches){
+    if(!sb) return;
+    const rm = await this.openMatches("id,lineups,official").eq("tournament_id", t.id);
+    if(rm.error) throw rm.error;
+    const hv = new Map((rm.data||[]).map(r=>[r.id, r]));
+    matches.forEach(m=>{ const r = hv.get(m.id); if(r){ m.lineups = r.lineups; m.official = r.official; } });
+    mergeEntryLineups(matches);
   },
 
   /* 自動更新用の軽い読み込み：大会・試合の軽い列・チームの軽い列（運営は記入リンクの提出時刻も）だけ。
@@ -46,7 +112,7 @@ const DB = {
     const isOwner = !!(state.user && t.org_id === state.user.id);
     const mq = isOwner
       ? sb.from("gn_matches").select(POLL_MATCH_COLS).eq("tournament_id",id)
-      : sb.rpc("gn_matches_public").select(POLL_MATCH_COLS).eq("tournament_id",id);
+      : (state.lazyGuest ? this.openMatches(POLL_MATCH_COLS) : sb.rpc("gn_matches_public").select(POLL_MATCH_COLS)).eq("tournament_id",id);
     const [rm, rteams, entries] = await Promise.all([
       mq,
       sb.from("gn_teams").select(POLL_TEAM_COLS).eq("tournament_id",id),
@@ -65,7 +131,9 @@ const DB = {
       const part = ids.slice(i, i+100);
       const q = isOwner
         ? sb.from("gn_matches").select("*").in("id", part)
-        : sb.rpc("gn_matches_public").select("*").in("id", part);
+        : state.lazyGuest
+          ? this.openMatches(state.heavyLoaded ? "*" : GUEST_MATCH_COLS).in("id", part)   // 重い列は、読み込み済みのときだけ
+          : sb.rpc("gn_matches_public").select("*").in("id", part);
       const { data, error } = await q;
       if(error) throw error;
       out.push(...(data||[]));
@@ -75,14 +143,22 @@ const DB = {
   /* メンバー表の列だけを読む（チームが記入リンクで出した試合メンバーは更新日時が変わらないので、ときどきこれで拾う） */
   async loadLineups(t){
     const isOwner = !!(state.user && t && t.org_id === state.user.id);
+    if(!isOwner && state.lazyGuest && !state.heavyLoaded) return [];   // メンバー表をまだ読んでいない閲覧者は不要
     const q = isOwner
       ? sb.from("gn_matches").select("id,lineups,entry_lineups").eq("tournament_id", t.id)
-      : sb.rpc("gn_matches_public").select("id,lineups").eq("tournament_id", t.id);
+      : (state.lazyGuest ? this.openMatches("id,lineups") : sb.rpc("gn_matches_public").select("id,lineups")).eq("tournament_id", t.id);
     const { data, error } = await q;
     if(error) throw error;
     return data || [];
   },
   async loadTeams(tournamentId){
+    if(state.lazyGuest){
+      const { data, error } = await sb.from("gn_teams").select(GUEST_TEAM_COLS).eq("tournament_id",tournamentId);
+      if(error) throw error;
+      const teams = data || [];
+      await this.attachCrests(tournamentId, teams);
+      return teams;
+    }
     const { data, error } = await sb.from("gn_teams").select("*").eq("tournament_id",tournamentId);
     if(error) throw error;
     return data || [];
@@ -98,12 +174,14 @@ const DB = {
       const { t, teams, matches } = await this.loadTournament(m.tournament_id);
       return { m, t, teams, matches };
     }
-    const rm = await sb.rpc("gn_matches_public").select("*").eq("id",matchId).maybeSingle();
+    let rm = this._openMissing ? null : await this.openMatches("*").eq("id",matchId).maybeSingle();
+    if(!rm || rm.error) rm = await sb.rpc("gn_matches_public").select("*").eq("id",matchId).maybeSingle();
     if(rm.error) throw rm.error;
     const m = rm.data;
     if(!m) return { m:null, t:null, teams:[], matches:[] };
-    const { t, teams, matches } = await this.loadTournament(m.tournament_id);
-    return { m, t, teams, matches };
+    const d = await this.loadTournament(m.tournament_id);
+    if(d.lazy){ await this.loadHeavy(d.t, d.teams, d.matches); state.heavyLoaded = true; }
+    return { m, t:d.t, teams:d.teams, matches:d.matches };
   },
 
   /* --- 台帳（チーム・選手・団体設定）を丸ごと読む --- */

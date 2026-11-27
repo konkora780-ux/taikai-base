@@ -28,8 +28,11 @@ function render(){
   const changed = state.view!==_lastView || (state.view==="t" && state.tab!==_lastTab);
   // 画面の組み立てで失敗したら、元の画面のまま固まらないよう前の画面に戻し、理由を表示する
   // （以前は失敗しても見た目だけ前の画面が残り、「勝手に戻った」ように見えていた可能性がある）
+  // 一般の閲覧で、名簿・試合メンバー・公式記録が要る画面なら、読み終わるまで「読み込み中」にして読み終えたら描き直す
+  const waitHeavy = typeof guestNeedsHeavy === "function" && guestNeedsHeavy(state);
+  if(waitHeavy) ensureHeavy().then(()=> render());
   let html;
-  try{ html = v(); }
+  try{ html = (waitHeavy && state.view !== "t") ? `<div class="screen"><div class="empty">読み込み中…</div></div>` : v(); }
   catch(e){
     console.error(e);
     toast("画面を表示できませんでした（"+(e && e.message || e)+"）");
@@ -981,7 +984,7 @@ function viewTournament(){
   + `<div class="twrap">${tournamentSidebar(state.tab)}<div class="tmain">
     <div class="tabs">${tabs.map(([k,l])=>
       `<button class="${state.tab===k?"on":""}" onclick="setTab('${k}')">${esc(l)}</button>`).join("")}</div>
-    <div class="screen">${body()}
+    <div class="screen">${guestNeedsHeavy(state) ? `<div class="empty">読み込み中…</div>` : body()}
       <div class="btnrow noprint">
         <button class="btn ghost sm" style="flex:1" onclick="window.print()">🖨 印刷・PDF</button>
         <button class="btn ghost sm" style="flex:1" onclick="shareTournament()">🔗 共有</button>
@@ -1223,7 +1226,7 @@ function matchCard(m){
           <button class="linkbtn" onclick="copyText('${officialLinkFor(m.id)}','リンクをコピーしました')">リンクをコピー</button>
           <button class="linkbtn" style="color:var(--bad)" onclick="toggleMatchPublic('${m.id}')">非公開にする</button></div>`
       : `<div class="mpub"><button class="linkbtn" onclick="toggleMatchPublic('${m.id}')">🔗 公式記録を公開する</button></div>`)
-    : (m.official&&m.official.public
+    : (officialIsPublic(m)
       ? `<div class="mpub"><button class="linkbtn" onclick="goOfficialPublic('${m.id}')">📄 公式記録を見る</button></div>` : "")}
   </div>`;
 }

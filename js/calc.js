@@ -73,6 +73,33 @@ function mergeEntryLineups(matches){
    校章・名簿・公式記録のサイン画像を毎回送らないので、Supabaseの転送量が大きく減る */
 const POLL_MATCH_COLS = "id,tournament_id,stage,grp,round,slot,home_team,away_team,home_src,away_src,kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,updated_at";
 const POLL_TEAM_COLS  = "id,name,grp,seed,sort_order,club_id";
+/* 一般の閲覧で最初に読む列（試合メンバー・公式記録・校章を除く）。試合メンバー・公式記録は画面を開いたときに読む。
+   名簿は日程の得点者名に使うので最初から読む。official_public は「公式記録を見る」ボタンを出すかどうかだけの印 */
+const GUEST_MATCH_COLS = "id,tournament_id,org_id,stage,grp,round,slot,matchNo,home_team,away_team,home_src,away_src,kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,updated_at,result_type,result_note,official_public";
+const GUEST_TEAM_COLS  = "id,tournament_id,org_id,name,grp,seed,sort_order,club_id,short_name,kana,rep_name,coach_name,coach2_name,uniform_color,intro,links,pts_adjust,pts_adjust_note,withdrawn,withdrawn_note,players";
+/* 公式記録が一般公開されているか（一般の閲覧で公式記録の中身をまだ読んでいないときは official_public の印で判断） */
+function officialIsPublic(m){ return !!((m && m.official && m.official.public) || (m && m.official === undefined && m.official_public === true)); }
+const EMPTY_MD5 = "d41d8cd98f00b204e9800998ecf8427e";   // 校章が無い（空文字）ときの指紋
+/* 校章をスマホに覚えておく（2回目からは、画像が変わったチームの分だけ読む）。覚えるのは新しい順に200チームまで */
+const CREST_CACHE_KEY = "gn_crest_cache_v1";
+function crestCacheRead(){
+  try{ const o = JSON.parse(localStorage.getItem(CREST_CACHE_KEY) || "{}"); return (o && typeof o === "object") ? o : {}; }
+  catch(e){ return {}; }
+}
+function crestCacheWrite(cache){
+  try{
+    const keys = Object.keys(cache).sort((a,b)=> (cache[b].at||0) - (cache[a].at||0));
+    keys.slice(200).forEach(k=> delete cache[k]);
+    localStorage.setItem(CREST_CACHE_KEY, JSON.stringify(cache));
+  }catch(e){ try{ localStorage.removeItem(CREST_CACHE_KEY); }catch(_){} }   // 容量が足りないときは覚えるのをやめる
+}
+/* 一般の閲覧で、その画面に名簿・試合メンバー・公式記録が要るか（要らない画面＝日程・順位表などは軽いまま） */
+const GUEST_LITE_TABS = ["overview","notice","venues","schedule","table","matrix","bracket"];
+function guestNeedsHeavy(st){
+  if(!st.lazyGuest || st.heavyLoaded || st.heavyFailed) return false;
+  if(st.view === "t") return !GUEST_LITE_TABS.includes(st.tab || "schedule");
+  return ["match","official","officialPublic","lineup","teamPublic","entry"].includes(st.view);
+}
 function pollSig(row, cols){
   return JSON.stringify(cols.split(",").map(k=> row ? (row[k]===undefined ? null : row[k]) : null));
 }

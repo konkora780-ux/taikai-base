@@ -326,3 +326,22 @@ test("自動更新：チームは並び・組・名前が変わったときだ�
   assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A",{grp:"B"}), team(ctx,"B")]), true);
   assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A")]), true);
 });
+
+// --- 一般の閲覧で、名簿・試合メンバー・公式記録を後から読む仕組み ---
+test("一般の閲覧：日程・順位表などは軽いまま、ランキングや試合の画面では読み込みが要る", ()=>{
+  const ctx = setup();
+  const st = { lazyGuest:true, heavyLoaded:false, view:"t", tab:"schedule" };
+  assert.equal(ctx.guestNeedsHeavy(st), false);
+  assert.equal(ctx.guestNeedsHeavy({ ...st, tab:"scorers" }), true);
+  assert.equal(ctx.guestNeedsHeavy({ ...st, view:"match" }), true);
+  assert.equal(ctx.guestNeedsHeavy({ ...st, view:"home" }), false);
+  assert.equal(ctx.guestNeedsHeavy({ ...st, tab:"scorers", heavyLoaded:true }), false);
+  assert.equal(ctx.guestNeedsHeavy({ ...st, tab:"scorers", lazyGuest:false }), false);   // 運営・従来の読み込み
+});
+test("公式記録の公開：中身を読む前は official_public の印で、読んだあとは中身で判断する", ()=>{
+  const ctx = setup();
+  assert.equal(ctx.officialIsPublic({ official_public:true }), true);
+  assert.equal(ctx.officialIsPublic({ official_public:false }), false);
+  assert.equal(ctx.officialIsPublic({ official_public:true, official:null }), false);
+  assert.equal(ctx.officialIsPublic({ official:{ public:true } }), true);
+});

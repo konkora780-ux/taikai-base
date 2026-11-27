@@ -1682,8 +1682,9 @@ function signBoxesHTML(o){
     out += `<span class="lbc" style="left:${pt(x+w/2)};top:${pt(S-(B.top+B.mid)/2-size*0.5)};font-size:${pt(size)}">${esc(label)}</span>`;
     const img = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(signs[k]||"") ? signs[k] : "";   // 画像データ以外は表示しない
     const pos = `left:${pt(x+1)};top:${pt(S-B.mid+1)};width:${pt(w-2)};height:${pt(B.mid-B.bot-2)}`;
-    if(state.officialReadOnly){   // 一般公開の閲覧ビューでは、サインの画像そのものは出さない（悪用防止）
-      out += `<div class="signcell ro" style="${pos}">${img?"署名済":""}</div>`;
+    // 一般の閲覧では、サインの画像そのものは届かない（setup-30 の窓口が「署名済み」の印だけを返す）＝悪用防止・通信量の節約
+    if(state.officialReadOnly || (signs[k] && !img)){
+      out += `<div class="signcell ro" style="${pos}">${signs[k]?"署名済":""}</div>`;
     } else {
       out += `<div class="signcell${img?" has":""}" data-sign="${k}" style="${pos}" onclick="openSignPad('${k}')">`
         + (img ? `<img src="${esc(img)}" alt="${esc(label)}のサイン">` : `<span class="noprint">タップして<br>サイン</span>`) + `</div>`;
