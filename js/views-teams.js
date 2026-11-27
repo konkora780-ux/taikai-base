@@ -1393,8 +1393,15 @@ function draftOfficial(m){
   if(!o.etMin && etHalf && matchETPlayed(m)) o.etMin = String(etHalf*2);
   [["H",H],["A",A]].forEach(([side,R])=>{
     const s = o[side];
-    if(!s.name) s.name = R.label==="—" ? "" : R.label;
-    if(!s.name2) s.name2 = s.name;
+    // 前の試合が未決着のうちに公式記録を作ると「勝者」「敗者」などの仮の名前が保存される。
+    // 対戦相手が決まったあとに開いたら、仮の名前は実際のチーム名に置き換える（手で入れた名前はそのまま）
+    const TEMP = /^(勝者|敗者|—|⚠)$/;
+    const real = R.kind==="team" && R.label && !TEMP.test(R.label);
+    if(!s.name || (real && TEMP.test(s.name))){
+      if(s.name2 === s.name) s.name2 = "";
+      s.name = R.label==="—" ? "" : R.label;
+    }
+    if(!s.name2 || (real && TEMP.test(s.name2))) s.name2 = s.name;
     // 出場メンバーがまだ空なら、メンバー表（無ければエントリー）から写す
     applyLineupToOfficial(o, m, side, false);
     // 得点とカードを写す
