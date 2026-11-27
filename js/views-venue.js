@@ -249,6 +249,7 @@ function viewVenueEntry(){
       <b style="font-size:18px">📍 ${esc(e.venue)}</b>
       <div class="hint" style="margin:4px 0 0">${esc(venueDayLabel(e.day))}の試合（${ms.length}件）。試合を押すと結果を入れられます。</div>
     </div>
+    ${venueDeadlineNote()}
     ${ms.length ? ms.map(m=>{
       const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
       const sc = (m.home_score!=null && m.away_score!=null) ? `${m.home_score} － ${m.away_score}${(m.home_pk!=null&&m.away_pk!=null)?`<small>（PK ${m.home_pk}－${m.away_pk}）</small>`:""}` : "－";
@@ -318,4 +319,9 @@ async function saveVenueOfficial(silent){
     if(state.view==="official") snapSubView();
     return true;
   }catch(err){ console.error(err); toast("保存できませんでした: "+(err.message||err)); return false; }
+}
+
+/* 会場担当の画面に出す注意：訂正はその日のうちに（こんちゃんの要望 2026-11-28） */
+function venueDeadlineNote(){
+  return `<div class="callout" style="margin-bottom:10px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ <b>訂正はその日のうち（24時まで）に</b>行ってください。24時を過ぎるとこのリンクは使えなくなり、それ以降の訂正は運営（本部）への連絡が必要です。</div>`;
 }

@@ -940,6 +940,7 @@ function viewMatch(){
     ${subBackBar(backFn, backLabel, !vmode)}
     <div class="screen">
     ${venueDatalistHTML()}
+    ${vmode ? venueDeadlineNote() : ""}
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
     <fieldset class="ovlock"${locked?" disabled":""}>
     <div class="scorebox">
