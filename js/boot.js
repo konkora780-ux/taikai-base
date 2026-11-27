@@ -54,3 +54,18 @@ document.addEventListener("click", (e)=>{
     try{ el.showPicker(); }catch(_){}
   }
 });
+
+/* 画面の右下に「アプリの更新日時」を小さく表示する。
+   GitHub Pages は公開（デプロイ）のたびにページの最終更新日時（Last-Modified）を付け直すので、
+   document.lastModified を読むだけでマージごとに自動で変わる（手で書き換える必要なし）。
+   タップの邪魔にならないよう pointer-events:none、画面の端やiPhoneの丸い角に隠れないよう少し内側に置く（CSSの .app-stamp）。 */
+(function showAppStamp(){
+  const d = new Date(document.lastModified);
+  if(isNaN(d.getTime()) || document.querySelector(".app-stamp")) return;
+  const p = n => String(n).padStart(2, "0");
+  const el = document.createElement("div");
+  el.className = "app-stamp";
+  el.setAttribute("aria-label", "アプリの更新日時");
+  el.textContent = `更新 ${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  document.body.appendChild(el);
+})();

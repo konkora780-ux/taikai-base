@@ -7,8 +7,9 @@ function viewTeams(){
   const deadline = cfg.rosterDeadline;
   const locked = !!(deadline && localDate(new Date().toISOString()) > deadline && !state.unlockTeams);
   return `<div class="tourwrap">`
-  + topbar({ title:"チーム・選手", sub:state.t.name, back:"go('t')" })
+  + topbar({ title:"チーム・選手", sub:state.t.name, back:"pageBack()" })
   + `<div class="twrap">${tournamentSidebar("team")}<div class="tmain">
+    ${subBackBar("pageBack()", pageBackLabel(), true)}
     <div class="screen">
     <p class="lead">この大会にエントリーするチームと選手です。台帳から入れると、背番号ごとそのまま入ります（この大会だけ番号を書き換えることもできます）。</p>
     ${locked?`<div class="lockmsg">🔒 選手登録の締切（${esc(fmtDate(deadline))}）を過ぎています。内容は変更できません。直すときは下の「✏ 編集する」を押してください。</div>`:""}
@@ -313,6 +314,8 @@ function doBackupImport(){
 }
 
 function viewRoster(){
+  // ログインが切れた状態で台帳の画面に来たとき（別タブでログアウトした等）は、止まらずにログイン画面を出す
+  if(!state.user){ state.view = "login"; return viewLogin(); }
   const year = orgYear();
   return topbar({ title:"チーム・選手の台帳", sub:`${year}年度`, back:"go('home')" })
   + `<div class="screen">
@@ -341,6 +344,8 @@ function viewRoster(){
       <button class="btn sec sm" style="flex:1" onclick="openClubBulkAdd()">📋 チーム名をまとめて作る</button>
       <button class="btn sec sm" style="flex:1" onclick="openClubEntryLinks()">📨 記入リンクを配る</button>
     </div>
+    <div class="btnrow"><button class="btn sec sm" style="flex:1" onclick="openExcelImport()">📥 エクセル（選手登録票）から読み込む</button></div>
+    <p class="hint">各チームに<a href="templates/選手登録票（1チーム用）.xlsx" download>選手登録票（エクセル）</a>を配り、戻ってきたファイルを選ぶと、チームのプロフィールと選手をまとめて登録できます（複数ファイルを一度に選べます）。</p>
     <p class="hint">各チームに「記入リンク」を配ると、チームがログイン不要でチーム名・選手を登録できます（初年度の登録に便利）。</p>
 
     <div class="block-label" style="margin-top:22px">会場（${state.venues.length}）</div>
@@ -487,10 +492,14 @@ function viewClub(){
         <div><label class="f">代表者</label><input class="in" value="${esc(c.rep_name||"")}" onchange="editClub('${c.id}','rep_name',this.value||null)"></div>
         <div><label class="f">監督</label><input class="in" value="${esc(c.coach_name||"")}" onchange="editClub('${c.id}','coach_name',this.value||null)"></div>
       </div>
-      <div class="row2">
-        <div><label class="f">コーチ</label><input class="in" value="${esc(c.coach2_name||"")}" onchange="editClub('${c.id}','coach2_name',this.value||null)"></div>
-        <div><label class="f">ユニフォームカラー</label><input class="in" value="${esc(c.uniform_color||"")}" onchange="editClub('${c.id}','uniform_color',this.value||null)" placeholder="例）赤/白"></div>
-      </div>
+      ${(()=>{ const co = parseCoaches(c.coach2_name);
+        const box = i=>`<div><label class="f">コーチ${i+1}</label><input class="in" value="${esc(co[i])}" onchange="editClubCoach('${c.id}',${i},this.value)"></div>`;
+        return [0,2,4].map(i=>`<div class="row2">${box(i)}${box(i+1)}</div>`).join(""); })()}
+      <label class="f">ユニフォームの色</label>
+      ${(()=>{ const u = parseUniform(c.uniform_color);
+        const box = (k,lb,ph)=>`<div><div class="hint" style="margin:0 0 4px">${lb}</div><input class="in" value="${esc(u[k])}" placeholder="${ph}" onchange="editClubUniform('${c.id}','${k}',this.value)"></div>`;
+        return `<div class="row2">${box("fp1","FP（正）","例）赤")}${box("fp2","FP（副）","例）白")}</div>
+                <div class="row2">${box("gk1","GK（正）","例）黄")}${box("gk2","GK（副）","例）緑")}</div>`; })()}
       <label class="f">チーム紹介</label>
       <textarea class="in" style="min-height:80px" onchange="editClub('${c.id}','intro',this.value||null)">${esc(c.intro||"")}</textarea>
       <label class="f">公式サイト・SNS（自由記入・複数行OK）</label>
@@ -508,6 +517,7 @@ function viewClub(){
       <button class="btn sec sm" style="flex:1" onclick="addMember('${c.id}')">＋ 1人ずつ追加</button>
       <button class="btn sec sm" style="flex:1" onclick="openBulkSheet('${c.id}')">📋 まとめて貼り付け</button>
     </div>
+    <div class="btnrow"><button class="btn sec sm" style="flex:1" onclick="openExcelImport('${c.id}')">📥 エクセル（選手登録票）から読み込む</button></div>
     ${grads?`<div class="btnrow"><button class="btn ghost sm" onclick="state.showGrads=!state.showGrads;render()">
       ${state.showGrads?"卒業した選手をかくす":`卒業した選手を見る（${grads}名）`}</button></div>`:""}
 
@@ -520,6 +530,18 @@ function viewClub(){
 function editClub(id,k,v){
   const c = clubById(id); if(!c) return;
   c[k] = v; c._dirty = true;
+}
+/* コーチ1〜6の1欄だけを書きかえる */
+function editClubCoach(id,i,v){
+  const c = clubById(id); if(!c) return;
+  const co = parseCoaches(c.coach2_name); co[i] = String(v||"").trim();
+  c.coach2_name = formatCoaches(co); c._dirty = true;
+}
+/* ユニフォーム（FP正・副／GK正・副）の1欄だけを書きかえる */
+function editClubUniform(id,k,v){
+  const c = clubById(id); if(!c) return;
+  const u = parseUniform(c.uniform_color); u[k] = String(v||"").trim();
+  c.uniform_color = formatUniform(u); c._dirty = true;
 }
 /* 出場する大会の規模（全国／都道府県／地域）を複数トグル */
 function toggleClubRegion(id, key){
@@ -539,13 +561,29 @@ function readImageResized(file, max, cb){
       const s = Math.min(1, max/Math.max(img.width, img.height));
       const w = Math.max(1, Math.round(img.width*s)), h = Math.max(1, Math.round(img.height*s));
       const cv = document.createElement("canvas"); cv.width=w; cv.height=h;
-      cv.getContext("2d").drawImage(img, 0, 0, w, h);
-      try{ cb(cv.toDataURL("image/png")); }catch(e){ toast("画像を読み込めませんでした"); }
+      const ctx = cv.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      try{ cb(smallestImageDataUrl(cv, ctx)); }catch(e){ toast("画像を読み込めませんでした"); }
     };
     img.onerror = ()=> toast("画像を読み込めませんでした");
     img.src = rd.result;
   };
   rd.readAsDataURL(file);
+}
+/* 同じ大きさ（ピクセル数）のまま、いちばん軽い画像形式を選ぶ。
+   PNGに加えて WebP（透明を残せる・Safariなど作れないブラウザでは自動で外れる）と、
+   透明な部分が無いときだけ JPEG を試す。画面・印刷の見た目（解像度）は変えずに、通信量と保存容量を減らすため */
+function smallestImageDataUrl(cv, ctx){
+  const cands = [cv.toDataURL("image/png")];
+  const webp = cv.toDataURL("image/webp", 0.9);
+  if(webp.startsWith("data:image/webp")) cands.push(webp);
+  let opaque = true;
+  try{
+    const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    for(let i=3; i<px.length; i+=4){ if(px[i] < 255){ opaque = false; break; } }
+  }catch(e){ opaque = false; }
+  if(opaque) cands.push(cv.toDataURL("image/jpeg", 0.9));
+  return cands.reduce((a,b)=> b.length < a.length ? b : a);
 }
 /* 台帳チームの校章（管理側の編集画面用） */
 function setClubCrestFromInput(clubId, input){
@@ -1010,8 +1048,7 @@ const SHEET = { W:595.28, H:842,
     [93,360,"警告・退場",8],[240,360,"監督",8],[341,360,"監督",8],[464,360,"警告・退場",8],
     [37,348,"時間",8],[65,348,"種別",6],[82,348,"番号",6],[118,348,"選手名",8],[172,348,"理由",8],
     [408,348,"時間",8],[436,348,"種別",6],[453,348,"番号",6],[489,348,"選手名",8],[543,348,"理由",8],
-    [285,310,"シュート",7],[293,297,"GK",7],[293,284,"CK",7],[286,271,"直接FK",7],[286,259,"間接FK",7],
-    [285,246,"(ｵﾌｻｲﾄﾞ)",6],[293,233,"PK",7],
+    /* チーム合計の項目名（シュート/GK/CK…）は totalsHeaderHTML() がセル中央そろえで描画 */
     [32,221,"得点時間",7],[67,221,"得点チーム",7],[116,221,"No.",7],[151,221,"得点者",7],[201,221,"アシスト",7],
     [234,221,"得点経過　記録例： ～:ドリブル →:ゴロパス ↑:浮き球パス ×:混戦 S:シュート H:ヘディング",6],
     [45,120,"PKの経過",8],
@@ -1029,8 +1066,8 @@ const ROW_CARD   = [[343.7,331.1],[331.1,318.5],[318.5,305.9],[305.9,293.2],[293
 const ROW_TOTAL  = [[318.5,305.9],[305.9,293.2],[293.2,280.6],[280.6,268],[268,255.4],[255.4,242.8],[242.8,230.2]];
 const TOTAL_KEYS = ["shot","gk","ck","fk","ifk","off","pk"];
 // チーム合計の列区切り（左から）：H＝延前/延後/後半/前半/計、A＝計/前半/後半/延前/延後（中央のシュート等ラベル欄281.3-315.1を挟んで左右対称）
-const TOT_H = [199.9,216.18,232.46,248.74,265.02,281.3];
-const TOT_A = [315.1,331.38,347.66,363.94,380.22,396.5];
+const TOT_H = [197,213.9,230.7,247.6,264.5,281.3];   // 用紙の縦線の位置にそろえる（ずれると文字が枠の中央に来ない）
+const TOT_A = [315.1,331.9,348.8,365.7,382.5,399.4];
 const ROW_GOAL   = [[217.6,204.9],[204.9,192.3],[192.3,179.7],[179.7,167.1],[167.1,154.5],[154.5,141.9],[141.9,129.3]];
 /* 得点経過の行は入った得点の数だけ動的に増やす（最低7・最大14）。同じ枠内を等分する。 */
 const GOAL_TOP = 217.6, GOAL_BOT = 129.3;
@@ -1174,9 +1211,10 @@ function viewLineup(){
     ? `<div class="callout ok" style="margin-bottom:8px">✅ このメンバーはチームが記入リンクで提出しました（${esc(fmtStamp(lu.submitted_at))}）。直すと運営の内容が優先されます。</div>` : "";
 
   return `<div class="tourwrap">`
-  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"go('t')",
+  + topbar({ title:"メンバー表", sub:`🏆 ${state.t.name} ・ ${H.label} vs ${A.label}`, back:"subBack()",
       act:`<button class="act" onclick="saveLineup()">保存</button>` })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="team-switch">
       <button class="${side==="H"?"on":""}" onclick="state.lineupSide='H';render()">${esc(H.label||"ホーム")}</button>
       <button class="${side==="A"?"on":""}" onclick="state.lineupSide='A';render()">${esc(A.label||"アウェイ")}</button>
@@ -1201,8 +1239,10 @@ function viewLineup(){
       <button class="btn" style="margin-top:14px" onclick="saveLineup()">保存する</button>
       <div class="btnrow">
         <button class="btn sec sm" style="flex:1" onclick="window.print()">🖨 メンバー表を印刷</button>
-        <button class="btn sec sm" style="flex:1" onclick="saveLineup(true).then(()=>openOfficial('${m.id}'))">📄 公式記録へ</button>
+        <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveLineup(true).then(()=>openOfficial('${m.id}'))">📄 公式記録へ</button>
       </div>
+      <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に戻る</button></div>
+      <p class="hint" style="text-align:center">選び直した内容は、戻るときに自動で保存されます。</p>
     </div>
     ${lineupSheetHTML(m)}
   </div></div></div>`;
@@ -1231,10 +1271,11 @@ function setCaptain(side, pid){
   luTouch(side); render();
 }
 function openLineup(id){
+  enterSubView("lineup");
   state.matchId = id;
   const m = state.matches.find(x=>x.id===id);
   ensureLineups(m);
-  state.lineupSide = "H"; state.view = "lineup"; render();
+  state.lineupSide = "H"; state.view = "lineup"; snapSubView(); render();
 }
 async function saveLineup(stay){
   const m = curMatchAny(); if(!m) return false;
@@ -1242,6 +1283,7 @@ async function saveLineup(stay){
   try{
     await DB.upsert("gn_matches", stripMatch(m));
     if(!stay) toast("メンバー表を保存しました");
+    if(state.view==="lineup") snapSubView();
     return true;
   }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); return false; }
 }
@@ -1296,8 +1338,37 @@ function applyLineupToOfficial(o, m, side, force){
     s.lineup[i].pos  = p ? (p.pos||"") : (force?"":s.lineup[i].pos);
   }
 }
+/* 保存済みの公式記録に欠けている欄を、空の様式で補う。
+   古い版で保存した記録や、途中までしか作られていない記録でも、公式記録の画面が開けなくなる
+   （開こうとすると結果入力の画面に残ったままになる）のを防ぐ */
+function normalizeOfficial(o){
+  const E = emptyOfficial();
+  if(!o || typeof o!=="object") return E;
+  Object.keys(E).forEach(k=>{ if(o[k]==null) o[k] = E[k]; });
+  const fillRows = (arr, n, mk)=>{
+    const a = Array.isArray(arr) ? arr : [];
+    for(let i=0;i<a.length;i++){ a[i] = Object.assign(mk(), (a[i] && typeof a[i]==="object") ? a[i] : {}); }
+    while(a.length<n) a.push(mk());
+    return a;
+  };
+  ["H","A"].forEach(side=>{
+    const D = emptySide();
+    if(!o[side] || typeof o[side]!=="object") o[side] = D;
+    const s = o[side];
+    Object.keys(D).forEach(k=>{ if(s[k]==null && D[k]!=null) s[k] = D[k]; });
+    s.lineup = fillRows(s.lineup, D.lineup.length, ()=>Object.assign({}, D.lineup[0]));
+    s.lineup.forEach(r=>{ ["no","name","pos"].forEach(k=>{ if(r[k]==null) r[k] = ""; else r[k] = String(r[k]); }); });
+    s.cards  = fillRows(s.cards, D.cards.length, ()=>Object.assign({}, D.cards[0]));
+    ["scores","pks"].forEach(k=>{ const a = Array.isArray(s[k]) ? s[k] : []; while(a.length<D[k].length) a.push(D[k][a.length]); s[k] = a; });
+    if(!s.tot || typeof s.tot!=="object") s.tot = D.tot;
+    Object.keys(D.tot).forEach(k=>{ if(!Array.isArray(s.tot[k])) s.tot[k] = D.tot[k]; });
+  });
+  o.goals = fillRows(o.goals, 7, emptyGoalRow);
+  o.goals.forEach(g=>{ if(!Array.isArray(g.seq)) g.seq = Array(10).fill(""); });
+  return o;
+}
 function draftOfficial(m){
-  const o = m.official ? JSON.parse(JSON.stringify(m.official)) : emptyOfficial();
+  const o = normalizeOfficial(m.official ? JSON.parse(JSON.stringify(m.official)) : emptyOfficial());
   const cfg = cfgOf(state.t);
   const H = resolveSlot(m,"H"), A = resolveSlot(m,"A");
   if(!o.title)    o.title = state.t.name || "";
@@ -1433,11 +1504,15 @@ function memberHeaderHTML(et){
 function totalsHeaderHTML(){
   const S = SHEET.H;
   const cl = (x1,x2,y,t,s)=> `<span class="lbc" style="left:${pt((x1+x2)/2)};top:${pt(S-y-s*0.82)};font-size:${pt(s)}">${esc(t)}</span>`;
-  const Y = 329;
+  const Y = 331.1 - 6.5*0.32;   // 見出し行（343.7〜318.5）の上下中央
   let o = "";
   o += cl(TOT_H[0],TOT_H[1], Y,"延前",6) + cl(TOT_H[1],TOT_H[2], Y,"延後",6)
      + cl(TOT_H[2],TOT_H[3], Y,"後半",6.5) + cl(TOT_H[3],TOT_H[4], Y,"前半",6.5) + cl(TOT_H[4],TOT_H[5], Y,"計",6.5);
   o += cl(281.3,315.1, Y,"チーム合計",6.5);
+  // 中央の項目名（シュート〜PK）も各行の上下左右中央に
+  [["シュート",7],["GK",7],["CK",7],["直接FK",7],["間接FK",7],["(ｵﾌｻｲﾄﾞ)",6],["PK",7]].forEach(([t,s],i)=>{
+    const [yt,yb] = ROW_TOTAL[i]; o += cl(281.3,315.1, (yt+yb)/2 - s*0.32, t, s);
+  });
   o += cl(TOT_A[0],TOT_A[1], Y,"計",6.5) + cl(TOT_A[1],TOT_A[2], Y,"前半",6.5) + cl(TOT_A[2],TOT_A[3], Y,"後半",6.5)
      + cl(TOT_A[3],TOT_A[4], Y,"延前",6) + cl(TOT_A[4],TOT_A[5], Y,"延後",6);
   return o;
@@ -1638,9 +1713,9 @@ function headerHTML(o, hCrest, aCrest){
   vl(400, r1[0], r1[1]);
   lb(32, r1, "大会名:", 7.5);   fx("title",  62, 400, r1, {size:9.5});
   fx("format", 400, R, r1, {size:9.5, ph:"例）決勝"});
-  vl(220, r2[0], r2[1]); vl(400, r2[0], r2[1]); vl(487, r2[0], r2[1]);
-  lb(32, r2, "期　日:", 7.5);   fx("date",   62, 220, r2, {align:"l"});
-  lb(224, r2, "会　場:", 7.5);  fx("venue", 252, 400, r2, {align:"l"});
+  vl(150, r2[0], r2[1]); vl(400, r2[0], r2[1]); vl(487, r2[0], r2[1]);
+  lb(32, r2, "期　日:", 7.5);   fx("date",   62, 150, r2, {align:"l"});
+  lb(154, r2, "会　場:", 7.5);  fx("venue", 182, 400, r2, {align:"l"});
   lb(404, r2, "試合時間:", 7);  fx("matchMin", 438, 474, r2, {}); lb(475, r2, "分", 7.5);
   lb(491, r2, "延長:", 7);      fx("etMin",  512, 555, r2, {}); lb(556, r2, "分", 7.5);
   [145,228,300,363,470].forEach(x=> vl(x, r3[0], r3[1]));
@@ -1749,3 +1824,172 @@ function pkMaruCount(side){
   return n ? String(n) : "";
 }
 
+
+/* ==========================================================================
+   エクセル（選手登録票）から読み込む
+   外部ライブラリを使わず、ブラウザの標準機能（DecompressionStream・DOMParser）で .xlsx を読む。
+   .xlsx は「XMLファイルをZIPで固めたもの」なので、ZIPをほどいて1枚目のシートの文字を取り出す。
+   ========================================================================== */
+async function _unzipEntries(buf){
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for(let i=buf.byteLength-22; i>=Math.max(0,buf.byteLength-65557); i--){
+    if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; }
+  }
+  if(eocd<0) throw new Error("エクセル（.xlsx）のファイルではないようです");
+  const count = dv.getUint16(eocd+10,true);
+  let p = dv.getUint32(eocd+16,true);
+  const dec = new TextDecoder();
+  const out = {};
+  for(let n=0;n<count;n++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method = dv.getUint16(p+10,true), csize = dv.getUint32(p+20,true);
+    const nlen = dv.getUint16(p+28,true), xlen = dv.getUint16(p+30,true), clen = dv.getUint16(p+32,true);
+    const off = dv.getUint32(p+42,true);
+    const name = dec.decode(u8.subarray(p+46,p+46+nlen));
+    out[name] = { method, csize, off };
+    p += 46+nlen+xlen+clen;
+  }
+  out._read = async (name)=>{
+    const e = out[name]; if(!e) return null;
+    const lnl = dv.getUint16(e.off+26,true), lxl = dv.getUint16(e.off+28,true);
+    const data = u8.subarray(e.off+30+lnl+lxl, e.off+30+lnl+lxl+e.csize);
+    if(e.method===0) return dec.decode(data);
+    if(e.method!==8) throw new Error("このファイルの圧縮形式には対応していません");
+    const ds = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return await new Response(ds).text();
+  };
+  return out;
+}
+async function readXlsxFirstSheet(file){
+  if(/\.xls$/i.test(file.name)) throw new Error("古い形式（.xls）です。エクセルで「.xlsx」形式で保存し直してください");
+  const z = await _unzipEntries(await file.arrayBuffer());
+  const xml = s => new DOMParser().parseFromString(s, "application/xml");
+  const tags = (d,t) => Array.from(d.getElementsByTagNameNS("*",t));
+  // 1枚目のシートの場所（workbook.xml の最初の sheet → rels の Target）
+  let sheetPath = "xl/worksheets/sheet1.xml";
+  const wbx = await z._read("xl/workbook.xml"), rel = await z._read("xl/_rels/workbook.xml.rels");
+  if(wbx && rel){
+    const first = tags(xml(wbx),"sheet")[0];
+    const rid = first && (first.getAttribute("r:id") || first.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id"));
+    const r = tags(xml(rel),"Relationship").find(x=>x.getAttribute("Id")===rid);
+    if(r){ const t = r.getAttribute("Target"); sheetPath = t.startsWith("/") ? t.slice(1) : ("xl/"+t.replace(/^\.\//,"")); }
+  }
+  const sst = [];
+  const ss = await z._read("xl/sharedStrings.xml");
+  if(ss) tags(xml(ss),"si").forEach(si=> sst.push(tags(si,"t").map(t=>t.textContent).join("")));
+  const sx = await z._read(sheetPath);
+  if(!sx) throw new Error("シートが見つかりませんでした");
+  const rows = [];
+  const colNo = ref => { let n=0; for(const ch of ref.replace(/\d+$/,"")) n = n*26 + (ch.charCodeAt(0)-64); return n-1; };
+  tags(xml(sx),"c").forEach(c=>{
+    const ref = c.getAttribute("r") || "";
+    const m = ref.match(/^([A-Z]+)(\d+)$/); if(!m) return;
+    const ri = +m[2]-1, ci = colNo(ref), t = c.getAttribute("t");
+    const v = tags(c,"v")[0];
+    let val = "";
+    if(t==="s") val = v ? (sst[+v.textContent]||"") : "";
+    else if(t==="inlineStr") val = tags(c,"t").map(x=>x.textContent).join("");
+    else val = v ? v.textContent : "";
+    (rows[ri] = rows[ri] || [])[ci] = val;
+  });
+  for(let i=0;i<rows.length;i++) rows[i] = Array.from(rows[i]||[], x=>x==null?"":x);
+  return rows;
+}
+
+/* clubId を渡すとそのチームへ（ファイルのチーム名は使わない）。省略時はチーム名で台帳を探し、無ければ新しく作る */
+function openExcelImport(clubId){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  inp.multiple = !clubId;
+  inp.onchange = async ()=>{
+    const files = Array.from(inp.files||[]);
+    if(!files.length) return;
+    const items = [];
+    for(const f of files){
+      try{
+        const r = parseTeamSheet(await readXlsxFirstSheet(f));
+        const nm = String(r.profile.name||"").trim();
+        const club = clubId ? clubById(clubId)
+          : state.clubs.find(c=>String(c.name).trim()===nm);
+        if(!clubId && !nm){ items.push({ file:f.name, error:"チーム名が書かれていません" }); continue; }
+        if(!r.hasRoster){ items.push({ file:f.name, error:"選手名簿の見出し（番号・氏名）が見つかりません" }); continue; }
+        const warns = [];
+        if(clubId && nm && nm!==String(club.name).trim())
+          warns.push(`ファイルのチーム名は「${nm}」です。「${club.name}」に読み込んでよいか確認してください（プロフィールと選手が上書きされます）。`);
+        const catKey = r.profile.category || club?.category || "elem";
+        const bad = playersWithBadGrade(r.players, catKey);
+        if(bad.length){
+          const cat = CATEGORIES[catKey] || CATEGORIES.none;
+          const range = cat.max ? `1〜${cat.max}年` : "学年なし";
+          warns.push(`学年が区分（${cat.label}：${range}）に合わない選手が${bad.length}名います（${bad.slice(0,3).map(p=>`${p.name} ${p.grade}`).join("、")}${bad.length>3?" など":""}）。この選手の学年は空欄で登録されます。`);
+        }
+        items.push({ file:f.name, name: clubId ? club.name : nm, club, r, warns });
+      }catch(e){ items.push({ file:f.name, error: e.message||String(e) }); }
+    }
+    showExcelImportSheet(items);
+  };
+  inp.click();
+}
+function showExcelImportSheet(items){
+  const ok = items.filter(x=>!x.error);
+  const el = document.createElement("div"); el.className="modal";
+  el.innerHTML = `<div class="sheet">
+    <h3>エクセルから読み込む</h3>
+    ${items.map(x=> x.error
+      ? `<div class="card" style="padding:10px 12px;margin-bottom:8px"><b>${esc(x.file)}</b><div class="hint" style="color:var(--bad);margin:2px 0 0">読めませんでした：${esc(x.error)}</div></div>`
+      : `<div class="card" style="padding:10px 12px;margin-bottom:8px"><b>${esc(x.name)}</b>
+          <span class="hint" style="margin:0 0 0 6px">${x.club?"台帳のチームを更新":"新しいチームとして登録"}</span>
+          <div class="hint" style="margin:2px 0 0">選手 ${x.r.players.length}名${x.r.profile.uniform_color?`・ユニフォーム ${esc(x.r.profile.uniform_color)}`:""}　<span style="opacity:.7">（${esc(x.file)}）</span></div>
+          ${(x.warns||[]).map(w=>`<div class="hint" style="color:var(--bad);margin:4px 0 0">⚠ ${esc(w)}</div>`).join("")}</div>`).join("")}
+    ${ok.length?`<label class="f">選手の入れ方</label>
+    <div class="seg" id="xi-mode">
+      <button class="on" data-v="replace">名簿を入れ替える</button>
+      <button data-v="add">いまの名簿に足す</button>
+    </div>
+    <p class="hint">プロフィールは、エクセルに書いてある項目だけを上書きします（空欄の項目は今のまま）。同じファイルを読み直すときは「入れ替える」にすると選手が二重になりません。卒業した選手はそのまま残ります。</p>`:""}
+    <div class="btnrow">
+      <button class="btn ghost" onclick="this.closest('.modal').remove()">${ok.length?"やめる":"閉じる"}</button>
+      ${ok.length?`<button class="btn" id="xi-ok">${ok.length}チームを登録する</button>`:""}
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  if(!ok.length) return;
+  let mode = "replace";
+  el.querySelectorAll("#xi-mode button").forEach(b=> b.onclick = ()=>{
+    el.querySelectorAll("#xi-mode button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); mode = b.dataset.v;
+  });
+  $("#xi-ok").onclick = async ()=>{
+    let np = 0;
+    ok.forEach(x=>{
+      let c = x.club;
+      if(!c){
+        c = { id:uid(), org_id:state.user.id, name:x.name, category:"elem", regions:[], crest:null, note:null };
+        state.clubs.push(c);
+      }
+      const pf = Object.assign({}, x.r.profile); delete pf.name;
+      Object.assign(c, pf); c._dirty = true;
+      applyImportedMembers(c.id, x.r.players, mode);
+      np += x.r.players.length;
+    });
+    el.remove();
+    await saveRoster(true);
+    toast(`${ok.length}チーム・選手${np}名を登録しました`);
+  };
+}
+function applyImportedMembers(clubId, rows, mode){
+  const c = clubById(clubId);
+  const cat = CATEGORIES[c?.category] || CATEGORIES.none;
+  if(mode==="replace"){
+    const old = state.members.filter(m=>m.club_id===clubId && m.status!=="graduated");
+    (state._deletedMembers = state._deletedMembers || []).push(...old.map(m=>m.id));
+    state.members = state.members.filter(m=>!(m.club_id===clubId && m.status!=="graduated"));
+  }
+  const base = membersOf(clubId).length;
+  rows.forEach((r,i)=> state.members.push({
+    id:uid(), org_id:state.user.id, club_id:clubId,
+    name:r.name, kana:r.kana||null, no:r.no, pos:r.pos, prev_team:r.prev_team||null,
+    grade: cat.max ? (r.grade && r.grade<=cat.max ? r.grade : null) : null,
+    status:"active", sort_order:base+i, note:null, height:r.height||null, weight:r.weight||null, _dirty:true }));
+}

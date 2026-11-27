@@ -18,7 +18,8 @@ html,body{margin:0;padding:0;}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
   background:var(--paper); color:var(--ink); line-height:1.5;
-  -webkit-text-size-adjust:100%; padding-bottom:40px;
+  -webkit-text-size-adjust:100%;
+  padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 48px);  /* 右下の更新日時（.app-stamp）に最後の行が隠れないよう余白 */
 }
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
 input,select,textarea{font-family:inherit;font-size:16px;}
@@ -385,6 +386,13 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
 .ofcard>summary::before{content:"▸";color:var(--accent);font-size:12px;}
 .ofcard[open]>summary::before{content:"▾";}
 .ofcard[open]>summary{margin-bottom:8px;}
+/* 公式記録の詳細：天候などをボタンで選ぶ（タブレットで横に2列） */
+.ofpicks{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));column-gap:14px;}
+.ofseg button{flex:0 1 auto;min-width:64px;padding:10px 12px;}
+.ofpick .in{margin-top:6px;}
+.ofstep{display:flex;gap:6px;align-items:center;}
+.ofstep .in{text-align:center;}
+.ofstep .btn{width:48px;flex:0 0 48px;font-size:20px;padding:8px 0;}
 
 /* ===== タブ ===== */
 .tabs,.team-switch{position:sticky;top:0;z-index:40;background:var(--paper);
@@ -422,7 +430,7 @@ textarea.in{min-height:120px;resize:vertical;line-height:1.7;}
     padding-top:16px;border-top:1px solid var(--line);}
   .tsb-foot .linkbtn{padding:0;font-size:12.5px;}
   .tsb-foot .linkbtn.on{text-decoration:underline;}
-  .tmain{flex:1;min-width:0;height:100%;overflow-y:auto;}
+  .tmain{flex:1;min-width:0;height:100%;overflow-y:auto;padding-bottom:40px;}  /* 右下の更新日時に重ならない余白 */
   .tmain > .tabs{display:none;}           /* 横タブはサイドバーのnavに置き換え */
   .tmain > .screen{max-width:900px;padding:24px;}
 }
@@ -560,6 +568,15 @@ td.pt{font-weight:800;}
   background:rgba(23,33,47,.94);color:#fff;padding:11px 20px;border-radius:999px;
   font-size:13.5px;font-weight:600;z-index:200;box-shadow:var(--shadow);}
 
+/* 右下の「更新 YYYY/MM/DD HH:MM」。端すぎて隠れないよう安全領域（ノッチ・丸い角・ホームバー）＋14px内側に置く。
+   押せない飾り扱い（pointer-events:none）なので、下に重なったボタンもそのまま押せる。 */
+.app-stamp{position:fixed;z-index:60;pointer-events:none;
+  right:calc(env(safe-area-inset-right, 0px) + 14px);bottom:calc(env(safe-area-inset-bottom, 0px) + 14px);
+  padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.88);border:1px solid var(--line);
+  color:var(--sub);font-size:10.5px;font-weight:600;line-height:1.4;letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:0 1px 4px rgba(15,22,35,.08);}
+@media print{ .app-stamp{display:none !important;} }
+
 .sb-fail-banner{position:fixed;left:0;right:0;top:0;z-index:9999;
   background:var(--bad);color:#fff;padding:10px 14px;font-size:13px;font-weight:700;
   line-height:1.5;text-align:center;box-shadow:var(--shadow-lg);
@@ -689,14 +706,18 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
 .mb-team{font-size:13pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:3pt;}
 .mb-coach{font-size:9pt;margin:4pt 0 6pt;}
 .mb-tbl{width:100%;border-collapse:collapse;font-size:10pt;}
-.mb-tbl th,.mb-tbl td{border:1px solid #000;padding:3pt 5pt;}
+.mb-tbl th,.mb-tbl td{border:1px solid #000;padding:3pt 5pt;white-space:normal;}
+/* 全体の「最後の行は下線なし」を打ち消す（表の一番下の線が消えて表が途切れて見えるため） */
+.mb-tbl tr:last-child td{border-bottom:1px solid #000;}
+.mb-tbl td{text-align:left;}
 .mb-tbl th{background:#eee;font-size:8.5pt;}
 .mb-tbl td.c,.mb-tbl th.c{text-align:center;width:38pt;}
-.mb-sec td{background:#f0f0f0;font-weight:700;font-size:9pt;}
+.mb-sec td{background:#f0f0f0;font-weight:700;font-size:9pt;text-align:center;}
+.mb-sheet{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 .mb-empty{color:#999;text-align:center;}
 
 @media print{
-  .topbar,.tabs,.btn,.btnrow,.noprint,.sheetbar{display:none !important;}
+  .topbar,.tabs,.team-switch,.btn,.btnrow,.noprint,.sheetbar{display:none !important;}
   .printonly{display:block !important;padding:14pt;}
   .mb-cols{break-inside:avoid;}
   body{background:#fff;padding:0;}
@@ -723,7 +744,8 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
 .kobk{overflow:auto;position:relative;margin-bottom:14px;padding:12px;
   background:radial-gradient(circle at 1px 1px,#e3e7ef 1px,transparent 0) 0 0/22px 22px,#fff;
   border:1.5px solid var(--line);border-radius:14px;box-shadow:var(--shadow);}
-.kobk-canvas{position:relative;min-height:140px;}
+/* 幅は「中身（全回戦）の幅」に合わせる。画面より狭いと線を描くSVGも狭くなり、右側の線が切れて消えるため */
+.kobk-canvas{position:relative;min-height:140px;width:max-content;min-width:100%;}
 .kobk-svg{position:absolute;inset:0;pointer-events:none;z-index:1;}
 .kobk-rounds{position:relative;z-index:2;display:flex;gap:42px;align-items:flex-start;padding:4px;}
 .kobk-round{display:flex;flex-direction:column;min-width:148px;width:148px;}
@@ -770,3 +792,48 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
 /* 公式記録のkick offチェック欄 */
 .sheet-a4 .kochk{position:absolute;border:.75pt solid #000;box-sizing:border-box;display:flex;align-items:center;
   justify-content:center;font-size:9pt;line-height:1;font-weight:700;color:#000;}
+
+/* ===== 紙様式の縦型トーナメント表（views-bracket-paper.js） ===== */
+.ppb{overflow:auto;margin-bottom:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;}
+.ppb-in{position:relative;}
+.ppb-title{display:none;font-weight:800;font-size:16px;background:#000;color:#fff;padding:6px 10px;margin-bottom:8px;}
+.pb-svg{display:block;}
+.pb-svg text{font-family:inherit;text-anchor:middle;fill:#222;}
+.pb-svg .pb-day{font-size:12px;font-weight:700;}
+.pb-svg .pb-day.sm{font-size:10px;}
+.pb-svg .pb-t{font-size:9.5px;}
+.pb-svg .pb-no{font-weight:800;}
+.pb-svg .pb-sc{font-weight:800;fill:#d32f2f;}
+.pb-svg .pb-num{font-size:11px;font-weight:700;}
+.pb-svg .pb-nm{text-anchor:start;font-weight:600;fill:#222;text-orientation:upright;writing-mode:vertical-rl;}
+.pb-svg .pb-nm.tbd{fill:#999;font-weight:500;}
+.pb-note{font-size:11px;color:var(--sub);margin:4px 0 0;}
+.pb-venues{margin-top:10px;border:1px solid #333;font-size:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}
+.pb-vh{grid-column:1/-1;background:#000;color:#fff;text-align:center;font-weight:700;padding:3px;}
+.pb-v{display:flex;gap:8px;padding:3px 8px;border-top:1px solid #ccc;}
+.pb-v b{flex:0 0 auto;min-width:3em;}
+#ppPrint{display:none;}
+@media print{
+  body.ppbk > *{ display:none !important; }
+  /* 用紙1枚の高さに固定し、表(SVG)は会場一覧などの残りの高さに合わせて縮む */
+  body.ppbk > #ppPrint{ display:flex !important; flex-direction:column; width:100%; height:182mm;
+    overflow:hidden; background:#fff; break-inside:avoid; page-break-inside:avoid; }
+  body.ppbk #ppPrint > *{ flex:0 0 auto; }
+  body.ppbk #ppPrint .ppb-title{ display:block; font-size:13pt; padding:2pt 8pt; margin-bottom:3pt; }
+  body.ppbk #ppPrint svg{ display:block; flex:1 1 0; min-height:0; width:100%; height:0; }
+  body.ppbk #ppPrint .pb-venues{ margin-top:3pt; font-size:7.5pt; line-height:1.25; grid-template-columns:repeat(4,1fr); }
+  body.ppbk #ppPrint .pb-vh{ padding:1pt; }
+  body.ppbk #ppPrint .pb-v{ padding:1pt 5pt; gap:5pt; }
+  body.ppbk #ppPrint .pb-note{ font-size:7.5pt; margin:1pt 0 0; }
+  body.ppbk #ppPrint, body.ppbk #ppPrint *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+
+
+/* 画面の上の「‹ ○○に戻る」（試合まわり・設定・チーム編集）。PC幅ではヘッダーの戻るが隠れるので、ここで戻り先を名前つきで見せる */
+.subback{margin:14px 0 2px;padding:0 12px;}
+.subback button{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1.5px solid var(--line);border-radius:999px;
+  padding:8px 16px;font-size:14px;font-weight:700;color:var(--accent);cursor:pointer;}
+.subback button:hover{border-color:var(--accent);background:#f3f6ff;}
+.subback.pconly{display:none;}
+@media (min-width:980px){ .subback.pconly{display:block;} }
+@media print{ .subback{display:none !important;} }

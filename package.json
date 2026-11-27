@@ -6,6 +6,7 @@
   "scripts": {
     "test:unit": "node --test tests/unit/*.test.js",
     "test:e2e": "playwright test",
+    "test:traffic": "node tests/poll-traffic.js",
     "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {

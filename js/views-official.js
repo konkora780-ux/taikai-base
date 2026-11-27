@@ -6,6 +6,7 @@ function viewOfficial(){
   + topbar({ title:"公式記録", sub:state.t.name, back:"backFromOfficial()",
       act:`<button class="act" onclick="saveOfficial()">保存</button>` })
   + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="sheetbar noprint">
       <span>表示の大きさ</span>
       ${[0.6,0.8,1,1.4].map(v=>`<button class="${z===v?"on":""}" onclick="state.sheetZoom=${v};render()">${Math.round(v*100)}%</button>`).join("")}
@@ -26,7 +27,7 @@ function viewOfficial(){
         公開・非公開の切り替えは、日程・結果の試合カードから行えます。
       </div>
       <div class="btnrow">
-        <button class="btn sec sm" style="flex:1" onclick="saveOfficial(true).then(()=>go('lineup'))">👥 メンバー表を編集</button>
+        <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveOfficial(true).then(()=>openLineup(state.matchId))">👥 メンバー表を編集</button>
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
       </div>
       <div class="btnrow">
@@ -34,6 +35,8 @@ function viewOfficial(){
       </div>
       <p class="hint" style="margin-top:2px">得点・スコア・PKは、公式記録を開くたび試合結果から自動で入れ直します（審判名・メンバー・シュート・経過記号などの手入力は残ります）。</p>
       <button class="btn" onclick="saveOfficial()">保存する</button>
+      <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に戻る</button></div>
+      <p class="hint" style="text-align:center">書き込んだ内容は、戻るときに自動で保存されます。</p>
     </div>
   </div></div></div>`;
 }
@@ -53,14 +56,19 @@ async function toggleMatchPublic(id){
     render();
   }catch(e){ console.error(e); toast("できませんでした: "+(e.message||e)); }
 }
-function backFromOfficial(){ state.official = null; go("t"); }
+function backFromOfficial(){ return subBack(); }
 function openOfficial(id){
+  enterSubView("official");
   state.matchId = id;
+  reopenOfficial();
+}
+/* 公式記録の画面を（戻り先の記録を変えずに）開き直す */
+function reopenOfficial(){
   state.officialReadOnly = false;
-  const m = state.matches.find(x=>x.id===id);
+  const m = state.matches.find(x=>x.id===state.matchId);
   state.official = draftOfficial(m);
   state.sheetZoom = state.sheetZoom || 0.8;
-  state.view = "official"; render();
+  state.view = "official"; snapSubView(); render();
 }
 
 /* --- 公式記録の一般公開リンク（ログイン不要・#om=試合id） --- */
@@ -247,13 +255,15 @@ function refreshTotals(){
   if(els[1]) els[1].textContent = sideTotal("A");
 }
 async function saveOfficial(silent){
-  const m = state.matches.find(x=>x.id===state.matchId); if(!m) return;
+  const m = state.matches.find(x=>x.id===state.matchId); if(!m) return false;
   m.official = state.official;
   m.updated_at = new Date().toISOString();
   try{
     await DB.upsert("gn_matches", stripMatch(m));
     if(!silent) toast("公式記録を保存しました");
-  }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); }
+    if(state.view==="official") snapSubView();
+    return true;
+  }catch(e){ console.error(e); toast("保存できませんでした: "+(e.message||e)); return false; }
 }
 
 /* ---------- 右上のサイン欄：スマホで指（PCはマウス）で手書きする ---------- */
@@ -368,8 +378,9 @@ function signToPng(strokes, drawStroke){
 function viewSettings(){
   const t = state.t, cfg = cfgOf(t), sp = sportOf(t);
   return `<div class="tourwrap">`
-  + topbar({ title:"大会の設定", sub:t.name, back:"go('t')" })
+  + topbar({ title:"大会の設定", sub:t.name, back:"pageBack()" })
   + `<div class="twrap">${tournamentSidebar("settings")}<div class="tmain">
+    ${subBackBar("pageBack()", pageBackLabel(), true)}
     <div class="screen">
     <div class="card">
       <label class="f">大会名</label>
@@ -844,6 +855,9 @@ async function deleteTournament(){
    画面遷移・読み込み
    ========================================================================== */
 function go(v){
+  // 「大会の設定」⇔「チーム・選手（編集）」を行き来したときは、戻るで来た画面へ戻す
+  if(v==="settings" || v==="teams") state.pageFrom = (["settings","teams"].includes(state.view) && state.view!==v) ? state.view : null;
+  if(!SUB_VIEW_LABEL[v]) state.subStack = [];   // 試合まわり以外の画面へ移ったら、戻り先の記録は捨てる
   state.view = v;
   if(v==="home"){ location.hash = ""; loadHomeStats(); }
   if(v==="t" && state.t) location.hash = "t=" + state.t.id;
@@ -865,10 +879,11 @@ async function openTournament(id){
   state.loading = false; render();
 }
 function openMatch(id){
+  enterSubView("match");
   state.matchId = id;
   const m = state.matches.find(x=>x.id===id);
   state.unlockMatch = (m && !isDone(m)) ? id : null;   // 開いた時点で未終了なら編集可・終了済みはロック
-  state.view = "match"; render();
+  state.view = "match"; render(); snapSubView();   // 戻るときに書き込みがあったか比べるための控え
 }
 /* 終了した試合の編集ロックを解除する。「終了」は最終確定という扱いにするため、
    ただ画面を開けるだけでなく試合の状態そのものを一旦「終了」から外す（試合中に戻す）。
@@ -1544,22 +1559,62 @@ function viewClubEntryLinks(){
   </div>`;
 }
 
-/* --- 分担入力の自動反映（開いている大会だけ、静かに更新） --- */
+/* --- 分担入力の自動反映（開いている大会だけ、静かに更新） ---
+   通信量を抑えるため、毎回は「軽い列」だけを読み、変わった試合だけ全部の列を読み直す（calc.js の POLL_MATCH_COLS）。
+   チームは並び・組・名前が変わったとき、または記入リンクで名簿が提出されたときだけ読み直す。
+   軽い列に出ない変化（チームが記入リンクで出した試合メンバー＝更新日時が変わらない）は、5分ごとにメンバー表の列だけを、
+   30分ごとに全体を読み直して拾う */
+const POLL_LINEUPS_EVERY  = 15;   // 20秒×15＝5分
+const POLL_FULL_ALL_EVERY = 90;   // 20秒×90＝30分
+let _pollCount = 0, _pollBusy = false, _pollTid = null, _pollEntrySig = null;
+function pollRenderSig(s){
+  // 結果（スコア・状態・メモ）に加え、名簿の提出（記入リンク）も自動で反映する
+  return JSON.stringify([
+    s.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]),
+    s.teams.map(t=>[t.id, t.grp, (t.players||[]).length]),
+  ]);
+}
+async function pollTournamentOnce(){
+  const id = state.t.id;
+  if(_pollTid !== id){ _pollTid = id; _pollCount = 0; _pollEntrySig = null; }
+  _pollCount++;
+  const before = pollRenderSig({matches:state.matches, teams:state.teams});
+  const p = await DB.pollTournament(id);
+  if(p === null || _pollCount % POLL_FULL_ALL_EVERY === 0){
+    // 端末内保存（お試し版）、または15分ごとの丸ごと読み直し
+    const d = await DB.loadTournament(id);
+    if(!d.t || !state.t || state.t.id !== id) return;
+    state.t = d.t; state.teams = d.teams; state.matches = d.matches;
+  }else{
+    if(!p.t || !state.t || state.t.id !== id) return;
+    normalizeMatchRows(p.matches);
+    const ids = changedMatchIds(state.matches, p.matches);
+    const fresh = await DB.loadMatchesByIds(p.t, ids);
+    const lineups = _pollCount % POLL_LINEUPS_EVERY === 0 ? await DB.loadLineups(p.t) : null;
+    const entrySig = p.entries ? JSON.stringify(Object.keys(p.entries).sort().map(k=>[k, p.entries[k].submitted_at||null])) : null;
+    const needTeams = teamsLightChanged(state.teams, p.teams) || (_pollEntrySig !== null && entrySig !== _pollEntrySig);
+    _pollEntrySig = entrySig;
+    const teams = needTeams ? await DB.loadTeams(id) : null;
+    if(!state.t || state.t.id !== id || state.view !== "t") return;   // 読んでいる間に画面が変わった
+    state.t = p.t;
+    state.matches = mergePolledMatches(state.matches, p.matches, fresh);
+    if(lineups){
+      const byId = new Map(lineups.map(r=>[r.id,r]));
+      state.matches.forEach(m=>{ const r = byId.get(m.id); if(!r) return;
+        m.lineups = r.lineups; if("entry_lineups" in r) m.entry_lineups = r.entry_lineups; });
+      mergeEntryLineups(state.matches);
+    }
+    if(teams) state.teams = teams;
+  }
+  if(before !== pollRenderSig({matches:state.matches, teams:state.teams})) render();
+}
 setInterval(async ()=>{
   if(document.hidden) return;
-  if(state.view!=="t" || !state.t) return;
-  try{
-    const d = await DB.loadTournament(state.t.id);
-    if(!d.t) return;
-    // 結果（スコア・状態・メモ）に加え、名簿の提出（記入リンク）も自動で反映する
-    const sig = s => JSON.stringify([
-      s.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]),
-      s.teams.map(t=>[t.id, t.grp, (t.players||[]).length]),
-    ]);
-    const before = sig({matches:state.matches, teams:state.teams});
-    state.t = d.t; state.teams = d.teams; state.matches = d.matches;
-    if(before !== sig(d)) render();
-  }catch(e){ /* 通信できないときは静かに次回へ */ }
+  if(state.view!=="t" || !state.t || _pollBusy) return;
+  _pollBusy = true;
+  try{ await pollTournamentOnce(); }
+  catch(e){ /* 通信できないときは静かに次回へ */ }
+  finally{ _pollBusy = false; }
 }, POLL_MS);
 
 /* --- 公式記録の入力を、再描画しても取りこぼさないよう #app に委譲 --- */

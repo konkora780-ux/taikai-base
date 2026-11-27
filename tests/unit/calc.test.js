@@ -220,3 +220,109 @@ test("mergeEntryLineups：チームの提出を反映し、提出後に運営が
   assert.equal(a.lineups.H.coach, "監督");
   assert.equal(b.lineups.H.players[0].role, "out");
 });
+
+test("古い/欠けた試合データを読み込んでも、得点ランキングや出場記録の計算で止まらない（normalizeMatchRows）", () => {
+  const ctx = setup();
+  const ms = [
+    doneMatch("m1","A","B",1,0,{ events:[null, {}, { type:"goal", team:"H", playerId:"p1" }],
+      lineups:{ H:{ coach:"" }, A:"old", _meta:{ pk:null } }, kickoff:"xx" }),
+    doneMatch("m2","B","C",0,0,{ events:null, lineups:null }),
+  ];
+  ctx.mergeEntryLineups(ms);
+  assert.equal(ms[0].events.length, 2);               // 空の行(null)だけ捨てる
+  assert.deepEqual(Array.from(ms[0].lineups.H.players), []);  // 選手一覧が無ければ空に
+  assert.equal(ms[0].lineups.A, undefined);           // 読めない形のメンバー表は無しに
+  assert.ok(ms[0].lineups._meta);                     // PKなどの付帯情報は残す
+  assert.equal(ms[0].kickoff, null);                  // 日時として読めないキックオフは未定に
+  assert.deepEqual(Array.from(ms[1].events), []);
+  ctx.state.matches = ms;
+  assert.doesNotThrow(() => ctx.scorerRanking(null));
+});
+
+test("ユニフォーム：FP正・副／GK正・副を1つの文字列に入れて読み戻せる（以前の「赤/白」も読める）", ()=>{
+  const ctx = setup();
+  const s = ctx.formatUniform({ fp1:"赤", fp2:"白", gk1:"黄", gk2:"" });
+  assert.equal(s, "FP正:赤 / FP副:白 / GK正:黄");
+  assert.deepEqual({ ...ctx.parseUniform(s) }, { fp1:"赤", fp2:"白", gk1:"黄", gk2:"" });
+  assert.deepEqual({ ...ctx.parseUniform("赤/白") }, { fp1:"赤", fp2:"白", gk1:"", gk2:"" });
+  assert.deepEqual({ ...ctx.parseUniform("青") }, { fp1:"青", fp2:"", gk1:"", gk2:"" });
+  assert.equal(ctx.formatUniform({}), null);
+});
+
+test("選手登録票（エクセル）の読み取り：見出しの右の値と、番号・氏名の見出しより下の選手", ()=>{
+  const ctx = setup();
+  const rows = [
+    ["選手登録票（1チーム1枚）"], [],
+    ["チーム名","一関工業","","区分","高校生"],
+    ["読み仮名","いちのせき","","略称","一関工"],
+    ["代表者","","","監督","監督 二郎"],
+    ["コーチ","コーチ 三郎","","大会の規模","全国・都道府県"],
+    ["FP（正）","赤","","FP（副）","白"],
+    ["GK（正）","黄","","GK（副）",""],
+    ["チーム紹介","明るいチーム"],
+    ["10","山田 太郎","さくら","6","FW"],               // 記入例（見出しより上）は選手にしない
+    ["番号","氏名","前所属","学年","位置","よみがな","身長","体重"],
+    ["7","鈴木 一郎","","2","fw","すずき","170","60"],
+    ["","","","","","","",""],
+    ["x","佐藤 花子","","","監督"],
+  ];
+  const r = ctx.parseTeamSheet(rows);
+  assert.equal(r.profile.name, "一関工業");
+  assert.equal(r.profile.category, "hs");
+  assert.deepEqual(Array.from(r.profile.regions), ["national","pref"]);
+  assert.equal(r.profile.rep_name, undefined);       // 空欄は上書きしない
+  assert.equal(r.profile.coach2_name, "コーチ 三郎");
+  assert.equal(r.profile.uniform_color, "FP正:赤 / FP副:白 / GK正:黄");
+  assert.equal(r.players.length, 2);
+  assert.deepEqual({ ...r.players[0] }, { no:7, name:"鈴木 一郎", prev_team:null, grade:2, pos:"FW", kana:"すずき", height:"170", weight:"60" });
+  assert.equal(r.players[1].no, null);
+  assert.equal(r.players[1].pos, null);
+  assert.equal(ctx.parseTeamSheet([["チーム名","A"]]).hasRoster, false);
+});
+
+test("コーチ：6人まで別々の欄に入れ、「、」区切りの1つの文字列で保存する", ()=>{
+  const ctx = setup();
+  assert.equal(ctx.formatCoaches(["佐藤","","鈴木"]), "佐藤、鈴木");
+  assert.equal(ctx.formatCoaches(["","",""]), null);
+  assert.deepEqual(Array.from(ctx.parseCoaches("佐藤、鈴木")), ["佐藤","鈴木","","","",""]);
+  assert.deepEqual(Array.from(ctx.parseCoaches("A,B、C、D、E、F、G")), ["A","B","C","D","E","F、G"]);   // 7人目以降も消さずに残す
+  const r = ctx.parseTeamSheet([["コーチ１","佐藤","","コーチ2","鈴木"],["コーチ3","田中"],["コーチ6","高橋"],["番号","氏名"]]);
+  assert.equal(r.profile.coach2_name, "佐藤、鈴木、田中、高橋");
+});
+
+test("区分に合わない学年の選手を見つける（読み込み前の注意用）", ()=>{
+  const ctx = setup();
+  const ps = [{ name:"A", grade:3 }, { name:"B", grade:4 }, { name:"C", grade:null }, { name:"D", grade:0 }];
+  assert.deepEqual(ctx.playersWithBadGrade(ps, "jhs").map(p=>p.name), ["B","D"]);
+  assert.deepEqual(ctx.playersWithBadGrade(ps, "elem").map(p=>p.name), ["D"]);
+  assert.deepEqual(ctx.playersWithBadGrade(ps, "none").map(p=>p.name), ["A","B","D"]);
+});
+
+// --- 自動更新を軽くする仕組み（変わった試合だけ読み直す） ---
+test("自動更新：軽い列が同じ試合は読み直さず、変わった試合・新しい試合だけを選ぶ", ()=>{
+  const ctx = setup();
+  const cur = [
+    doneMatch("m1","A","B",1,0,{updated_at:"2026-11-01T00:00:00+00:00", lineups:{H:{players:[1,2]}}, official:{signs:{x:"data:..."}}}),
+    doneMatch("m2","A","C",0,0,{status:"scheduled"}),
+  ];
+  const light = [
+    doneMatch("m1","A","B",1,0,{updated_at:"2026-11-01T00:00:00+00:00"}),   // 重い列（メンバー表・公式記録）が無くても「同じ」
+    doneMatch("m2","A","C",2,0,{status:"done"}),                          // スコアが変わった
+    doneMatch("m3","B","C",0,0),                                          // 新しい試合
+  ];
+  assert.deepEqual([...ctx.changedMatchIds(cur, light)], ["m2","m3"]);
+  const fresh = [doneMatch("m2","A","C",2,0,{lineups:{}}), doneMatch("m3","B","C",0,0)];
+  const merged = ctx.mergePolledMatches(cur, light, fresh);
+  assert.deepEqual(merged.map(m=>m.id), ["m1","m2","m3"]);
+  assert.equal(merged[0], cur[0]);                        // 変わらない試合は手元のもの（メンバー表・公式記録つき）を残す
+  assert.equal(merged[1].home_score, 2);
+  // 消えた試合は外れる
+  assert.deepEqual(ctx.mergePolledMatches(cur, [light[1]], [fresh[0]]).map(m=>m.id), ["m2"]);
+});
+test("自動更新：チームは並び・組・名前が変わったときだけ読み直す（名簿・校章は比べない）", ()=>{
+  const ctx = setup();
+  const cur = [team(ctx,"A",{players:[{no:"1"}], crest:"data:image/png;base64,xxx"}), team(ctx,"B")];
+  assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A"), team(ctx,"B")]), false);
+  assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A",{grp:"B"}), team(ctx,"B")]), true);
+  assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A")]), true);
+});

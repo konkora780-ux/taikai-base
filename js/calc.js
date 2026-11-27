@@ -53,6 +53,7 @@ function memberCountWarnings(t){
 /* チームが記入リンクで提出した試合メンバー（entry_lineups）を、運営のメンバー表（lineups）へ反映する。
    運営があとから手で直した側（lu.at が提出より新しい）はそのまま。運営の古い画面で上書きされても、次に読み込んだときに戻る */
 function mergeEntryLineups(matches){
+  normalizeMatchRows(matches);
   (matches||[]).forEach(m=>{
     const el = m && m.entry_lineups; if(!el) return;
     ["H","A"].forEach(side=>{
@@ -63,6 +64,56 @@ function mergeEntryLineups(matches){
       m.lineups = m.lineups || {};
       m.lineups[side] = JSON.parse(JSON.stringify(e));
     });
+  });
+  return matches;
+}
+
+/* --- 自動更新（20秒ごと）を軽くするための「変わった試合だけ読む」仕組み ---
+   毎回は軽い列（スコア・状態・記録など）だけを読み、前回と違う試合だけ全部の列（メンバー表・公式記録）を読み直す。
+   校章・名簿・公式記録のサイン画像を毎回送らないので、Supabaseの転送量が大きく減る */
+const POLL_MATCH_COLS = "id,tournament_id,stage,grp,round,slot,home_team,away_team,home_src,away_src,kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,updated_at";
+const POLL_TEAM_COLS  = "id,name,grp,seed,sort_order,club_id";
+function pollSig(row, cols){
+  return JSON.stringify(cols.split(",").map(k=> row ? (row[k]===undefined ? null : row[k]) : null));
+}
+/* 前回の試合一覧（cur）と、今回読んだ軽い列（light）を比べて、読み直す試合のidを返す */
+function changedMatchIds(cur, light){
+  const byId = new Map((cur||[]).map(m=>[m.id,m]));
+  return (light||[]).filter(r=>{
+    const m = byId.get(r.id);
+    return !m || pollSig(m, POLL_MATCH_COLS) !== pollSig(r, POLL_MATCH_COLS);
+  }).map(r=>r.id);
+}
+/* 変わらなかった試合は手元のまま、変わった試合は読み直した行に置き換え、消えた試合は外す（並びは今回の一覧どおり） */
+function mergePolledMatches(cur, light, fresh){
+  const byId = new Map((cur||[]).map(m=>[m.id,m]));
+  const freshById = new Map((fresh||[]).map(m=>[m.id,m]));
+  return (light||[]).map(r=> freshById.get(r.id) || byId.get(r.id)).filter(Boolean);
+}
+/* チームの並び・組・名前などが変わったか（名簿や校章は比べない＝毎回は読まない） */
+function teamsLightChanged(cur, light){
+  if((cur||[]).length !== (light||[]).length) return true;
+  const byId = new Map((cur||[]).map(t=>[t.id,t]));
+  return (light||[]).some(r=> !byId.has(r.id) || pollSig(byId.get(r.id), POLL_TEAM_COLS) !== pollSig(r, POLL_TEAM_COLS));
+}
+
+/* 読み込んだ試合データの形をそろえる（古い版・途中で止まった保存・バックアップ復元などで欄が欠けていても、
+   どの画面も止まらないようにする）。記録(events)の中の空の行は捨て、メンバー表の選手一覧が無ければ空にし、
+   日時として読めないキックオフは「未定」扱いにする */
+function normalizeMatchRows(matches){
+  (matches||[]).forEach(m=>{
+    if(!m || typeof m!=="object") return;
+    if(!Array.isArray(m.events)) m.events = [];
+    else m.events = m.events.filter(ev=> ev && typeof ev==="object");
+    if(m.lineups && typeof m.lineups==="object"){
+      ["H","A"].forEach(side=>{
+        const lu = m.lineups[side];
+        if(lu==null) return;
+        if(typeof lu!=="object"){ delete m.lineups[side]; return; }
+        lu.players = Array.isArray(lu.players) ? lu.players.filter(p=> p && typeof p==="object") : [];
+      });
+    }else if(m.lineups!=null) m.lineups = null;
+    if(m.kickoff && isNaN(new Date(m.kickoff))) m.kickoff = null;
   });
   return matches;
 }
@@ -817,6 +868,123 @@ function summarizeMatchDiff(before, after){
     if(JSON.stringify(before[k]) !== JSON.stringify(after[k])) changed.push(HISTORY_FIELD_LABEL[k] || k);
   });
   return changed.length ? changed.join("・") : "変更なし（付随情報のみ）";
+}
+
+/* ==========================================================================
+   ユニフォーム（FP正・副／GK正・副）
+   保存先は従来どおり uniform_color の1列（文字列）。新しい列を足さずに済むよう
+   「FP正:赤 / FP副:白 / GK正:黄 / GK副:緑」の形で入れる。以前の「赤/白」も読める。
+   ========================================================================== */
+const UNIFORM_KEYS = [["fp1","FP正"],["fp2","FP副"],["gk1","GK正"],["gk2","GK副"]];
+function parseUniform(str){
+  const o = { fp1:"", fp2:"", gk1:"", gk2:"" };
+  const s = String(str||"").trim();
+  if(!s) return o;
+  if(/(FP|GK)\s*[正副]\s*[:：]/i.test(s)){
+    s.split(/\s*[\/／]\s*(?=(?:FP|GK)\s*[正副]\s*[:：])/i).forEach(part=>{
+      const m = part.match(/^(FP|GK)\s*([正副])\s*[:：]\s*(.*)$/i);
+      if(!m) return;
+      const k = (m[1].toUpperCase()==="FP"?"fp":"gk") + (m[2]==="正"?"1":"2");
+      o[k] = m[3].trim();
+    });
+    return o;
+  }
+  const p = s.split(/\s*[\/／]\s*/);                     // 以前の書き方「赤/白」＝FPの正/副とみなす
+  if(p.length===2){ o.fp1 = p[0]; o.fp2 = p[1]; } else o.fp1 = s;
+  return o;
+}
+function formatUniform(o){
+  const s = UNIFORM_KEYS.map(([k,lb])=>{
+    const v = String((o&&o[k])||"").trim();
+    return v ? `${lb}:${v}` : "";
+  }).filter(Boolean).join(" / ");
+  return s || null;
+}
+
+/* コーチ（最大6人）：保存先は従来どおり coach2_name の1列。「佐藤、鈴木、田中」のように「、」区切りで入れる */
+const COACH_SLOTS = 6;
+function parseCoaches(str){
+  const a = String(str||"").split(/\s*[、，,\n]\s*/).map(x=>x.trim()).filter(Boolean);
+  if(a.length > COACH_SLOTS) a.splice(COACH_SLOTS-1, a.length, a.slice(COACH_SLOTS-1).join("、"));  // 上限を超えた分は最後の欄にまとめて残す
+  while(a.length < COACH_SLOTS) a.push("");
+  return a;
+}
+function formatCoaches(arr){
+  const s = (arr||[]).map(x=>String(x||"").trim()).filter(Boolean).join("、");
+  return s || null;
+}
+
+/* ==========================================================================
+   登録用エクセル（選手登録票・1チーム用）の読み取り
+   rows はシートの2次元配列（文字列）。「チーム名」などの見出しのすぐ右のセルを値として読み、
+   「番号・氏名」の見出し行より下を選手名簿として読む（見出しの位置がずれても読める）。
+   ========================================================================== */
+const SHEET_LABELS = {
+  "チーム名":"name", "区分":"category", "読み仮名":"kana", "よみがな":"kana", "略称":"short_name",
+  "代表者":"rep_name", "監督":"coach_name", "コーチ":"coach2_name", "大会の規模":"regions",
+  "コーチ1":"coach_1", "コーチ2":"coach_2", "コーチ3":"coach_3", "コーチ4":"coach_4", "コーチ5":"coach_5", "コーチ6":"coach_6",
+  "FP正":"fp1", "FP副":"fp2", "GK正":"gk1", "GK副":"gk2",
+  "チーム紹介":"intro", "公式サイト・SNS":"links",
+};
+function _sheetCell(v){ return String(v==null?"":v).replace(/\r\n?/g,"\n").trim(); }
+function _sheetLabel(v){ return _sheetCell(v).replace(/[\s（）()]/g,"").replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0))
+  .toUpperCase().replace("ＦＰ","FP").replace("ＧＫ","GK"); }
+function parseTeamSheet(rows){
+  rows = Array.isArray(rows) ? rows : [];
+  const hdr = rows.findIndex(r=>Array.isArray(r) && _sheetLabel(r[0])==="番号" && _sheetLabel(r[1])==="氏名");
+  const top = hdr>=0 ? rows.slice(0,hdr) : rows;
+  const raw = {};
+  top.forEach(r=>{
+    if(!Array.isArray(r)) return;
+    r.forEach((v,c)=>{
+      const key = SHEET_LABELS[_sheetLabel(v)];
+      if(key && raw[key]===undefined) raw[key] = _sheetCell(r[c+1]);
+    });
+  });
+  const profile = {};
+  ["name","kana","short_name","rep_name","coach_name","coach2_name","intro","links"].forEach(k=>{
+    if(raw[k]) profile[k] = raw[k];
+  });
+  if(raw.category){
+    const hit = Object.entries(CATEGORIES).find(([,v])=>v.label===raw.category);
+    profile.category = hit ? hit[0] : (/一般|なし/.test(raw.category) ? "none" : undefined);
+    if(!profile.category) delete profile.category;
+  }
+  if(raw.regions){
+    const rg = [];
+    if(/全国/.test(raw.regions)) rg.push("national");
+    if(/都道府県|県/.test(raw.regions)) rg.push("pref");
+    if(/地域|地区/.test(raw.regions)) rg.push("local");
+    if(rg.length) profile.regions = rg;
+  }
+  const coaches = formatCoaches([1,2,3,4,5,6].map(i=>raw["coach_"+i]));
+  if(coaches) profile.coach2_name = coaches;
+  const uni = formatUniform({ fp1:raw.fp1, fp2:raw.fp2, gk1:raw.gk1, gk2:raw.gk2 });
+  if(uni) profile.uniform_color = uni;
+
+  const players = [];
+  if(hdr>=0) rows.slice(hdr+1).forEach(r=>{
+    if(!Array.isArray(r)) return;
+    const p = r.slice(0,8).map(_sheetCell);
+    const name = p[1];
+    if(!name) return;
+    const pos = String(p[4]||"").toUpperCase();
+    const g = String(p[3]||"").match(/^\d+/);
+    players.push({
+      no: /^\d{1,3}$/.test(p[0]) ? parseInt(p[0],10) : null,
+      name, prev_team: p[2]||null,
+      grade: g ? parseInt(g[0],10) : null,
+      pos: POSITIONS.includes(pos) ? pos : null,
+      kana: p[5]||null, height: p[6]||null, weight: p[7]||null,
+    });
+  });
+  return { profile, players, hasRoster: hdr>=0 };
+}
+
+/* 区分（小学生＝1〜6年 など）に合わない学年の選手を返す。読み込むと学年は空欄になるので、事前に知らせる用 */
+function playersWithBadGrade(players, categoryKey){
+  const cat = CATEGORIES[categoryKey] || CATEGORIES.none;
+  return (players||[]).filter(p=> p.grade!=null && p.grade!=="" && (!cat.max || p.grade<1 || p.grade>cat.max));
 }
 
 /* ==========================================================================
