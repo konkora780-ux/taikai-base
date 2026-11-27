@@ -345,3 +345,20 @@ test("公式記録の公開：中身を読む前は official_public の印で、
   assert.equal(ctx.officialIsPublic({ official_public:true, official:null }), false);
   assert.equal(ctx.officialIsPublic({ official:{ public:true } }), true);
 });
+
+test("公式記録：未決着のときに保存された「勝者」は、相手が決まったら実際のチーム名に置き換わる", ()=>{
+  const ctx = loadApp();
+  // views-teams.js（draftOfficial）も読む
+  const fs = require("fs"), path = require("path"), vm = require("vm");
+  vm.runInContext(fs.readFileSync(path.join(__dirname,"..","..","js","views-teams.js"),"utf8"), ctx);
+  ctx.state.t = freshTournament(ctx, { format:"ko" });
+  ctx.state.teams = [team(ctx,"A"), team(ctx,"B"), team(ctx,"C"), team(ctx,"D")];
+  const sf1 = doneMatch("s1","A","B",2,0,{stage:"ko"}), sf2 = doneMatch("s2","C","D",0,1,{stage:"ko"});
+  const fin = doneMatch("f","",null,1,0,{ stage:"ko", home_team:null, away_team:null, home_src:"W:s1", away_src:"W:s2",
+    official:{ public:true, H:{ name:"勝者", name2:"勝者", lineup:[] }, A:{ name:"手入力の名前", lineup:[] } } });
+  ctx.state.matches = [sf1, sf2, fin];
+  const o = ctx.draftOfficial(fin);
+  assert.equal(o.H.name, "A");
+  assert.equal(o.H.name2, "A");
+  assert.equal(o.A.name, "手入力の名前");   // 手で入れた名前は変えない
+});
