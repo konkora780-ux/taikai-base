@@ -2,10 +2,12 @@ function viewOfficial(){
   const m = state.matches.find(x=>x.id===state.matchId);
   if(!m) return topbar({title:"公式記録", back:"go('t')"}) + `<div class="empty">見つかりません。</div>`;
   const z = state.sheetZoom || 1;
+  const vmode = isVenueMode();   // 会場担当：大会の他の画面へは移らない・メンバー表の編集と公開の切り替えは運営
+  const signed = vmode && state.official && state.official.signs && Object.keys(state.official.signs).some(k=>state.official.signs[k]);
   return `<div class="tourwrap">`
   + topbar({ title:"公式記録", sub:state.t.name, back:"backFromOfficial()",
       act:`<button class="act" onclick="saveOfficial()">保存</button>` })
-  + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
+  + `<div class="twrap">${vmode ? "" : tournamentSidebar("schedule")}<div class="tmain">
     ${subBackBar("subBack()", subBackLabel(), true)}
     <div class="sheetbar noprint">
       <span>表示の大きさ</span>
@@ -20,14 +22,16 @@ function viewOfficial(){
     </div></div>` : ""; })()}
     <div class="screen noprint">
       <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
-      <div class="callout ${state.official.public?"ok":""}" style="margin-bottom:12px">
+      ${vmode ? `<div class="callout" style="margin-bottom:12px">記録者が内容を最終チェックしたら、右上のサイン欄を押して、その場で審判などに<b>指でサイン</b>をもらってください。このリンクは今日の24時まで使えます。公開・非公開の切り替えは運営（本部）が行います。</div>
+      ${signed ? `<div class="callout" style="margin-bottom:12px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ サイン済みです。サインのあとに内容を直したときは、サインをもらい直してください（サイン欄を押すと書き直せます）。</div>` : ""}`
+      : `<div class="callout ${state.official.public?"ok":""}" style="margin-bottom:12px">
         ${state.official.public
           ? `🔗 この試合の公式記録は一般公開中です。`
           : `この試合の公式記録は非公開です。`}
         公開・非公開の切り替えは、日程・結果の試合カードから行えます。
-      </div>
+      </div>`}
       <div class="btnrow">
-        <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveOfficial(true).then(()=>openLineup(state.matchId))">👥 メンバー表を編集</button>
+        ${vmode ? "" : `<button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveOfficial(true).then(()=>openLineup(state.matchId))">👥 メンバー表を編集</button>`}
         <button class="btn sec sm" style="flex:1" onclick="importLineupToOfficial()">⬇ メンバー表から取り込む</button>
       </div>
       <div class="btnrow">
@@ -255,6 +259,7 @@ function refreshTotals(){
   if(els[1]) els[1].textContent = sideTotal("A");
 }
 async function saveOfficial(silent){
+  if(isVenueMode()) return saveVenueOfficial(silent);   // 会場担当：サーバー側で確かめる関数を通す（setup-32）
   const m = state.matches.find(x=>x.id===state.matchId); if(!m) return false;
   m.official = state.official;
   m.updated_at = new Date().toISOString();

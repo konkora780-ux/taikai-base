@@ -929,11 +929,15 @@ function viewMatch(){
     </div>`;
   }).join("") || `<div class="hint" style="padding:8px 2px">まだ記録がありません。</div>`;
 
+  // 会場担当（ログインなし・setup-32）は、大会の他の画面へ移らず「会場の試合一覧」へ戻る
+  const vmode = isVenueMode();
+  const backFn = vmode ? "venueBack()" : "subBack()";
+  const backLabel = vmode ? "会場の試合一覧" : subBackLabel();
   return `<div class="tourwrap">`
-  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:"subBack()",
+  + topbar({ title:"結果を入れる", sub:`🏆 ${state.t.name} ・ ${label}`, back:backFn,
       act: canEdit() ? `<button class="btn ghost sm" onclick="openMatchHistory()">🕘 履歴</button>` : "" })
-  + `<div class="twrap">${tournamentSidebar("schedule")}<div class="tmain">
-    ${subBackBar("subBack()", subBackLabel(), true)}
+  + `<div class="twrap">${vmode ? "" : tournamentSidebar("schedule")}<div class="tmain">
+    ${subBackBar(backFn, backLabel, !vmode)}
     <div class="screen">
     ${venueDatalistHTML()}
     ${locked?`<div class="lockmsg">🔒 この試合は「終了」です。内容は変更できません。直すときは下の「✏ 修正する」を押してください。</div>`:""}
@@ -1030,9 +1034,11 @@ function viewMatch(){
     </div>` : ""}
 
     <div class="card">
-      <label class="f">キックオフ・会場</label>
+      ${vmode ? `<label class="f">キックオフ・会場</label>
+      <div class="hint" style="margin:0">${esc([fmtDate(m.kickoff), fmtTime(m.kickoff), m.venue].filter(Boolean).join(" "))}（変更は運営が行います）</div>`
+      : `<label class="f">キックオフ・会場</label>
       <input class="in" type="datetime-local" value="${esc(kickoffLocal)}" oninput="setKickoff(this.value)">
-      <input class="in" list="venueList" style="margin-top:8px" value="${esc(m.venue||"")}" oninput="setField('venue',this.value)" placeholder="会場（例：第1グラウンド）">
+      <input class="in" list="venueList" style="margin-top:8px" value="${esc(m.venue||"")}" oninput="setField('venue',this.value)" placeholder="会場（例：第1グラウンド）">`}
       <label class="f">メモ（保護者・観覧者にも表示されます）</label>
       <input class="in" value="${esc(m.note||"")}" oninput="setField('note',this.value)" placeholder="例）雷のため30分遅延中／雨天のため時間短縮">
       <p class="hint">試合の連絡に。保存すると、結果を見ている人の画面にも 📣 で出ます。</p>
@@ -1040,6 +1046,7 @@ function viewMatch(){
 
     ${(()=>{ const of=m.official||ofPreview(m); const meta=(m.lineups&&m.lineups._meta)||{}; const ov=cfgOf(state.t).overview||{}; return `<details class="card ofcard">
       <summary>📋 公式記録の詳細（審判・天候など・あとからでもOK）</summary>
+      ${vmode ? `<p class="hint" style="margin-top:6px">審判名・天候などを入れてください。試合後の最終チェックと審判のサインは、下の「📄 公式記録（最終チェック・サイン）」で行います。</p>` : ""}
       ${ofPickHtml("format","回戦（大会名の右に入ります）",of)}
       <label class="f">この試合だけ時間が違う場合（決勝だけ40分など・空なら大会の設定${ov.halfMin?"（"+ov.halfMin+"分ハーフ）":""}のまま）</label>
       <div class="row2">
@@ -1082,11 +1089,13 @@ function viewMatch(){
     ${locked
       ? `<button class="btn" onclick="unlockMatch('${m.id}')">✏ 修正する</button>`
       : `<button class="btn" onclick="saveMatch()">保存する</button>`}
-    <div class="btnrow">
+    ${vmode ? `<div class="btnrow">
+      <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;openVenueOfficial('${m.id}')">📄 公式記録（最終チェック・サイン）</button>
+    </div>` : `<div class="btnrow">
       <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveMatch(true).then(()=>openLineup('${m.id}'))">👥 メンバー表</button>
       <button class="btn sec sm" style="flex:1" onclick="this.disabled=true;saveMatch(true).then(()=>openOfficial('${m.id}'))">📄 公式記録</button>
-    </div>
-    <div class="btnrow"><button class="btn ghost" onclick="subBack()">‹ ${esc(subBackLabel())}に${locked?"戻る":"保存せずに戻る"}</button></div>
+    </div>`}
+    <div class="btnrow"><button class="btn ghost" onclick="${backFn}">‹ ${esc(backLabel)}に${locked?"戻る":vmode?"戻る（書いた内容は保存されます）":"保存せずに戻る"}</button></div>
     </div>
   </div></div></div>`;
 }
@@ -1461,6 +1470,7 @@ function openSubSheet(editIdx){
 }
 
 async function saveMatch(stay){
+  if(isVenueMode()) return saveVenueMatch(stay);   // 会場担当：サーバー側で確かめる関数を通す（setup-32）
   const m = curMatch(); if(!m) return false;
   if(m.status==="done" && (m.home_score==null || m.away_score==null)){
     m.home_score = m.home_score??0; m.away_score = m.away_score??0;

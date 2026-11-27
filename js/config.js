@@ -222,7 +222,7 @@ const orgYear = ()=> state.org?.year ?? fiscalYear();
    保存まわり（Supabase / 端末内）
    ========================================================================== */
 const LOCAL_KEY = "taikai_local_v1";
-const EMPTY_DB  = { t:[], teams:[], matches:[], clubs:[], members:[], orgs:[], entry:[], clubEntry:[], venues:[], announcements:[] };
+const EMPTY_DB  = { t:[], teams:[], matches:[], clubs:[], members:[], orgs:[], entry:[], clubEntry:[], venues:[], announcements:[], venueEntry:[] };
 const TBL_KEY   = { gn_tournaments:"t", gn_teams:"teams", gn_matches:"matches",
                     gn_clubs:"clubs", gn_members:"members", gn_orgs:"orgs", gn_entry:"entry", gn_venues:"venues",
                     gn_announcements:"announcements" };

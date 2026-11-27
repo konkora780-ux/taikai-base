@@ -23,6 +23,8 @@
   if(cm0){ state.loading=false; await openClubEntry(cm0[1]); return; }   // 台帳の記入リンク（ログイン不要）
   const em = location.hash.match(/entry=([0-9a-f-]{36})/i);
   if(em){ state.loading=false; await openEntry(em[1]); return; }   // 記入リンク（ログイン不要）
+  const vm0 = location.hash.match(/venue=([0-9a-f-]{36})/i);
+  if(vm0){ state.loading=false; await openVenueEntry(vm0[1]); return; }   // 会場担当の入力リンク（ログイン不要）
   const om0 = location.hash.match(/om=([0-9a-f-]{36})/i);
   if(om0){ state.loading=false; await openOfficialPublic(om0[1]); return; }   // 公式記録の公開リンク（ログイン不要）
 
@@ -39,6 +41,8 @@ window.addEventListener("hashchange", ()=>{
   if(cm){ if(!state.clubEntry || state.clubEntry.clubId!==cm[1]) openClubEntry(cm[1]); return; }
   const em = location.hash.match(/entry=([0-9a-f-]{36})/i);
   if(em){ if(!state.entry || state.entry.team?.id!==em[1]) openEntry(em[1]); return; }
+  const vm = location.hash.match(/venue=([0-9a-f-]{36})/i);
+  if(vm){ if(!state.venueEntry || state.venueEntry.id!==vm[1]) openVenueEntry(vm[1]); return; }
   const om = location.hash.match(/om=([0-9a-f-]{36})/i);
   if(om){ if(state.matchId!==om[1] || state.view!=="officialPublic") openOfficialPublic(om[1]); return; }
   const m = location.hash.match(/t=([0-9a-f-]{36})/i);

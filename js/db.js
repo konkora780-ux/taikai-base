@@ -448,6 +448,130 @@ const DB = {
     return data || "code";
   },
 
+  /* --- 会場担当の入力リンク（setup-32） --- */
+  // 会場担当：大会を軽く読む。試合は軽い列だけ、チームは名前など（校章なし）、選手名簿は「この会場の試合のチーム」だけ。
+  // ログイン中の運営・お試し版は今までどおり丸ごと読む
+  async loadVenueTournament(tid, venueMatchIds){
+    const isOwnerish = !sb || !!state.user;
+    if(isOwnerish) return this.loadTournament(tid);
+    const rt = await sb.from("gn_tournaments").select("*").eq("id",tid).maybeSingle();
+    if(rt.error) throw rt.error;
+    const [rm, rteams] = await Promise.all([
+      this.openMatches(GUEST_MATCH_COLS).eq("tournament_id", tid),
+      sb.from("gn_teams").select(GUEST_TEAM_COLS).eq("tournament_id", tid),
+    ]);
+    if(rm.error) throw rm.error;
+    if(rteams.error) throw rteams.error;
+    const t = rt.data, teams = rteams.data || [], matches = rm.data || [];
+    normalizeMatchRows(matches);
+    // トーナメントの「勝者」枠も解決してから、要るチームの名簿だけ読む
+    const prev = { t:state.t, teams:state.teams, matches:state.matches };
+    state.t = t; state.teams = teams; state.matches = matches;
+    const need = new Set();
+    matches.filter(m=>venueMatchIds.includes(m.id)).forEach(m=>{ ["H","A"].forEach(sd=>{ const s = resolveSlot(m, sd); if(s && s.id) need.add(s.id); }); });
+    Object.assign(state, prev);
+    if(need.size){
+      const rp = await sb.from("gn_teams").select("id,players").in("id", [...need]);
+      if(rp.error) throw rp.error;
+      const byId = new Map((rp.data||[]).map(r=>[r.id, r.players]));
+      teams.forEach(x=>{ if(byId.has(x.id)) x.players = byId.get(x.id); });
+    }
+    teams.forEach(x=>{ if(!x.players) x.players = []; });
+    return { t, teams, matches };
+  },
+  // 運営：この大会の会場担当リンクの一覧
+  async loadVenueEntries(tournamentId){
+    if(!sb) return local.read().venueEntry.filter(x=>x.tournament_id===tournamentId);
+    const { data, error } = await sb.from("gn_venue_entry").select("*").eq("tournament_id", tournamentId).order("day").order("venue");
+    if(error) throw error;
+    return data || [];
+  },
+  async createVenueEntry(row){
+    if(!sb){ const d = local.read(); d.venueEntry.push(Object.assign({ fail_count:0, locked_until:null, last_used_at:null, created_at:new Date().toISOString() }, row)); local.write(d); return; }
+    const { error } = await sb.from("gn_venue_entry").insert(row);
+    if(error) throw error;
+  },
+  async updateVenueEntry(id, patch){
+    if(!sb){ const d = local.read(); const r = d.venueEntry.find(x=>x.id===id); if(r) Object.assign(r, patch); local.write(d); return; }
+    const { error } = await sb.from("gn_venue_entry").update(patch).eq("id", id);
+    if(error) throw error;
+  },
+  // 会場担当：コードを確かめて {ok, tournament_id, venue, day} を受け取る（サーバー側で照合）
+  async venueEntryOpen(id, code){
+    if(!sb){
+      const r = local.read().venueEntry.find(x=>x.id===id);
+      if(!r || !r.active || (r.expires_at && new Date(r.expires_at).getTime() < Date.now())) return { ok:false, reason:"closed" };
+      if(r.code !== code) return { ok:false, reason:"code" };
+      const ms = venueMatchesOf(local.read().matches.filter(x=>x.tournament_id===r.tournament_id), r.venue, r.day)
+        .map(m=>({ id:m.id, lineups:m.lineups||null, official:m.official||null }));
+      return { ok:true, tournament_id:r.tournament_id, venue:r.venue, day:r.day, matches:ms };
+    }
+    const { data, error } = await sb.rpc("venue_entry_open", { p_id:id, p_code:code });
+    if(error) throw error;
+    return data;
+  },
+  // 会場担当：1試合の結果を保存。書き換えられる欄だけを送り、サーバー側で会場・日付・中身を確かめる
+  // 返り値 "ok" / "code" / "notyours" / "bad"
+  async venueSaveMatch(id, code, m){
+    const meta = (m.lineups && m.lineups._meta) || {};
+    const payload = {
+      home_score:m.home_score??null, away_score:m.away_score??null, home_pk:m.home_pk??null, away_pk:m.away_pk??null,
+      status:m.status||"todo", result_type:m.result_type||null, result_note:m.result_note||null,
+      events:m.events||[], note:m.note||"",
+      meta:{ useET:!!meta.useET, usePK:!!meta.usePK, pk:meta.pk||{ H:[], A:[] },
+             halfMin:meta.halfMin??null, etHalfMin:meta.etHalfMin??null },
+      kickoffTeam:(m.official && m.official.kickoffTeam) || null,
+    };
+    // 公式記録は上部の決まった欄だけ（サインなどは送らない）
+    if(m.official){
+      payload.official = {};
+      VENUE_OFFICIAL_KEYS.forEach(k=>{ if(m.official[k]!=null) payload.official[k] = String(m.official[k]); });
+    }
+    if(!sb){
+      const d = local.read();
+      const r = d.venueEntry.find(x=>x.id===id);
+      if(!r || !r.active || r.code !== code || (r.expires_at && new Date(r.expires_at).getTime() < Date.now())) return "code";
+      const row = d.matches.find(x=>x.id===m.id);
+      if(!row || venueMatchesOf([row], r.venue, r.day).length===0) return "notyours";
+      ["home_score","away_score","home_pk","away_pk","status","result_type","result_note","events","note"].forEach(k=> row[k] = payload[k]);
+      row.lineups = Object.assign({}, row.lineups||{}); row.lineups._meta = Object.assign({}, row.lineups._meta||{}, payload.meta);
+      row.official = Object.assign({}, row.official||{}, payload.official||{}, { kickoffTeam:payload.kickoffTeam });
+      row.updated_at = new Date().toISOString();
+      local.write(d); return "ok";
+    }
+    const { data, error } = await sb.rpc("venue_save_match", { p_id:id, p_code:code, p_match:m.id, p_data:payload });
+    if(error) throw error;
+    return data || "code";
+  },
+
+  // 会場担当：公式記録の画面を開くとき、その1試合の公式記録（サイン画像を含む）だけを読む
+  async venueGetOfficial(id, code, matchId){
+    if(!sb){
+      const d = local.read(); const r = d.venueEntry.find(x=>x.id===id);
+      if(!r || !r.active || r.code !== code) return { ok:false, reason:"code" };
+      const m = d.matches.find(x=>x.id===matchId);
+      if(!m || venueMatchesOf([m], r.venue, r.day).length===0) return { ok:false, reason:"notyours" };
+      return { ok:true, official:m.official||null };
+    }
+    const { data, error } = await sb.rpc("venue_get_official", { p_id:id, p_code:code, p_match:matchId });
+    if(error) throw error;
+    return data || { ok:false, reason:"code" };
+  },
+  // 会場担当：公式記録（最終チェック・サイン）を保存。公開/非公開はサーバー側で元の値のまま
+  async venueSaveOfficial(id, code, matchId, official){
+    if(!sb){
+      const d = local.read(); const r = d.venueEntry.find(x=>x.id===id);
+      if(!r || !r.active || r.code !== code) return "code";
+      const m = d.matches.find(x=>x.id===matchId);
+      if(!m || venueMatchesOf([m], r.venue, r.day).length===0) return "notyours";
+      m.official = Object.assign({}, official, { public: !!(m.official && m.official.public) });
+      m.updated_at = new Date().toISOString(); local.write(d); return "ok";
+    }
+    const { data, error } = await sb.rpc("venue_save_official", { p_id:id, p_code:code, p_match:matchId, p_official:official });
+    if(error) throw error;
+    return data || "code";
+  },
+
   /* --- 台帳の記入リンク（年度初めの登録） --- */
   // 本部：この団体の台帳記入コード一覧 {club_id:{code,submitted_at}}
   async loadClubEntries(orgId){

@@ -14,6 +14,7 @@ function render(){
     teamPublic:viewTeamPublic,
     entry:viewEntry, entrylinks:viewEntryLinks,
     clubentry:viewClubEntry, clubentrylinks:viewClubEntryLinks,
+    venueentry:viewVenueEntry, venuelinks:viewVenueLinks,
     terms:viewTerms,
   }[state.view] || viewHome);
   const y = window.scrollY;
@@ -103,7 +104,7 @@ function subBackLabel(){
 async function subBack(){
   // 結果入力・公式記録・メンバー表で書き込んだ内容は、前へ進むボタンと同じく自動で保存してから戻る。
   // 保存に失敗したとき（通信が切れた等）は、書いた内容を失わないよう画面を移らずにとどまる
-  if(canEdit() && !(state.view==="official" && state.officialReadOnly) && state.subSnap != null && state.subSnap !== subViewSnapshot()){
+  if((canEdit() || isVenueMode()) && !(state.view==="official" && state.officialReadOnly) && state.subSnap != null && state.subSnap !== subViewSnapshot()){
     const ok = state.view === "official" ? await saveOfficial()
              : state.view === "lineup"   ? await saveLineup()
              : state.view === "match"    ? await saveMatch(true) : true;
@@ -1089,7 +1090,8 @@ function tabSchedule(){
   if(!shown.length) return out + `<div class="empty">このカテゴリーの試合はまだありません。</div>`;
   const groups = scheduleGroups(shown);
   if(canEdit()) out += `<div class="btnrow noprint" style="margin-bottom:10px">
-    <button class="btn sec sm" style="flex:1" onclick="go('sched')">🗓 日程・会場をまとめて入力</button></div>`;
+    <button class="btn sec sm" style="flex:1" onclick="go('sched')">🗓 日程・会場をまとめて入力</button>
+    <button class="btn ghost sm" style="flex:1" onclick="openVenueLinks()">📍 会場担当の入力リンク</button></div>`;
   groups.forEach(g=>{
     const collapsed = (state.scheduleCollapsed||{})[g.key] !== false;   // 初期値はたたんである（trueがデフォルト）
     const dLabel = scheduleDateLabel(g);
