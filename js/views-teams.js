@@ -1362,6 +1362,10 @@ function normalizeOfficial(o){
     ["scores","pks"].forEach(k=>{ const a = Array.isArray(s[k]) ? s[k] : []; while(a.length<D[k].length) a.push(D[k][a.length]); s[k] = a; });
     if(!s.tot || typeof s.tot!=="object") s.tot = D.tot;
     Object.keys(D.tot).forEach(k=>{ if(!Array.isArray(s.tot[k])) s.tot[k] = D.tot[k]; });
+    // 自動計算の「計」は手で直せない枠なので、開くたびに数え直してそろえる（内訳が空なら元の値のまま）
+    const sumOf = vals=> vals.some(v=>String(v??"").trim()!=="") ? String(vals.reduce((a,v)=>a+num(v),0)) : null;
+    Object.keys(s.tot).forEach(k=>{ const a=s.tot[k]; const t=sumOf([a[0],a[1],a[3],a[4]]); if(t!=null) a[2]=t; });
+    s.lineup.forEach(r=>{ const t=sumOf([r.s1,r.s2,r.e1,r.e2]); if(t!=null) r.st=t; });
   });
   o.goals = fillRows(o.goals, 7, emptyGoalRow);
   o.goals.forEach(g=>{ if(!Array.isArray(g.seq)) g.seq = Array(10).fill(""); });
@@ -1545,6 +1549,22 @@ function sheetLines(){
   out += `<i class="ln" style="left:${pt(80)};top:${pt(SHEET.H-116.6)};width:.5pt;height:${pt(116.6-91.4)}"></i>`;
   return out;
 }
+/* 公式記録の数字の枠か。"int"＝数字だけ（スマホは数字キーボード）／"mix"＝数字が中心で「分」「+」「:」「-」なども入る
+   （時間・気温・キックオフ時刻など。スマホの数字キーボードでは記号が打てないので、キーボードは普通のまま） */
+function sheetNumKind(path){
+  if(/^(H|A)\.lineup\.\d+\.(no|subNo|g|st|s1|s2|e1|e2)$/.test(path)) return "int";
+  if(/^(H|A)\.(scores\.\d+|pk|tot\.\w+\.\d)$/.test(path)) return "int";
+  if(/^((H|A)\.cards\.\d+\.no|goals\.\d+\.no|crowd)$/.test(path)) return "int";
+  if(/^((H|A)\.lineup\.\d+\.subTime|(H|A)\.cards\.\d+\.time|goals\.\d+\.time|temp|matchMin|etMin|kickoffTime)$/.test(path)) return "mix";
+  return null;
+}
+/* 自動計算の枠か（選手ごとのシュートの計＝前半＋後半＋延長／チーム合計の計＝前半＋後半＋延前＋延後） */
+function sheetIsCalc(path){ return /^(H|A)\.(lineup\.\d+\.st|tot\.\w+\.2)$/.test(path); }
+/* 全角の数字・記号を半角に（日本語入力がオンのまま打っても半角で入るように） */
+function toHalfNum(v){
+  return String(v).replace(/[０-９]/g, c=> String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/：/g,":").replace(/＋/g,"+").replace(/[－ー−]/g,"-").replace(/．/g,".").replace(/　/g," ");
+}
 /* 1つの入力枠 */
 function box(path, x1, x2, yTop, yBot, o){
   o = o || {};
@@ -1562,7 +1582,13 @@ function box(path, x1, x2, yTop, yBot, o){
   }
   const tap = o.tap ? ` data-tapk="${o.tap.k}"${o.tap.side?` data-side="${o.tap.side}"`:""}${o.tap.idx!=null?` data-idx="${o.tap.idx}"`:""}${o.tap.ci!=null?` data-ci="${o.tap.ci}"`:""}${o.tap.half?` data-half="${o.tap.half}"`:""} readonly` : "";
   const cls = "fx" + (o.align==="l"?" l":"") + (o.tap?" pickable":"");
-  return `<input class="${cls}" data-p="${path}"${tap}
+  if(sheetIsCalc(path))   // 自動計算の合計欄＝手で入力できない（矢印キーでも飛ばす）
+    return `<input class="fx calc" data-p="${path}" readonly tabindex="-1" aria-readonly="true" title="自動計算"
+    style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}"
+    value="${esc(pget(state.official,path)??"")}">`;
+  const nk = sheetNumKind(path);   // 数字の枠：全角→半角に自動でそろえる。数字だけの枠はスマホで数字キーボード
+  const numAttr = nk ? ` data-num="1" autocomplete="off"${nk==="int"?` inputmode="numeric"`:""}` : "";
+  return `<input class="${cls}" data-p="${path}"${tap}${numAttr}
     style="left:${pt(x1+1)};top:${pt(SHEET.H-yTop)};width:${pt(x2-x1-2)};height:${pt(h)};font-size:${pt(size)}"
     value="${esc(pget(state.official,path)??"")}"${o.ph?` placeholder="${esc(o.ph)}"`:""}>`;
 }

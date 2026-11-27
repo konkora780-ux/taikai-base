@@ -1647,6 +1647,7 @@ document.addEventListener("visibilitychange", ()=>{
 /* --- 公式記録の入力を、再描画しても取りこぼさないよう #app に委譲 --- */
 $("#app").addEventListener("input", e=>{
   const el = e.target.closest(".fx"); if(!el || !el.dataset.p || !state.official) return;
+  if(el.dataset.num && !e.isComposing) ofHalfNum(el);   // 数字の枠は全角→半角（変換中は触らない）
   const v = el.value !== undefined ? el.value : el.textContent;   // contenteditable(.fxedit)はvalueが無い
   pset(state.official, el.dataset.p, v);
   if(/^(H|A)\.scores\./.test(el.dataset.p)) refreshTotals();
@@ -1659,12 +1660,26 @@ $("#app").addEventListener("input", e=>{
   const pm = el.dataset.p.match(/^(H|A)\.pks\.\d+$/);
   if(pm){ const sp=document.getElementById("pkmaru-"+pm[1]); if(sp) sp.textContent = pkMaruCount(pm[1]); }
 });
+/* 日本語入力で確定したとき（ブラウザによっては確定後の input が来ないため）も半角にそろえて保存 */
+$("#app").addEventListener("compositionend", e=>{
+  const el = e.target.closest && e.target.closest(".fx[data-num]"); if(!el || !state.official) return;
+  setTimeout(()=>{ if(ofHalfNum(el)) el.dispatchEvent(new Event("input", {bubbles:true})); }, 0);
+});
+function ofHalfNum(el){
+  const v = el.value, h = toHalfNum(v); if(v===h) return false;
+  const p = el.selectionStart; el.value = h;
+  try{ if(p!=null) el.setSelectionRange(p, p); }catch(_){}
+  return true;
+}
 /* チーム名(.fxedit)はEnterで改行させない（折り返しはCSS任せ・手動改行は防ぐ）。押したらフォーカスを外して確定 */
 $("#app").addEventListener("keydown", e=>{
+  if(e.isComposing || e.keyCode===229) return;   // 日本語の変換中は何もしない
   if(e.key!=="Enter") return;
   const el = e.target.closest(".fxedit"); if(!el) return;
   e.preventDefault(); el.blur();
 });
+/* --- 公式記録の枠を、Excelのように矢印キーで移動する（officialNavKey は下） --- */
+$("#app").addEventListener("keydown", e=> officialNavKey(e), true);
 $("#app").addEventListener("click", e=>{
   const el = e.target.closest(".pickable"); if(!el) return;
   const k = el.dataset.tapk;
@@ -1712,8 +1727,85 @@ function syncShotDOM(side){
 /* チーム合計：計 = 前半 + 後半 + 延前 + 延後 */
 function recomputeTotal(side, key){
   const arr = state.official[side].tot[key];
-  arr[2] = String(num(arr[0]) + num(arr[1]) + num(arr[3]) + num(arr[4]));
+  const parts = [arr[0], arr[1], arr[3], arr[4]];
+  arr[2] = parts.some(v=>String(v??"").trim()!=="") ? String(parts.reduce((a,v)=>a+num(v),0)) : "";   // 全部空なら計も空
   const el = document.querySelector(`.fx[data-p="${side}.tot.${key}.2"]`);
   if(el) el.value = arr[2];
 }
 
+/* --- 公式記録：矢印キー・Enterで枠を移動（Excelのような操作） ---
+   ・↑↓：いつでも上下の枠へ（結合した広い枠をまたいでも、元の列の位置を覚えておく）
+   ・←→：枠が空／全選択中／文字の端にカーソルがあるときだけ左右の枠へ（文字の途中ならカーソル移動）
+   ・Enter：下の枠へ（Shift+Enterで上）。選んで入れる枠（黄色くなる枠）ではリストを開く
+   ・日本語の変換中・Shift/Ctrl/Alt/⌘との同時押しは何もしない（範囲選択や変換を邪魔しない） */
+let _ofNavAnchor = null;   // 上下移動で覚えておく横位置／左右移動で覚えておく縦位置
+function officialNavKey(e){
+  if(e.isComposing || e.keyCode===229 || e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = e.key;
+  if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"].includes(k)) return;
+  const el = e.target && e.target.closest && e.target.closest(".sheet-a4 .fx");
+  if(!el || state.officialReadOnly) return;
+  if(k==="Enter"){
+    if(el.classList.contains("pickable")){ e.preventDefault(); el.click(); return; }
+    e.preventDefault(); ofNavMove(el, e.shiftKey ? "up" : "down"); return;
+  }
+  if(e.shiftKey) return;   // Shift+矢印＝文字の範囲選択はそのまま
+  if(k==="ArrowLeft"  && !ofCaretAtEdge(el, "start")) return;
+  if(k==="ArrowRight" && !ofCaretAtEdge(el, "end"))   return;
+  const dir = { ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right" }[k];
+  if(ofNavMove(el, dir)) e.preventDefault();
+}
+/* 左右キーで枠を移ってよいか：読み取り専用・空・全選択中・カーソルが端 */
+function ofCaretAtEdge(el, edge){
+  if(el.tagName==="INPUT"){
+    if(el.readOnly) return true;
+    const len = el.value.length, s = el.selectionStart, t = el.selectionEnd;
+    if(len===0 || s==null) return true;
+    if(s===0 && t===len) return true;
+    if(s!==t) return false;
+    return edge==="start" ? s===0 : s===len;
+  }
+  const txt = el.textContent || "";   // contenteditable（チーム名）
+  if(!txt.length) return true;
+  const sel = window.getSelection(); if(!sel || !sel.rangeCount) return true;
+  const r = sel.getRangeAt(0); if(!el.contains(r.startContainer)) return true;
+  const pre = document.createRange(); pre.selectNodeContents(el); pre.setEnd(r.startContainer, r.startOffset);
+  const s = pre.toString().length, t = s + r.toString().length;
+  if(s===0 && t===txt.length) return true;
+  if(s!==t) return false;
+  return edge==="start" ? s===0 : s===txt.length;
+}
+/* 画面上の位置から、その方向でいちばん自然な隣の枠を探して移る */
+function ofNavMove(el, dir){
+  const all = [...document.querySelectorAll(".sheet-a4 .fx:not(.calc)")].filter(x=> x!==el && x.offsetParent!==null);
+  const c = el.getBoundingClientRect();
+  const vert = dir==="up" || dir==="down";
+  if(!_ofNavAnchor || _ofNavAnchor.el!==el || _ofNavAnchor.vert!==vert)
+    _ofNavAnchor = { el, vert, v: vert ? (c.left+c.right)/2 : (c.top+c.bottom)/2 };
+  const a = _ofNavAnchor.v, tol = 1;
+  let best = null, bestScore = Infinity;
+  for(const x of all){
+    const r = x.getBoundingClientRect();
+    let gap, off;
+    if(dir==="down"){ if(r.top < c.bottom - tol) continue; gap = r.top - c.bottom; off = r.left<=a && a<=r.right ? 0 : Math.min(Math.abs(r.left-a), Math.abs(r.right-a)); }
+    else if(dir==="up"){ if(r.bottom > c.top + tol) continue; gap = c.top - r.bottom; off = r.left<=a && a<=r.right ? 0 : Math.min(Math.abs(r.left-a), Math.abs(r.right-a)); }
+    else if(dir==="right"){ if(r.left < c.right - tol) continue; gap = r.left - c.right; off = r.top<=a && a<=r.bottom ? 0 : Math.min(Math.abs(r.top-a), Math.abs(r.bottom-a)); }
+    else { if(r.right > c.left + tol) continue; gap = c.left - r.right; off = r.top<=a && a<=r.bottom ? 0 : Math.min(Math.abs(r.top-a), Math.abs(r.bottom-a)); }
+    // 同じ列（行）にある枠を最優先。列が無いところはずれの小さい枠へ
+    const score = off===0 ? gap : 100000 + off*4 + gap;
+    if(score < bestScore){ bestScore = score; best = x; }
+  }
+  if(!best) return false;
+  if(!vert && bestScore >= 100000) return false;   // 左右は同じ行の中だけ（行の端で止まる）
+  _ofNavAnchor = { el:best, vert, v:a };
+  ofNavFocus(best);
+  return true;
+}
+function ofNavFocus(x){
+  x.focus({preventScroll:true});
+  // 見えていなければ必要な分だけスクロール（上の固定ヘッダーに隠れない余白は CSS の scroll-margin）
+  x.scrollIntoView({block:"nearest", inline:"nearest"});
+  // Excelと同じく、移った先の文字は全選択（そのまま打てば置き換わる）
+  if(x.tagName==="INPUT"){ if(!x.readOnly) try{ x.select(); }catch(_){} }
+  else { const rg = document.createRange(); rg.selectNodeContents(x); const s = getSelection(); s.removeAllRanges(); s.addRange(rg); }
+}
