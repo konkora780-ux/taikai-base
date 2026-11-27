@@ -11,7 +11,7 @@ const ROOT = path.join(__dirname, "..");
 const FAKE = fs.readFileSync(path.join(__dirname, "support", "fake-supabase.js"), "utf8");
 const TYPES = { ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".css":"text/css", ".png":"image/png" };
 
-function serve(){
+function serve(port){
   const srv = http.createServer((req, res)=>{
     const p = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]).replace(/^\/+/, "") || "index.html");
     if(!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()){ res.writeHead(404); return res.end(); }
@@ -20,7 +20,7 @@ function serve(){
     if(p.endsWith(".html")) return res.end(fs.readFileSync(p, "utf8").replace(/\sintegrity="[^"]*"/g, ""));
     fs.createReadStream(p).pipe(res);
   });
-  return new Promise(r=> srv.listen(0, ()=> r(srv)));
+  return new Promise(r=> srv.listen(port||0, ()=> r(srv)));
 }
 
 // 岩手県の規模（約37チーム・36試合）の大会を作る。校章は約20KB、公式記録は半分の試合でサイン3枚（各約18KB）つき
@@ -28,7 +28,7 @@ function fixture(){
   const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
   const ORG = uuid(1), TID = uuid(2);
   const crest = "data:image/png;base64," + "A".repeat(20000);
-  const sign  = "data:image/png;base64," + "B".repeat(18000);
+  const sign  = "data:image/png;base64,SIGNIMAGE" + "B".repeat(17999);
   const teams = Array.from({length:37}, (_,i)=>({ id:uuid(100+i), tournament_id:TID, org_id:ORG, name:`岩手県立テスト高校${i+1}`, grp:"A", seed:null, sort_order:i, club_id:null, crest,
     players: Array.from({length:30}, (_,j)=>({ id:`p${i}_${j}`, no:String(j+1), name:"山田 太郎", kana:"やまだ たろう", grade:"2", pos:"MF" })) }));
   const matches = Array.from({length:36}, (_,i)=>{
@@ -37,8 +37,10 @@ function fixture(){
       home_team:h.id, away_team:a.id, home_src:null, away_src:null, kickoff:`2026-10-${String(15+(i%6)).padStart(2,"0")}T10:00:00+00:00`, venue:"テスト会場",
       home_score: i<18 ? 1 : null, away_score: i<18 ? 0 : null, home_pk:null, away_pk:null, status: i<18 ? "done" : "scheduled",
       events: i<18 ? [{ id:`e${i}`, type:"goal", team:"H", min:10, playerId:`p${i%37}_9` }] : [], note:"", sort_order:i, updated_at:"2026-10-01T00:00:00+00:00",
-      lineups:{}, entry_lineups:null,
-      official: i<18 ? { public:true, signs:{ ref:sign, H:sign, A:sign }, title:"テスト大会", H:{ name:h.name, lineup:[] }, A:{ name:a.name, lineup:[] } } : null };
+      lineups: i<18 ? { H:{ coach:"", players:h.players.slice(0,16).map((p,j)=>({ id:p.id, no:p.no, name:p.name, pos:p.pos, role:j<11?"start":"sub" })) },
+                       A:{ coach:"", players:a.players.slice(0,16).map((p,j)=>({ id:p.id, no:p.no, name:p.name, pos:p.pos, role:j<11?"start":"sub" })) } } : {},
+      entry_lineups:null,
+      official: i<18 ? { public:true, signs:{ mc:sign, ref:sign, admin:sign }, title:"テスト大会", H:{ name:h.name, lineup:[] }, A:{ name:a.name, lineup:[] } } : null };
   });
   const t = { id:TID, org_id:ORG, name:"第105回 選手権 岩手県大会（テスト）", sport:"soccer", format:"league",
     settings:{ win:3, draw:1, lose:0, groups:["A"], advanceBy:{}, wildcards:[], wcRule:"total", brackets:null, venues:[], koSize:8, thirdPlace:false, duration:40, blocks:[{id:"A",name:"A"}] },
@@ -83,6 +85,8 @@ async function run(role){
   await tick(1);
   const teamReflected = await page.evaluate(()=> state.teams.some(t=> t.name === "名前を変えたチーム"));
   // ④ 軽い列に出ない変化（チームが記入リンクで出したメンバー）→ 5分ごとの試合の読み直しで拾う
+  // 一般の閲覧者は、メンバーが要る画面を開いたあとだけメンバー表を読み直す（日程だけ見ているときは読まない）
+  await page.evaluate(()=> typeof ensureHeavy === "function" ? ensureHeavy() : null); await page.waitForTimeout(50);
   await page.evaluate(()=>{ window.__fakeDb.gn_matches[5].lineups = { H:{ players:[{ id:"x", name:"提出された選手", role:"start" }] } }; });
   await tick(4);   // ここまでで 15 回目
   const lineupReflected = await page.evaluate(()=> !!(state.matches[5].lineups && state.matches[5].lineups.H && state.matches[5].lineups.H.players.length));
@@ -103,7 +107,8 @@ async function run(role){
   return { role, initial, idle9, perIdlePoll: Math.round(idle9/9), changed1, hour, reflected, teamReflected, lineupReflected, tabs, errors, reqSample };
 }
 
-(async()=>{
+module.exports = { serve, fixture, FAKE };
+if(require.main === module) (async()=>{
   for(const role of ["guest","owner"]){
     const r = await run(role);
     console.log(JSON.stringify(r, null, 1));

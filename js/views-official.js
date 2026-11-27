@@ -863,6 +863,18 @@ function go(v){
   if(v==="t" && state.t) location.hash = "t=" + state.t.id;
   render();
 }
+/* 一般の閲覧で、名簿・試合メンバー・公式記録が要る画面を開いたときに一度だけ読む（日程・順位表だけなら読まない＝通信量を節約） */
+let _heavyBusy = null;
+function ensureHeavy(){
+  if(!state.lazyGuest || state.heavyLoaded || state.heavyFailed || !state.t) return Promise.resolve();
+  if(_heavyBusy) return _heavyBusy;
+  const tid = state.t.id;
+  _heavyBusy = DB.loadHeavy(state.t, state.teams, state.matches)
+    .then(()=>{ if(state.t && state.t.id===tid) state.heavyLoaded = true; })
+    .catch(e=>{ console.error(e); state.heavyFailed = true; toast("選手・メンバーの情報を読み込めませんでした。↻ 更新でやり直せます"); })
+    .finally(()=>{ _heavyBusy = null; });
+  return _heavyBusy;
+}
 async function openTournament(id){
   state.loading = true; render();
   try{
@@ -918,7 +930,9 @@ async function reloadRoster(){
 async function refresh(){
   if(!state.t) return;
   try{
+    const hadHeavy = state.lazyGuest && state.heavyLoaded;
     const d = await DB.loadTournament(state.t.id);
+    if(d.lazy && hadHeavy){ await DB.loadHeavy(d.t, d.teams, d.matches); state.heavyLoaded = true; }
     if(d.t){ state.t = d.t; state.teams = d.teams; state.matches = d.matches; }
     render(); toast("最新にしました");
   }catch(e){ toast("更新できませんでした"); }
@@ -991,7 +1005,11 @@ async function openEntry(teamId){
     if(!team || !t) state.entry = { error:"このリンクは無効か、大会が見つかりません。本部にご確認ください。" };
     else{
       // 試合ごとのメンバー提出のため、大会の日程（公開用）も読む。トーナメントの「勝者」枠の解決にも使う
-      try{ const full = await DB.loadTournament(t.id); state.t = full.t||t; state.teams = full.teams||[]; state.matches = full.matches||[]; }
+      try{
+        const full = await DB.loadTournament(t.id);
+        if(full.lazy){ await DB.loadHeavy(full.t, full.teams, full.matches); state.heavyLoaded = true; }   // 記入リンクは従来どおり全部読む
+        state.t = full.t||t; state.teams = full.teams||[]; state.matches = full.matches||[];
+      }
       catch(_){ state.t = t; state.teams = [team]; state.matches = []; }
       state.entry = { team, t, players:(team.players||[]).map(p=>({...p})), code:"", done:false, tab:"roster", matchId:null, lu:null };
     }
@@ -1582,7 +1600,9 @@ async function pollTournamentOnce(){
   const p = await DB.pollTournament(id);
   if(p === null || _pollCount % POLL_FULL_ALL_EVERY === 0){
     // 端末内保存（お試し版）、または15分ごとの丸ごと読み直し
+    const hadHeavy = state.lazyGuest && state.heavyLoaded;
     const d = await DB.loadTournament(id);
+    if(d.lazy && hadHeavy){ await DB.loadHeavy(d.t, d.teams, d.matches); state.heavyLoaded = true; }
     if(!d.t || !state.t || state.t.id !== id) return;
     state.t = d.t; state.teams = d.teams; state.matches = d.matches;
   }else{
