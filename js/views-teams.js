@@ -561,13 +561,29 @@ function readImageResized(file, max, cb){
       const s = Math.min(1, max/Math.max(img.width, img.height));
       const w = Math.max(1, Math.round(img.width*s)), h = Math.max(1, Math.round(img.height*s));
       const cv = document.createElement("canvas"); cv.width=w; cv.height=h;
-      cv.getContext("2d").drawImage(img, 0, 0, w, h);
-      try{ cb(cv.toDataURL("image/png")); }catch(e){ toast("画像を読み込めませんでした"); }
+      const ctx = cv.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      try{ cb(smallestImageDataUrl(cv, ctx)); }catch(e){ toast("画像を読み込めませんでした"); }
     };
     img.onerror = ()=> toast("画像を読み込めませんでした");
     img.src = rd.result;
   };
   rd.readAsDataURL(file);
+}
+/* 同じ大きさ（ピクセル数）のまま、いちばん軽い画像形式を選ぶ。
+   PNGに加えて WebP（透明を残せる・Safariなど作れないブラウザでは自動で外れる）と、
+   透明な部分が無いときだけ JPEG を試す。画面・印刷の見た目（解像度）は変えずに、通信量と保存容量を減らすため */
+function smallestImageDataUrl(cv, ctx){
+  const cands = [cv.toDataURL("image/png")];
+  const webp = cv.toDataURL("image/webp", 0.9);
+  if(webp.startsWith("data:image/webp")) cands.push(webp);
+  let opaque = true;
+  try{
+    const px = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    for(let i=3; i<px.length; i+=4){ if(px[i] < 255){ opaque = false; break; } }
+  }catch(e){ opaque = false; }
+  if(opaque) cands.push(cv.toDataURL("image/jpeg", 0.9));
+  return cands.reduce((a,b)=> b.length < a.length ? b : a);
 }
 /* 台帳チームの校章（管理側の編集画面用） */
 function setClubCrestFromInput(clubId, input){
