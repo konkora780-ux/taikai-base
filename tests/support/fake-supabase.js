@@ -26,6 +26,50 @@
     return c;
   }
   function fakeHash(str){ let h = 0; for(let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) | 0; } return "h" + h + "_" + str.length; }
+  /* setup-32 の会場担当の関数と同じ判定（会場名・日本時間の日付・コード・期限・書き換える欄） */
+  const OF_KEYS = ["format","referee","fourth","ar1","ar2","recorder","org","weather","wind","pitch","pitchCond","temp","crowd"];
+  const jst = iso => new Date(new Date(iso).getTime() + 9*3600*1000).toISOString().slice(0,10);
+  function fakeVenueRpc(name, a){
+    const out = data => { const json = JSON.stringify(data), size = json.length; if(json.includes("SIGNIMAGE")) window.__signBytes = (window.__signBytes||0) + size; window.__bytes += size; window.__requests.push({ table:name, cols:"", size }); return { data, error:null }; };
+    const v = (db().gn_venue_entry || []).find(x=>x.id===a.p_id);
+    const closed = !v || !v.active || (v.expires_at && new Date(v.expires_at).getTime() < Date.now());
+    const codeOk = !closed && v.code === String(a.p_code||"").toUpperCase();
+    if(v && !closed && !codeOk) v.fail_count = (v.fail_count||0) + 1;
+    const mine = m => m.tournament_id===v.tournament_id && String(m.venue||"").trim()===String(v.venue).trim() && m.kickoff && jst(m.kickoff)===v.day;
+    if(name === "venue_entry_open"){
+      if(closed) return out({ ok:false, reason:"closed" });
+      if(!codeOk) return out({ ok:false, reason:"code" });
+      const ms = db().gn_matches.filter(mine).map(m=>{ let of = null;
+        if(m.official){ of = {}; OF_KEYS.concat(["kickoffTeam"]).forEach(k=>{ if(k in m.official) of[k] = m.official[k]; }); }
+        return { id:m.id, lineups:m.lineups, official:of }; });
+      return out({ ok:true, tournament_id:v.tournament_id, venue:v.venue, day:v.day, matches:ms });
+    }
+    if(name === "venue_get_official"){
+      if(!codeOk) return out({ ok:false, reason:"code" });
+      const mm = db().gn_matches.find(x=>x.id===a.p_match);
+      if(!mm || !mine(mm)) return out({ ok:false, reason:"notyours" });
+      return out({ ok:true, official:mm.official || null });
+    }
+    if(name === "venue_save_official"){
+      if(!codeOk) return out("code");
+      const mm = db().gn_matches.find(x=>x.id===a.p_match);
+      if(!mm || !mine(mm)) return out("notyours");
+      mm.official = Object.assign(JSON.parse(JSON.stringify(a.p_official)), { public: !!(mm.official && mm.official.public === true) });
+      mm.updated_at = new Date().toISOString();
+      return out("ok");
+    }
+    if(!codeOk) return out("code");
+    const m = db().gn_matches.find(x=>x.id===a.p_match);
+    if(!m || !mine(m)) return out("notyours");
+    const d = a.p_data;
+    ["home_score","away_score","home_pk","away_pk","status","result_type","result_note","events","note"].forEach(k=> m[k] = d[k] ?? null);
+    if(d.meta){ m.lineups = Object.assign({}, m.lineups||{}); m.lineups._meta = Object.assign({}, m.lineups._meta||{},
+      { useET:d.meta.useET, usePK:d.meta.usePK, pk:d.meta.pk, halfMin:d.meta.halfMin??null, etHalfMin:d.meta.etHalfMin??null }); }
+    if(d.official){ const add = {}; OF_KEYS.forEach(k=>{ if(k in d.official) add[k] = String(d.official[k]).slice(0,100); });
+      m.official = Object.assign({}, m.official||{}, add, { kickoffTeam:d.kickoffTeam||null }); }
+    m.updated_at = new Date().toISOString();
+    return out("ok");
+  }
   class Q {
     constructor(table){ this.table = table; this.filters = []; this.cols = "*"; this.single = false; this.op = "select"; }
     select(cols){ if(this.op === "select") this.cols = cols || "*"; return this; }
@@ -79,7 +123,8 @@
   };
   window.supabase = { createClient(){ return {
     from(t){ return new Q(t); },
-    rpc(name){
+    rpc(name, args){
+      if(/^venue_(entry_open|save_match|get_official|save_official)$/.test(name)){ const q = new Q("__rpc"); q.run = ()=> fakeVenueRpc(name, args||{}); return q; }
       if(name === "gn_matches_public") return new Q("gn_matches_public");
       if(name === "gn_matches_open"){
         if(window.__fakeNoOpen){ const q = new Q("__missing"); q.run = ()=>({ data:null, error:{ code:"PGRST202", message:"Could not find the function" } }); return q; }
