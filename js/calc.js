@@ -68,6 +68,35 @@ function mergeEntryLineups(matches){
   return matches;
 }
 
+/* --- 自動更新（20秒ごと）を軽くするための「変わった試合だけ読む」仕組み ---
+   毎回は軽い列（スコア・状態・記録など）だけを読み、前回と違う試合だけ全部の列（メンバー表・公式記録）を読み直す。
+   校章・名簿・公式記録のサイン画像を毎回送らないので、Supabaseの転送量が大きく減る */
+const POLL_MATCH_COLS = "id,tournament_id,stage,grp,round,slot,home_team,away_team,home_src,away_src,kickoff,venue,home_score,away_score,home_pk,away_pk,status,events,note,sort_order,updated_at";
+const POLL_TEAM_COLS  = "id,name,grp,seed,sort_order,club_id";
+function pollSig(row, cols){
+  return JSON.stringify(cols.split(",").map(k=> row ? (row[k]===undefined ? null : row[k]) : null));
+}
+/* 前回の試合一覧（cur）と、今回読んだ軽い列（light）を比べて、読み直す試合のidを返す */
+function changedMatchIds(cur, light){
+  const byId = new Map((cur||[]).map(m=>[m.id,m]));
+  return (light||[]).filter(r=>{
+    const m = byId.get(r.id);
+    return !m || pollSig(m, POLL_MATCH_COLS) !== pollSig(r, POLL_MATCH_COLS);
+  }).map(r=>r.id);
+}
+/* 変わらなかった試合は手元のまま、変わった試合は読み直した行に置き換え、消えた試合は外す（並びは今回の一覧どおり） */
+function mergePolledMatches(cur, light, fresh){
+  const byId = new Map((cur||[]).map(m=>[m.id,m]));
+  const freshById = new Map((fresh||[]).map(m=>[m.id,m]));
+  return (light||[]).map(r=> freshById.get(r.id) || byId.get(r.id)).filter(Boolean);
+}
+/* チームの並び・組・名前などが変わったか（名簿や校章は比べない＝毎回は読まない） */
+function teamsLightChanged(cur, light){
+  if((cur||[]).length !== (light||[]).length) return true;
+  const byId = new Map((cur||[]).map(t=>[t.id,t]));
+  return (light||[]).some(r=> !byId.has(r.id) || pollSig(byId.get(r.id), POLL_TEAM_COLS) !== pollSig(r, POLL_TEAM_COLS));
+}
+
 /* 読み込んだ試合データの形をそろえる（古い版・途中で止まった保存・バックアップ復元などで欄が欠けていても、
    どの画面も止まらないようにする）。記録(events)の中の空の行は捨て、メンバー表の選手一覧が無ければ空にし、
    日時として読めないキックオフは「未定」扱いにする */

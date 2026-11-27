@@ -297,3 +297,32 @@ test("区分に合わない学年の選手を見つける（読み込み前の�
   assert.deepEqual(ctx.playersWithBadGrade(ps, "elem").map(p=>p.name), ["D"]);
   assert.deepEqual(ctx.playersWithBadGrade(ps, "none").map(p=>p.name), ["A","B","D"]);
 });
+
+// --- 自動更新を軽くする仕組み（変わった試合だけ読み直す） ---
+test("自動更新：軽い列が同じ試合は読み直さず、変わった試合・新しい試合だけを選ぶ", ()=>{
+  const ctx = setup();
+  const cur = [
+    doneMatch("m1","A","B",1,0,{updated_at:"2026-11-01T00:00:00+00:00", lineups:{H:{players:[1,2]}}, official:{signs:{x:"data:..."}}}),
+    doneMatch("m2","A","C",0,0,{status:"scheduled"}),
+  ];
+  const light = [
+    doneMatch("m1","A","B",1,0,{updated_at:"2026-11-01T00:00:00+00:00"}),   // 重い列（メンバー表・公式記録）が無くても「同じ」
+    doneMatch("m2","A","C",2,0,{status:"done"}),                          // スコアが変わった
+    doneMatch("m3","B","C",0,0),                                          // 新しい試合
+  ];
+  assert.deepEqual([...ctx.changedMatchIds(cur, light)], ["m2","m3"]);
+  const fresh = [doneMatch("m2","A","C",2,0,{lineups:{}}), doneMatch("m3","B","C",0,0)];
+  const merged = ctx.mergePolledMatches(cur, light, fresh);
+  assert.deepEqual(merged.map(m=>m.id), ["m1","m2","m3"]);
+  assert.equal(merged[0], cur[0]);                        // 変わらない試合は手元のもの（メンバー表・公式記録つき）を残す
+  assert.equal(merged[1].home_score, 2);
+  // 消えた試合は外れる
+  assert.deepEqual(ctx.mergePolledMatches(cur, [light[1]], [fresh[0]]).map(m=>m.id), ["m2"]);
+});
+test("自動更新：チームは並び・組・名前が変わったときだけ読み直す（名簿・校章は比べない）", ()=>{
+  const ctx = setup();
+  const cur = [team(ctx,"A",{players:[{no:"1"}], crest:"data:image/png;base64,xxx"}), team(ctx,"B")];
+  assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A"), team(ctx,"B")]), false);
+  assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A",{grp:"B"}), team(ctx,"B")]), true);
+  assert.equal(ctx.teamsLightChanged(cur, [team(ctx,"A")]), true);
+});

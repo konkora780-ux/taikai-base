@@ -35,6 +35,59 @@ const DB = {
     return { t, teams:rteams.data||[], matches:mergeEntryLineups(rmatches.data||[]) };
   },
 
+  /* 自動更新用の軽い読み込み：大会・試合の軽い列・チームの軽い列（運営は記入リンクの提出時刻も）だけ。
+     端末内保存（お試し版）のときは通信が無いので null を返し、呼ぶ側は今まで通り丸ごと読む */
+  async pollTournament(id){
+    if(!sb) return null;
+    const rt = await sb.from("gn_tournaments").select("*").eq("id",id).maybeSingle();
+    if(rt.error) throw rt.error;
+    const t = rt.data;
+    if(!t) return { t:null };
+    const isOwner = !!(state.user && t.org_id === state.user.id);
+    const mq = isOwner
+      ? sb.from("gn_matches").select(POLL_MATCH_COLS).eq("tournament_id",id)
+      : sb.rpc("gn_matches_public").select(POLL_MATCH_COLS).eq("tournament_id",id);
+    const [rm, rteams, entries] = await Promise.all([
+      mq,
+      sb.from("gn_teams").select(POLL_TEAM_COLS).eq("tournament_id",id),
+      isOwner ? this.loadEntries(id).catch(()=>null) : Promise.resolve(null),
+    ]);
+    if(rm.error) throw rm.error;
+    if(rteams.error) throw rteams.error;
+    return { t, isOwner, matches: rm.data||[], teams: rteams.data||[], entries };
+  },
+  /* 指定した試合だけ、全部の列を読む（自動更新で変わった試合だけ読み直す用） */
+  async loadMatchesByIds(t, ids){
+    if(!ids.length) return [];
+    const isOwner = !!(state.user && t && t.org_id === state.user.id);
+    const out = [];
+    for(let i=0; i<ids.length; i+=100){   // URLが長くなりすぎないよう100件ずつ
+      const part = ids.slice(i, i+100);
+      const q = isOwner
+        ? sb.from("gn_matches").select("*").in("id", part)
+        : sb.rpc("gn_matches_public").select("*").in("id", part);
+      const { data, error } = await q;
+      if(error) throw error;
+      out.push(...(data||[]));
+    }
+    return mergeEntryLineups(out);
+  },
+  /* メンバー表の列だけを読む（チームが記入リンクで出した試合メンバーは更新日時が変わらないので、ときどきこれで拾う） */
+  async loadLineups(t){
+    const isOwner = !!(state.user && t && t.org_id === state.user.id);
+    const q = isOwner
+      ? sb.from("gn_matches").select("id,lineups,entry_lineups").eq("tournament_id", t.id)
+      : sb.rpc("gn_matches_public").select("id,lineups").eq("tournament_id", t.id);
+    const { data, error } = await q;
+    if(error) throw error;
+    return data || [];
+  },
+  async loadTeams(tournamentId){
+    const { data, error } = await sb.from("gn_teams").select("*").eq("tournament_id",tournamentId);
+    if(error) throw error;
+    return data || [];
+  },
+
   /* 公式記録の公開リンク：試合idだけで匿名に読む（大会・チームは所属大会を丸ごと読んで補う＝トーナメント枠の勝者参照も解決できるように）
      このリンクは常にゲスト向けの機能なので、公開用の窓口(gn_matches_public)だけを読む＝非公開の公式記録は最初から届かない */
   async loadMatchTarget(matchId){

@@ -1559,22 +1559,62 @@ function viewClubEntryLinks(){
   </div>`;
 }
 
-/* --- 分担入力の自動反映（開いている大会だけ、静かに更新） --- */
+/* --- 分担入力の自動反映（開いている大会だけ、静かに更新） ---
+   通信量を抑えるため、毎回は「軽い列」だけを読み、変わった試合だけ全部の列を読み直す（calc.js の POLL_MATCH_COLS）。
+   チームは並び・組・名前が変わったとき、または記入リンクで名簿が提出されたときだけ読み直す。
+   軽い列に出ない変化（チームが記入リンクで出した試合メンバー＝更新日時が変わらない）は、5分ごとにメンバー表の列だけを、
+   30分ごとに全体を読み直して拾う */
+const POLL_LINEUPS_EVERY  = 15;   // 20秒×15＝5分
+const POLL_FULL_ALL_EVERY = 90;   // 20秒×90＝30分
+let _pollCount = 0, _pollBusy = false, _pollTid = null, _pollEntrySig = null;
+function pollRenderSig(s){
+  // 結果（スコア・状態・メモ）に加え、名簿の提出（記入リンク）も自動で反映する
+  return JSON.stringify([
+    s.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]),
+    s.teams.map(t=>[t.id, t.grp, (t.players||[]).length]),
+  ]);
+}
+async function pollTournamentOnce(){
+  const id = state.t.id;
+  if(_pollTid !== id){ _pollTid = id; _pollCount = 0; _pollEntrySig = null; }
+  _pollCount++;
+  const before = pollRenderSig({matches:state.matches, teams:state.teams});
+  const p = await DB.pollTournament(id);
+  if(p === null || _pollCount % POLL_FULL_ALL_EVERY === 0){
+    // 端末内保存（お試し版）、または15分ごとの丸ごと読み直し
+    const d = await DB.loadTournament(id);
+    if(!d.t || !state.t || state.t.id !== id) return;
+    state.t = d.t; state.teams = d.teams; state.matches = d.matches;
+  }else{
+    if(!p.t || !state.t || state.t.id !== id) return;
+    normalizeMatchRows(p.matches);
+    const ids = changedMatchIds(state.matches, p.matches);
+    const fresh = await DB.loadMatchesByIds(p.t, ids);
+    const lineups = _pollCount % POLL_LINEUPS_EVERY === 0 ? await DB.loadLineups(p.t) : null;
+    const entrySig = p.entries ? JSON.stringify(Object.keys(p.entries).sort().map(k=>[k, p.entries[k].submitted_at||null])) : null;
+    const needTeams = teamsLightChanged(state.teams, p.teams) || (_pollEntrySig !== null && entrySig !== _pollEntrySig);
+    _pollEntrySig = entrySig;
+    const teams = needTeams ? await DB.loadTeams(id) : null;
+    if(!state.t || state.t.id !== id || state.view !== "t") return;   // 読んでいる間に画面が変わった
+    state.t = p.t;
+    state.matches = mergePolledMatches(state.matches, p.matches, fresh);
+    if(lineups){
+      const byId = new Map(lineups.map(r=>[r.id,r]));
+      state.matches.forEach(m=>{ const r = byId.get(m.id); if(!r) return;
+        m.lineups = r.lineups; if("entry_lineups" in r) m.entry_lineups = r.entry_lineups; });
+      mergeEntryLineups(state.matches);
+    }
+    if(teams) state.teams = teams;
+  }
+  if(before !== pollRenderSig({matches:state.matches, teams:state.teams})) render();
+}
 setInterval(async ()=>{
   if(document.hidden) return;
-  if(state.view!=="t" || !state.t) return;
-  try{
-    const d = await DB.loadTournament(state.t.id);
-    if(!d.t) return;
-    // 結果（スコア・状態・メモ）に加え、名簿の提出（記入リンク）も自動で反映する
-    const sig = s => JSON.stringify([
-      s.matches.map(m=>[m.id,m.home_score,m.away_score,m.status,m.note]),
-      s.teams.map(t=>[t.id, t.grp, (t.players||[]).length]),
-    ]);
-    const before = sig({matches:state.matches, teams:state.teams});
-    state.t = d.t; state.teams = d.teams; state.matches = d.matches;
-    if(before !== sig(d)) render();
-  }catch(e){ /* 通信できないときは静かに次回へ */ }
+  if(state.view!=="t" || !state.t || _pollBusy) return;
+  _pollBusy = true;
+  try{ await pollTournamentOnce(); }
+  catch(e){ /* 通信できないときは静かに次回へ */ }
+  finally{ _pollBusy = false; }
 }, POLL_MS);
 
 /* --- 公式記録の入力を、再描画しても取りこぼさないよう #app に委譲 --- */
