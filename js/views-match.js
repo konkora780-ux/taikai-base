@@ -664,12 +664,20 @@ function printBracket(){
   bk.style.setProperty("--kw", w+"px");
   bk.style.setProperty("--kh", h+"px");
   bk.style.setProperty("--ks", scale);
-  const done = ()=>{ document.body.classList.remove("pbk"); bk.style.removeProperty("--kw"); bk.style.removeProperty("--kh"); bk.style.removeProperty("--ks"); window.removeEventListener("afterprint", done); };
-  window.addEventListener("afterprint", done);
   document.body.classList.add("pbk");
+  _koPrinting = true;
   setTimeout(()=>window.print(), 60);
-  setTimeout(done, 4000);                           // 保険（afterprintが来ない環境用）
 }
+/* 印刷用の切り替え（body.pbk）は、印刷が終わった合図（afterprint）や時間では外さない。
+   Android の Chrome は window.print() のあと、紙面を作る前に afterprint が来たり、
+   用紙・向きを変えるたびに紙面を作り直したりするため、途中で外すと画面のままの姿で印刷されてしまう。
+   body.pbk は印刷のときにしか効かないので付けたままでも画面には影響がなく、
+   次に「ほかの印刷」が始まったとき（beforeprint）に外す。
+   「このトーナメント表の印刷中」の目印（_koPrinting）は、印刷画面から戻って次に画面を触った（キーを押した）ときに下ろす。
+   （Android では用紙を変えるたびに beforeprint が来ることがあるので、beforeprint では下ろさない） */
+let _koPrinting = false;
+window.addEventListener("beforeprint", ()=>{ if(!_koPrinting) document.body.classList.remove("pbk"); });
+["pointerdown","keydown"].forEach(t=> window.addEventListener(t, ()=>{ _koPrinting = false; }, true));
 
 /* --- 1回戦の組み合わせを手で決める --- */
 function openSeedSheet(){

@@ -260,8 +260,13 @@ function ppPrintCleanup(){
   document.getElementById("ppPrint")?.remove();
   document.getElementById("ppPrintPage")?.remove();
 }
-window.addEventListener("beforeprint", ()=>{ if(!_ppPrinting) ppPrintCleanup(); _ppPrinting = false; });
-window.addEventListener("afterprint", ()=>{ if(!_ppPrinting) ppPrintCleanup(); });
+/* 後片付けは「次にほかの印刷が始まったとき（beforeprint）」だけにする。afterprint では外さない
+   （Android の Chrome は紙面を作る前に afterprint が来ることがあり、外すと縦型の表が印刷されないため）。
+   #ppPrint は画面では display:none なので、残っていても画面には影響しない。
+   「縦型の印刷中」の目印は、印刷画面から戻って次に画面を触った（キーを押した）ときに下ろす
+   （Android では用紙を変えるたびに beforeprint が来ることがあるので、beforeprint では下ろさない）。 */
+window.addEventListener("beforeprint", ()=>{ if(!_ppPrinting) ppPrintCleanup(); });
+["pointerdown","keydown"].forEach(t=> window.addEventListener(t, ()=>{ _ppPrinting = false; }, true));
 function printPaperBracket(){
   const inn = document.getElementById("paperBracketIn");
   if(!inn){ window.print(); return; }
