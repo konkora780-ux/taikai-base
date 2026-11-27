@@ -641,6 +641,9 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
   .sp-btns .btn{flex:1 1 0;}
 }
 .sheet-a4 .fx:focus{outline:none;background:var(--accentbg);overflow:visible;text-overflow:clip;}
+.sheet-a4 .fx:focus{box-shadow:inset 0 0 0 1.5px var(--accent);}   /* いまの枠を枠線で示す（矢印キー移動の目印） */
+.sheet-a4 .fx{scroll-margin:72px 16px 16px;}   /* 矢印キーで移ったとき固定ヘッダーに隠れない余白 */
+.sheet-a4 .fx.calc{background:#eef1f5;pointer-events:none;}   /* 自動計算の合計欄（入力できない）。印刷では白 */
 .sheet-a4 .fxw{white-space:normal;word-break:break-word;text-overflow:clip;line-height:1.05;resize:none;
   text-align:center;padding:0 1pt;}
 .sheet-a4 .fxw.l{text-align:left;}
@@ -734,7 +737,7 @@ body.sp-lock{overflow:hidden;overscroll-behavior:none;}
   .sheetwrap{overflow:visible;padding:0;background:#fff;}
   .sheetscale{width:595.28pt !important;height:842pt !important;}
   .sheet-a4{transform:none !important;box-shadow:none;}
-  .sheet-a4 .fx{background:transparent !important;}
+  .sheet-a4 .fx{background:transparent !important;box-shadow:none !important;}
   .sheet-a4 .signcell{background:transparent !important;}
   .sheet-a4 .fx::placeholder{color:transparent !important;}   /* 入力例は印刷しない */
   .sheetwrap.page2{break-before:page;page-break-before:always;margin-top:0 !important;}
