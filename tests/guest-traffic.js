@@ -10,8 +10,9 @@
 const { chromium } = require("playwright");
 const { serve, fixture, FAKE } = require("./poll-traffic");
 
-async function openApp({ role="guest", noOpen=false, hash, storage }){
+async function openApp({ role="guest", noOpen=false, noPlayersHash=false, hash, storage, mutate }){
   const fx = fixture();
+  if(mutate) mutate(fx);
   const srv = await serve(47811);   // 校章の覚え（localStorage）を引き継ぐため、毎回同じ住所で配信する
   const base = `http://localhost:${srv.address().port}/`;
   const browser = await chromium.launch();
@@ -22,8 +23,10 @@ async function openApp({ role="guest", noOpen=false, hash, storage }){
   page.on("console", m=> { if(m.type()==="error") errors.push("console: "+m.text()); });
   await page.route(/cdn\.jsdelivr\.net\/npm\/@supabase/, r=> r.fulfill({ status:200, contentType:"text/javascript", body:FAKE }));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, r=> r.fulfill({ status:200, body:"" }));
-  await page.addInitScript(([d, user, no])=>{ window.__fakeDb = d; window.__fakeUser = user; window.__fakeNoOpen = no; },
-    [fx.db, role==="owner" ? { id:fx.ORG, email:"test@taikai.invalid" } : null, noOpen]);
+  await page.addInitScript(([d, user, no, nph])=>{ window.__fakeDb = d; window.__fakeUser = user; window.__fakeNoOpen = no; window.__fakeNoPlayersHash = nph;
+      // 「画面が見えているか」をテストから切り替えられるようにする
+      window.__hidden = false; Object.defineProperty(document, "hidden", { configurable:true, get:()=> window.__hidden }); },
+    [fx.db, role==="owner" ? { id:fx.ORG, email:"test@taikai.invalid" } : null, noOpen, noPlayersHash]);
   await page.goto(base + "index.html" + (hash ? hash(fx) : "#t=" + fx.TID));
   await page.waitForFunction(()=> typeof state !== "undefined" && !state.loading && (state.view==="t" ? state.matches.length===36 : !!state.t), null, { timeout:15000 });
   await page.waitForTimeout(300);
@@ -94,9 +97,39 @@ const screenHtml = page => page.evaluate(()=> (document.querySelector(".screen")
   a = await openApp({ storage });
   const second = await a.page.evaluate(()=> ({ bytes:window.__bytes, crestReq: window.__requests.filter(r=> r.table==="gn_teams" && r.cols==="id,crest").length,
     crests: state.teams.filter(t=>t.crest).length }));
-  out["一般・2回目の読み込み（校章を覚えている）"] = kb(second.bytes);
+  const second2 = await a.page.evaluate(()=> ({ plReq: window.__requests.filter(r=> r.table==="gn_teams" && r.cols==="id,players").length,
+    withPlayers: state.teams.filter(t=> (t.players||[]).length === 30).length, sched: (setTab("schedule"), document.querySelector(".screen").innerHTML) }));
+  out["一般・2回目の読み込み（校章・名簿を覚えている）"] = kb(second.bytes);
   check("2回目は校章を読まない・校章は表示用に入っている", second.crestReq === 0 && second.crests === 37, JSON.stringify(second));
+  check("2回目は名簿を読まない・名簿は入っている", second2.plReq === 0 && second2.withPlayers === 37, JSON.stringify({plReq:second2.plReq, w:second2.withPlayers}));
+  // 名簿が1チームだけ変わったら、そのチームだけ読み直す
   await a.close();
+  {
+    const b = await openApp({ storage, mutate: fx=>{ fx.db.gn_teams[3].players[0].name = "名簿 変更"; } });
+    const r = await b.page.evaluate(()=> ({ plReq: window.__requests.filter(x=> x.table==="gn_teams" && x.cols==="id,players").map(x=>x.size),
+      changed: state.teams[3].players[0].name }));
+    check("名簿が変わったチームだけ読み直す", r.plReq.length === 1 && r.plReq[0] < 10000 && r.changed === "名簿 変更", JSON.stringify(r));
+    // 画面が見えていないときは自動更新しない・見えたらすぐ1回確認する
+    const n0 = await b.page.evaluate(()=> window.__requests.length);
+    await b.page.evaluate(()=>{ window.__hidden = true; document.dispatchEvent(new Event("visibilitychange")); });
+    const hiddenReq = await b.page.evaluate(n=> { pollTick(); return window.__requests.length - n; }, n0);
+    await b.page.waitForTimeout(100);
+    const n1 = await b.page.evaluate(()=> window.__requests.length);
+    await b.page.evaluate(()=>{ _pollLastAt = 0; window.__hidden = false; document.dispatchEvent(new Event("visibilitychange")); });
+    await b.page.waitForTimeout(300);
+    const n2 = await b.page.evaluate(()=> window.__requests.length);
+    check("見えていないときは自動更新しない", hiddenReq === 0 && n1 === n0, `${n0}→${n1}`);
+    check("見える状態に戻るとすぐ1回確認する", n2 > n1, `${n1}→${n2}`);
+    await b.close();
+  }
+  // setup-31 未実行（名簿の指紋が無い）でも動く
+  {
+    const b = await openApp({ storage, noPlayersHash:true });
+    const r = await b.page.evaluate(()=> ({ withPlayers: state.teams.filter(t=> (t.players||[]).length === 30).length,
+      crestReq: window.__requests.filter(x=> x.table==="gn_teams" && x.cols==="id,crest").length }));
+    check("setup-31未実行でも名簿が入る（校章は覚えたまま）", r.withPlayers === 37 && r.crestReq === 0 && !b.errors.length, JSON.stringify(r) + b.errors.join(" / "));
+    await b.close();
+  }
 
   // ⑥ 運営（ログイン）：サイン画像も含め従来どおり全部読む
   a = await openApp({ role:"owner" });

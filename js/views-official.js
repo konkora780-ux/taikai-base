@@ -1628,14 +1628,21 @@ async function pollTournamentOnce(){
   }
   if(before !== pollRenderSig({matches:state.matches, teams:state.teams})) render();
 }
-setInterval(async ()=>{
+/* 画面が見えていないとき（別のタブ・アプリに切り替えた・スマホの画面を消した）は自動更新しない。
+   見える状態に戻ったら、前回から20秒以上たっていればすぐ1回確認して、最新の結果を出す */
+let _pollLastAt = 0;
+async function pollTick(){
   if(document.hidden) return;
   if(state.view!=="t" || !state.t || _pollBusy) return;
-  _pollBusy = true;
+  _pollBusy = true; _pollLastAt = Date.now();
   try{ await pollTournamentOnce(); }
   catch(e){ /* 通信できないときは静かに次回へ */ }
   finally{ _pollBusy = false; }
-}, POLL_MS);
+}
+setInterval(pollTick, POLL_MS);
+document.addEventListener("visibilitychange", ()=>{
+  if(!document.hidden && Date.now() - _pollLastAt >= POLL_MS) pollTick();
+});
 
 /* --- 公式記録の入力を、再描画しても取りこぼさないよう #app に委譲 --- */
 $("#app").addEventListener("input", e=>{

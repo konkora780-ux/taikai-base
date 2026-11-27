@@ -43,7 +43,9 @@
       if(this.table === "gn_matches_open") return (db().gn_matches || []).map(openMatch);
       if(this.table === "gn_teams_crest"){
         if(window.__fakeNoOpen) throw { message:"relation does not exist" };
-        return (db().gn_teams || []).map(t=>({ id:t.id, tournament_id:t.tournament_id, crest_hash: t.crest ? fakeHash(t.crest) : "d41d8cd98f00b204e9800998ecf8427e" }));
+        if(window.__fakeNoPlayersHash && /players_hash/.test(this.cols)) throw { message:"column gn_teams_crest.players_hash does not exist" };
+        return (db().gn_teams || []).map(t=>({ id:t.id, tournament_id:t.tournament_id, crest_hash: t.crest ? fakeHash(t.crest) : "d41d8cd98f00b204e9800998ecf8427e",
+          players_hash: fakeHash(JSON.stringify(t.players || null)) }));
       }
       return db()[this.table] || (db()[this.table] = []);
     }
