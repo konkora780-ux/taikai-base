@@ -57,39 +57,41 @@ const DB = {
     if(rm.error){ this._openMissing = true; return null; }
     if(rteams.error) throw rteams.error;
     const teams = rteams.data || [];
-    await this.attachCrests(t.id, teams);
+    await this.attachCached(t.id, teams);
     return { t, teams, matches:mergeEntryLineups(rm.data||[]), lazy:true };
   },
-  /* 校章：チームごとの「画像の指紋」（md5）だけ読み、スマホに覚えている画像と同じなら読まない */
-  async attachCrests(tournamentId, teams){
+  /* 校章と選手名簿：チームごとの「中身の指紋」（md5・setup-30/31 の gn_teams_crest）だけ読み、
+     スマホに覚えているものと同じなら読まない。指紋の窓口が無い（SQL未実行）ときは毎回読む */
+  async attachCached(tournamentId, teams){
     if(!teams.length) return;
-    const cache = crestCacheRead();
-    const rh = await sb.from("gn_teams_crest").select("id,crest_hash").eq("tournament_id", tournamentId);
-    let need;
-    if(rh.error){ need = teams.map(x=>x.id); }   // 指紋の窓口が無いときは毎回読む
-    else{
-      const hashOf = new Map((rh.data||[]).map(r=>[r.id, r.crest_hash]));
-      need = [];
+    let rh = await sb.from("gn_teams_crest").select("id,crest_hash,players_hash").eq("tournament_id", tournamentId);
+    let hasPlayersHash = true;
+    if(rh.error){ hasPlayersHash = false; rh = await sb.from("gn_teams_crest").select("id,crest_hash").eq("tournament_id", tournamentId); }
+    const rows = rh.error ? [] : (rh.data || []);
+    const kinds = [
+      { col:"crest",   key:CREST_CACHE_KEY,   hashOf:new Map(rows.map(r=>[r.id, r.crest_hash])), ok:!rh.error },
+      { col:"players", key:PLAYERS_CACHE_KEY, hashOf:new Map(rows.map(r=>[r.id, r.players_hash])), ok:!rh.error && hasPlayersHash },
+    ];
+    for(const k of kinds){
+      const cache = teamCacheRead(k.key), need = [];
       teams.forEach(x=>{
-        const h = hashOf.get(x.id), c = cache[x.id];
-        if(h === EMPTY_MD5){ x.crest = null; }
-        else if(c && c.h === h){ x.crest = c.c; c.at = Date.now(); }
+        const h = k.ok ? k.hashOf.get(x.id) : null, c = cache[x.id];
+        if(k.col === "crest" && h === EMPTY_MD5){ x.crest = null; }
+        else if(h && c && c.h === h){ x[k.col] = c.c; c.at = Date.now(); }
         else need.push(x.id);
       });
-      teams._hash = hashOf;
+      for(let i=0; i<need.length; i+=50){
+        const { data, error } = await sb.from("gn_teams").select("id," + k.col).in("id", need.slice(i, i+50));
+        if(error) throw error;
+        (data||[]).forEach(r=>{
+          const x = teams.find(y=>y.id===r.id); if(!x) return;
+          x[k.col] = r[k.col] ?? null;
+          const h = k.ok && k.hashOf.get(r.id);
+          if(h && r[k.col] != null) cache[r.id] = { h, c:r[k.col], at:Date.now() };
+        });
+      }
+      if(k.ok) teamCacheWrite(k.key, cache);
     }
-    for(let i=0; i<need.length; i+=50){
-      const { data, error } = await sb.from("gn_teams").select("id,crest").in("id", need.slice(i, i+50));
-      if(error) throw error;
-      (data||[]).forEach(r=>{
-        const x = teams.find(y=>y.id===r.id); if(!x) return;
-        x.crest = r.crest || null;
-        const h = teams._hash && teams._hash.get(r.id);
-        if(h && r.crest) cache[r.id] = { h, c:r.crest, at:Date.now() };
-      });
-    }
-    delete teams._hash;
-    crestCacheWrite(cache);
   },
   /* 試合メンバー・公式記録（サインなし）を読んで、手元の大会データに足す */
   async loadHeavy(t, teams, matches){
@@ -156,7 +158,7 @@ const DB = {
       const { data, error } = await sb.from("gn_teams").select(GUEST_TEAM_COLS).eq("tournament_id",tournamentId);
       if(error) throw error;
       const teams = data || [];
-      await this.attachCrests(tournamentId, teams);
+      await this.attachCached(tournamentId, teams);
       return teams;
     }
     const { data, error } = await sb.from("gn_teams").select("*").eq("tournament_id",tournamentId);
