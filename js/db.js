@@ -491,6 +491,12 @@ const DB = {
     const { error } = await sb.from("gn_venue_entry").insert(row);
     if(error) throw error;
   },
+  // 大会を削除したとき、その大会の会場担当リンクもいっしょに消す（残っても入力はできないが、一覧から片付ける）
+  async removeVenueEntries(tournamentId){
+    if(!sb){ const d = local.read(); d.venueEntry = d.venueEntry.filter(x=>x.tournament_id!==tournamentId); local.write(d); return; }
+    const { error } = await sb.from("gn_venue_entry").delete().eq("tournament_id", tournamentId);
+    if(error) throw error;
+  },
   async updateVenueEntry(id, patch){
     if(!sb){ const d = local.read(); const r = d.venueEntry.find(x=>x.id===id); if(r) Object.assign(r, patch); local.write(d); return; }
     const { error } = await sb.from("gn_venue_entry").update(patch).eq("id", id);
