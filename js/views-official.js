@@ -21,7 +21,7 @@ function viewOfficial(){
       <div class="sheet-a4" style="transform:scale(${z})">${p2}</div>
     </div></div>` : ""; })()}
     <div class="screen noprint">
-      <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
+      <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。${sheetPcInput()?"選手のシュート数は数字を直接打てます（矢印キー・Enterで次の枠へ）。":""}いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
       ${vmode ? `${venueDeadlineNote()}<div class="callout" style="margin-bottom:12px">記録者が内容を最終チェックしたら、右上のサイン欄を押して、その場で審判などに<b>指でサイン</b>をもらってください。このリンクは今日の24時まで使えます。公開・非公開の切り替えは運営（本部）が行います。</div>
       ${signed ? `<div class="callout" style="margin-bottom:12px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ サイン済みです。サインのあとに内容を直したときは、サインをもらい直してください（サイン欄を押すと書き直せます）。</div>` : ""}`
       : `<div class="callout ${state.official.public?"ok":""}" style="margin-bottom:12px">

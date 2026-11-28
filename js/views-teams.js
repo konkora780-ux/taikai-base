@@ -1558,6 +1558,10 @@ function sheetNumKind(path){
   if(/^((H|A)\.lineup\.\d+\.subTime|(H|A)\.cards\.\d+\.time|goals\.\d+\.time|temp|matchMin|etMin|kickoffTime)$/.test(path)) return "mix";
   return null;
 }
+/* PC（マウスなど細かく指せるポインター＋ホバーできる）か。画面幅ではなく操作のしかたで見分ける */
+function sheetPcInput(){
+  try{ return matchMedia("(hover: hover) and (pointer: fine)").matches; }catch(_){ return false; }
+}
 /* 自動計算の枠か（選手ごとのシュートの計＝前半＋後半＋延長／チーム合計の計＝前半＋後半＋延前＋延後） */
 function sheetIsCalc(path){ return /^(H|A)\.(lineup\.\d+\.st|tot\.\w+\.2)$/.test(path); }
 /* 全角の数字・記号を半角に（日本語入力がオンのまま打っても半角で入るように） */
@@ -1606,7 +1610,10 @@ function sheetFields(){
   const o = state.official;
   const mCur = curMatchAny()||{};
   const et = matchETPlayed(mCur);   // 延長をやった試合か（e1=延前/e2=延後 のシュート列を使う）
-  const shotTap = (side,i,half)=> et ? {size:7, tap:{k:"shot",side,idx:i,half}} : {size:7};
+  // 選手のシュート：スマホ・タブレット（指で操作）はリストから選ぶ／PC（マウス＋キーボード）はそのまま数字を打つ
+  const pc = sheetPcInput();
+  const shotOpt = (side,i,half)=> pc ? {size:7} : {size:7, tap:{k:"shot",side,idx:i,half}};
+  const shotTap = (side,i,half)=> et ? shotOpt(side,i,half) : {size:7};
   const hCrest = mCur.id ? crestFor(resolveSlot(mCur,"H").id) : null;
   const aCrest = mCur.id ? crestFor(resolveSlot(mCur,"A").id) : null;
   // 上部（主催団体・タイトル・大会名〜審判団・チーム名とスコア）＝紙の様式（2種委員会版）に合わせた並び
@@ -1617,8 +1624,8 @@ function sheetFields(){
     F.push(box(`H.lineup.${i}.subTime`, 45.2,78.9,  t,b,{size:7}));
     F.push(box(`H.lineup.${i}.e1`,      78.9,95.8,  t,b, shotTap("H",i,"e1")));   // 延長前半シュート（延長時のみ）
     F.push(box(`H.lineup.${i}.e2`,      95.8,112.7, t,b, shotTap("H",i,"e2")));   // 延長後半シュート
-    F.push(box(`H.lineup.${i}.s2`,     112.7,129.5, t,b,{size:7, tap:{k:"shot",side:"H",idx:i,half:"s2"}}));
-    F.push(box(`H.lineup.${i}.s1`,     129.5,146.4, t,b,{size:7, tap:{k:"shot",side:"H",idx:i,half:"s1"}}));
+    F.push(box(`H.lineup.${i}.s2`,     112.7,129.5, t,b,shotOpt("H",i,"s2")));
+    F.push(box(`H.lineup.${i}.s1`,     129.5,146.4, t,b,shotOpt("H",i,"s1")));
     F.push(box(`H.lineup.${i}.st`,     146.4,163.3, t,b,{size:7}));
     F.push(box(`H.lineup.${i}.g`,      163.3,180.1, t,b,{size:7}));
     F.push(box(`H.lineup.${i}.name`,   180.1,264.5, t,b,{align:"l", tap:{k:"lineup",side:"H",idx:i}}));
@@ -1629,8 +1636,8 @@ function sheetFields(){
     F.push(box(`A.lineup.${i}.name`,   331.9,416.3, t,b,{align:"l", tap:{k:"lineup",side:"A",idx:i}}));
     F.push(box(`A.lineup.${i}.g`,      416.3,433.1, t,b,{size:7}));
     F.push(box(`A.lineup.${i}.st`,     433.1,450,   t,b,{size:7}));
-    F.push(box(`A.lineup.${i}.s1`,     450,466.9,   t,b,{size:7, tap:{k:"shot",side:"A",idx:i,half:"s1"}}));
-    F.push(box(`A.lineup.${i}.s2`,     466.9,483.7, t,b,{size:7, tap:{k:"shot",side:"A",idx:i,half:"s2"}}));
+    F.push(box(`A.lineup.${i}.s1`,     450,466.9,   t,b,shotOpt("A",i,"s1")));
+    F.push(box(`A.lineup.${i}.s2`,     466.9,483.7, t,b,shotOpt("A",i,"s2")));
     F.push(box(`A.lineup.${i}.e1`,     483.7,500.6, t,b, shotTap("A",i,"e1")));
     F.push(box(`A.lineup.${i}.e2`,     500.6,517.5, t,b, shotTap("A",i,"e2")));
     F.push(box(`A.lineup.${i}.subTime`,517.5,551.2, t,b,{size:7}));

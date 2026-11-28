@@ -10,8 +10,8 @@ const { serve, fixture, FAKE } = require("./poll-traffic");
   const browser = await chromium.launch();
   const out = {}; let ok = true;
   const check = (name, cond, extra) => { out[name] = cond ? "OK" : "NG " + (extra||""); if(!cond) ok = false; };
-  for(const vp of [{ name:"PC", viewport:{ width:1400, height:900 } }, { name:"スマホ幅", viewport:{ width:390, height:844 } }]){
-    const page = await (await browser.newContext({ viewport:vp.viewport })).newPage();
+  for(const vp of [{ name:"PC", viewport:{ width:1400, height:900 } }, { name:"スマホ", viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true }]){
+    const page = await (await browser.newContext({ viewport:vp.viewport, isMobile:!!vp.isMobile, hasTouch:!!vp.hasTouch })).newPage();
     const errors = [];
     page.on("pageerror", e=> errors.push(e.message));
     await page.route(/cdn\.jsdelivr\.net\/npm\/@supabase/, r=> r.fulfill({ status:200, contentType:"text/javascript", body:FAKE }));
@@ -93,6 +93,26 @@ const { serve, fixture, FAKE } = require("./poll-traffic");
     check(T("計の枠は入力できない"), calc.ro && calc.ti===-1 && calc.pe==="none" && calc.stRo, JSON.stringify(calc));
     check(T("前半→← で後半へ（用紙の並びどおり）"), after === `H.tot.${tk}.1`, after);
     check(T("前半→→ は計を飛ばして相手チームの前半へ"), await page.evaluate(k=>{ const el=document.querySelector(`.fx[data-p="H.tot.${k}.0"]`); el.focus(); el.select(); }, tk) || await press("ArrowRight") === `A.tot.${tk}.0`);
+    // 選手のシュート：PCは数字を直接入力、スマホはリストから選ぶ
+    if(vp.name==="PC"){
+      const s1 = await page.evaluate(()=>{ const el=document.querySelector('.fx[data-p="H.lineup.8.s1"]'); return { pick:el.classList.contains("pickable"), ro:el.readOnly }; });
+      check(T("シュート欄は手入力できる"), !s1.pick && !s1.ro, JSON.stringify(s1));
+      await focus("H.lineup.8.s1"); await page.keyboard.type("2"); await page.keyboard.press("ArrowLeft"); await page.keyboard.press("ArrowLeft");   // 1回目は文字の先頭へ、2回目で左（後半）の枠へ
+      const nx = await cur(); await page.keyboard.type("1");
+      const r = await page.evaluate(()=>({ st:state.official.H.lineup[8].st, stDom:document.querySelector('.fx[data-p="H.lineup.8.st"]').value,
+        f:state.official.H.tot.shot[0], h:state.official.H.tot.shot[1], t:state.official.H.tot.shot[2] }));
+      check(T("前半2・後半1 → 計3（チーム合計も自動）"), nx==="H.lineup.8.s2" && r.st==="3" && r.stDom==="3" && r.f==="2" && r.h==="1" && r.t==="3", nx+" "+JSON.stringify(r));
+      await page.evaluate(()=>{ const el=document.querySelector('.fx[data-p="A.lineup.8.s1"]'); el.focus(); el.value="４"; el.dispatchEvent(new Event("input",{bubbles:true})); });
+      check(T("シュートも全角→半角"), await page.evaluate(()=> state.official.A.lineup[8].s1==="4" && state.official.A.lineup[8].st==="4"));
+      await page.keyboard.press("Enter");
+      check(T("シュート欄で Enter はリストを開かず下へ"), !(await page.evaluate(()=> !!document.querySelector(".modal .picklist"))) && await cur()==="A.lineup.9.s1");
+    } else {
+      const pk = await page.evaluate(()=> document.querySelector('.fx[data-p="H.lineup.8.s1"]').classList.contains("pickable"));
+      check(T("シュート欄はリストから選ぶ（従来どおり）"), pk);
+      await page.evaluate(()=> document.querySelector('.fx[data-p="H.lineup.8.s1"]').click()); await page.waitForTimeout(100);
+      check(T("タップでシュートのリストが開く"), await page.evaluate(()=> /シュート/.test((document.querySelector(".modal h3")||{}).textContent||"")));
+      await page.evaluate(()=> document.querySelectorAll(".modal").forEach(m=>m.remove()));
+    }
     check(T("JSエラーなし"), !errors.length, errors.join(" / "));
     if(vp.name==="PC"){ await page.evaluate(()=>{ state.sheetZoom=1; render(); }); await focus("ar1");
       await page.screenshot({ path: process.env.SHOT || "/tmp/keynav.png" }); }
