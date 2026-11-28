@@ -1662,6 +1662,8 @@ $("#app").addEventListener("input", e=>{
   // 選手のシュート前半/後半を手入力→本人の計＋チーム合計を自動計算
   const sm = el.dataset.p.match(/^(H|A)\.lineup\.\d+\.(s1|s2|e1|e2)$/);
   if(sm){ computeShots(sm[1]); syncShotDOM(sm[1]); }
+  // 出場時間（画面だけの表示）を数え直す：試合時間・交代の時間/番号・背番号・退場
+  if(/^((H|A)\.(lineup\.\d+\.(subTime|subNo|no|name)|cards\.\d+\.(time|kind|no))|matchMin|etMin)$/.test(el.dataset.p)) refreshPlayTime();
   // PK経過欄を手で直したら、チーム脇の〇の数を数え直す
   const pm = el.dataset.p.match(/^(H|A)\.pks\.\d+$/);
   if(pm){ const sp=document.getElementById("pkmaru-"+pm[1]); if(sp) sp.textContent = pkMaruCount(pm[1]); }

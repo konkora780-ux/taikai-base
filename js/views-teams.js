@@ -1562,6 +1562,67 @@ function sheetNumKind(path){
 function sheetPcInput(){
   try{ return matchMedia("(hover: hover) and (pointer: fine)").matches; }catch(_){ return false; }
 }
+/* 公式記録の「交代 時間」などの書き方 → 試合の通し時間（分）。「90+6分」→90（アディショナルタイムは数えない）、「HT」→前半の終わり */
+function sheetMinuteOf(text, half){
+  const t = String(text??"").replace(/[０-９]/g, c=> String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/分/g,"").trim();
+  if(!t) return null;
+  if(/^HT$/i.test(t)) return half || null;
+  const m = t.match(/^(\d+(?:\.\d+)?)/);
+  return m ? +m[1] : null;
+}
+/* 公式記録の書き込み（試合時間・選手交代の時間と番号・退場）から、選手ごとの出場時間（分）を出す。
+   先発＝0分から、途中出場＝交代した相手の「時間」から。交代で退いた／退場したらその時間まで。空の行は null */
+function officialPlayMinutes(o, side){
+  const S = o && o[side]; if(!S || !Array.isArray(S.lineup)) return [];
+  const m = (typeof curMatchAny==="function" && curMatchAny()) || null;
+  const et = m ? matchETPlayed(m) : !!String(o.etMin||"").trim();
+  let reg = num(o.matchMin), ext = et ? num(o.etMin) : 0;
+  if(!reg && m) reg = matchHalfMin(m,"1H")*2;
+  if(et && !ext && m) ext = matchHalfMin(m,"1ET")*2;
+  const total = reg + ext, half = reg/2;
+  if(!total) return S.lineup.map(()=> null);
+  let starters = 11; try{ starters = startCountOf(state.t) || 11; }catch(_){}
+  const clamp = v=> Math.max(0, Math.min(total, v));
+  const noOf = r=> String(r.no??"").trim();
+  const reds = (S.cards||[]).filter(c=> /退|赤|R/i.test(String(c.kind||"")) && String(c.no??"").trim());
+  return S.lineup.map((r,i)=>{
+    if(!String(r.name||"").trim() && !noOf(r)) return null;
+    let start;
+    if(i < starters) start = 0;
+    else {
+      const sn = String(r.subNo??"").trim(); if(!sn) return 0;   // 控えのまま出ていない
+      const out = S.lineup.find(x=> noOf(x)===sn);
+      const t = out ? sheetMinuteOf(out.subTime, half) : null;
+      if(t==null) return null;                                      // 入った時間がわからない
+      start = clamp(t);
+    }
+    let end = total;
+    const tOut = sheetMinuteOf(r.subTime, half); if(tOut!=null) end = Math.min(end, clamp(tOut));
+    reds.filter(c=> String(c.no).trim()===noOf(r)).forEach(c=>{ const t = sheetMinuteOf(c.time, half); if(t!=null) end = Math.min(end, clamp(t)); });
+    return Math.max(0, Math.round(end - start));
+  });
+}
+/* 出場時間の列（メンバー表の左右の外側）。画面だけの表示（.noprint）・一般公開の閲覧ビューには出さない */
+function playTimeHTML(){
+  if(state.officialReadOnly || !state.official) return "";
+  const S = SHEET.H, o = state.official;
+  const cols = { H:[5, 27], A:[568.6, 590.6] };
+  let out = `<div class="ptime noprint" id="ptime" title="試合時間と選手交代・退場の記録から自動計算（画面だけに表示。印刷・一般公開には出ません）">`;
+  ["H","A"].forEach(side=>{
+    const [x1,x2] = cols[side], w = x2-x1;
+    const top = 643, bot = ROW_PLAYER[ROW_PLAYER.length-1][1];
+    out += `<div class="ptbox" style="left:${pt(x1)};top:${pt(S-top)};width:${pt(w)};height:${pt(top-bot)}"></div>`;
+    out += `<div class="pthead" style="left:${pt(x1)};top:${pt(S-top)};width:${pt(w)};height:${pt(top-ROW_PLAYER[0][0])}">出場<br>時間</div>`;
+    officialPlayMinutes(o, side).forEach((v,i)=>{
+      const [t,b] = ROW_PLAYER[i];
+      out += `<div class="ptval${i===10?" ptsep":""}" style="left:${pt(x1)};top:${pt(S-t)};width:${pt(w)};height:${pt(t-b)}">${v==null?"":v}</div>`;
+    });
+  });
+  return out + `</div>`;
+}
+function refreshPlayTime(){
+  const el = document.getElementById("ptime"); if(el) el.outerHTML = playTimeHTML();
+}
 /* 自動計算の枠か（選手ごとのシュートの計＝前半＋後半＋延長／チーム合計の計＝前半＋後半＋延前＋延後） */
 function sheetIsCalc(path){ return /^(H|A)\.(lineup\.\d+\.st|tot\.\w+\.2)$/.test(path); }
 /* 全角の数字・記号を半角に（日本語入力がオンのまま打っても半角で入るように） */
@@ -1705,6 +1766,7 @@ function sheetFields(){
   F.push(box("timeText", 78,568.1, 82,70, {align:"l"}));
   F.push(box("note",     78,568.1, 69,57, {align:"l"}));
   F.push(signBoxesHTML(o));
+  F.push(playTimeHTML());   // 出場時間（運営・会場担当の画面だけ。印刷・一般公開には出さない）
   return F.join("");
 }
 /* --- 右上のサイン欄（マッチコミッショナー／主審／運営担当・会場長）。紙の様式と同じく3枠横並び ---
