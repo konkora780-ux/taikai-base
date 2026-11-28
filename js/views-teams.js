@@ -1669,16 +1669,25 @@ function officialPlayMinutes(o, side){
 function playTimeHTML(){
   if(state.officialReadOnly || !state.official) return "";
   const S = SHEET.H, o = state.official;
+  // 行の境目は、用紙のメンバー表の横線（SHEET.h）そのものを使う（ずれないように）
+  const ys = SHEET.h.filter(([y,x1,x2])=> Math.abs(x1-28.4)<0.5 && Math.abs(x2-568.1)<0.5 && y<=ROW_PLAYER[0][0]+0.5 && y>=ROW_PLAYER[19][1]-1)
+    .map(l=>l[0]).sort((a,b)=>b-a);
+  const rowY = ys.length===21 ? ys : ROW_PLAYER.map(r=>r[0]).concat([ROW_PLAYER[19][1]]);
+  const TOP = 646.4, HEAD = rowY[0], BOT = rowY[20], SEP = 482.5;   // 見出しの上端・選手1行目の上端・最下行の下端・先発と控えの太線
   const cols = { H:[5, 27], A:[568.6, 590.6] };
+  const hl = (x1,w,y,th)=> `<i class="ptln" style="left:${pt(x1)};top:${pt(S-y)};width:${pt(w)};height:${th}pt"></i>`;
+  const vl = (x,y1,y2)=> `<i class="ptln" style="left:${pt(x)};top:${pt(S-y1)};width:.5pt;height:${pt(y1-y2)}"></i>`;
   let out = `<div class="ptime noprint" id="ptime" title="試合時間と選手交代・退場の記録から自動計算（画面だけに表示。印刷・一般公開には出ません）">`;
   ["H","A"].forEach(side=>{
     const [x1,x2] = cols[side], w = x2-x1;
-    const top = 643, bot = ROW_PLAYER[ROW_PLAYER.length-1][1];
-    out += `<div class="ptbox" style="left:${pt(x1)};top:${pt(S-top)};width:${pt(w)};height:${pt(top-bot)}"></div>`;
-    out += `<div class="pthead" style="left:${pt(x1)};top:${pt(S-top)};width:${pt(w)};height:${pt(top-ROW_PLAYER[0][0])}">出場<br>時間</div>`;
+    out += `<div class="ptbox" style="left:${pt(x1)};top:${pt(S-TOP)};width:${pt(w)};height:${pt(TOP-BOT)}"></div>`;
+    out += `<div class="pthead" style="left:${pt(x1)};top:${pt(S-TOP)};width:${pt(w)};height:${pt(TOP-HEAD)}">出場<br>時間</div>`;
+    // 線は用紙の線と同じ描き方（y から下へ .5pt、先発と控えの境は 1.5pt）
+    out += hl(x1, w, TOP, .5) + vl(x1, TOP, BOT) + vl(x2-.5, TOP, BOT);
+    rowY.forEach((y,i)=>{ out += Math.abs(y-SEP)<0.5 ? hl(x1, w, SEP, 1.5) : hl(x1, w, y, .5); });
     officialPlayMinutes(o, side).forEach((v,i)=>{
-      const [t,b] = ROW_PLAYER[i];
-      out += `<div class="ptval${i===10?" ptsep":""}" style="left:${pt(x1)};top:${pt(S-t)};width:${pt(w)};height:${pt(t-b)}">${v==null?"":v}</div>`;
+      const t = rowY[i], b = rowY[i+1];
+      out += `<div class="ptval" style="left:${pt(x1)};top:${pt(S-t)};width:${pt(w)};height:${pt(t-b)}">${v==null?"":v}</div>`;
     });
   });
   return out + `</div>`;

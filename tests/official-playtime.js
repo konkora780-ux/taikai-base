@@ -84,6 +84,20 @@ const { serve, fixture, FAKE } = require("./poll-traffic");
     return officialPlayMinutes(o,"A");
   });
   check("参考資料の例（5・1・27、先発は90）", ref[11]===5 && ref[12]===1 && ref[13]===27 && ref[0]===90 && ref[1]===90 && ref[2]===69 && ref[4]===90, JSON.stringify(ref));
+  // 出場時間の列の横線が、用紙のメンバー表の横線とぴったり同じ高さ・太さか（表示の大きさ 60〜140%）
+  for(const z of [0.6, 0.8, 1, 1.4]){
+    const res = await page.evaluate(z=>{ state.sheetZoom = z; render();
+      const sheet = document.querySelector(".sheet-a4");
+      const main = [...sheet.querySelectorAll(".ln")].map(e=>e.getBoundingClientRect()).filter(r=> r.width > r.height*20);
+      const tbl = sheet.querySelector('.fx[data-p="H.lineup.0.subNo"]').getBoundingClientRect();
+      const pts = [...sheet.querySelectorAll("#ptime .ptln")].map(e=>e.getBoundingClientRect()).filter(r=> r.width > r.height && r.right < tbl.left);
+      const bad = pts.filter(p=> !main.some(m=> Math.abs(m.top-p.top)<0.2 && Math.abs(m.height-p.height)<0.2 && m.left < tbl.left+2 && m.right > tbl.left));
+      const thick = pts.filter(p=> p.height > 1.2*z).length;
+      return { n:pts.length, bad:bad.length, thick };
+    }, z);
+    check(`横線が用紙とそろう（${Math.round(z*100)}%）`, res.n===22 && res.bad===0 && res.thick===1, JSON.stringify(res));
+  }
+  await page.evaluate(()=>{ state.sheetZoom = 1; render(); });
   // 印刷には出ない
   if(process.env.SHOT) await page.screenshot({ path:process.env.SHOT, fullPage:false });
   await page.emulateMedia({ media:"print" });
