@@ -1106,7 +1106,7 @@ function emptySide(){
   };
 }
 function emptyOfficial(){
-  return { org:"", title:"", format:"", venue:"", date:"", kickoffTime:"", matchMin:"", etMin:"", pitchCond:"",
+  return { org:"", title:"", format:"", venue:"", date:"", kickoffTime:"", matchMin:"", etMin:"", at:["","","",""], pitchCond:"",
     commissioner:"", referee:"", ar1:"", ar2:"", fourth:"", admin:"", recorder:"",
     weather:"", temp:"", humid:"", wind:"", crowd:"", pitch:"",
     H:emptySide(), A:emptySide(),
@@ -1562,29 +1562,82 @@ function sheetNumKind(path){
 function sheetPcInput(){
   try{ return matchMedia("(hover: hover) and (pointer: fine)").matches; }catch(_){ return false; }
 }
-/* 公式記録の「交代 時間」などの書き方 → 試合の通し時間（分）。「90+6分」→90（アディショナルタイムは数えない）、「HT」→前半の終わり */
-function sheetMinuteOf(text, half){
-  const t = String(text??"").replace(/[０-９]/g, c=> String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/分/g,"").trim();
+/* 「90+5」などの先頭の数（正規の時間）と「+」のあと（アディショナルタイム）。全角でもよい */
+function sheetTimeParts(text){
+  const t = String(text??"").replace(/[０-９]/g, c=> String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/＋/g,"+").replace(/分/g,"").trim();
   if(!t) return null;
-  if(/^HT$/i.test(t)) return half || null;
-  const m = t.match(/^(\d+(?:\.\d+)?)/);
-  return m ? +m[1] : null;
+  if(/^HT$/i.test(t)) return { ht:true };
+  const m = t.match(/^(\d+(?:\.\d+)?)\s*(?:\+\s*(\d+(?:\.\d+)?))?/);
+  return m ? { n:+m[1], plus:m[2]!=null ? +m[2] : 0 } : null;
 }
-/* 公式記録の書き込み（試合時間・選手交代の時間と番号・退場）から、選手ごとの出場時間（分）を出す。
-   先発＝0分から、途中出場＝交代した相手の「時間」から。交代で退いた／退場したらその時間まで。空の行は null */
+/* 出場時間にアディショナルタイムを含めるか（大会の設定。既定は含める） */
+function playTimeIncludesAT(){
+  try{ return cfgOf(state.t).playTimeAT !== false; }catch(_){ return true; }
+}
+/* 公式記録のアディショナルタイム（前半・後半・延長前半・延長後半）を、試合時間の欄「90+5」とそろえる */
+function officialAT(o){
+  if(!Array.isArray(o.at)) o.at = ["","","",""];
+  while(o.at.length<4) o.at.push("");
+  return o.at;
+}
+function setOfficialAT(i, v){
+  const o = state.official; if(!o) return;
+  const at = officialAT(o); at[i] = toHalfNum(String(v||"")).replace(/[^\d]/g,"");
+  const key = i<2 ? "matchMin" : "etMin";
+  const p = sheetTimeParts(o[key]); const base = p && !p.ht ? p.n : null;
+  const sum = num(at[i<2?0:2]) + num(at[i<2?1:3]);
+  if(base!=null) o[key] = sum ? `${base}+${sum}` : String(base);
+  const el = document.querySelector(`.fx[data-p="${key}"]`); if(el) el.value = o[key];
+  refreshPlayTime();
+}
+/* 試合時間の欄に「90+5」と直接書いたとき：内訳がちがえば後半（延長は延長後半）のATとして入れる */
+function syncATFromSheet(key){
+  const o = state.official; if(!o) return;
+  const at = officialAT(o), p = sheetTimeParts(o[key]);
+  const i = key==="matchMin" ? 0 : 2, plus = p && !p.ht ? p.plus : 0;
+  if(num(at[i]) + num(at[i+1]) === plus) return;
+  if(plus >= num(at[i])) at[i+1] = plus - num(at[i]) ? String(plus - num(at[i])) : "";
+  else { at[i] = ""; at[i+1] = plus ? String(plus) : ""; }
+  [i, i+1].forEach(j=>{ const el=document.getElementById("of-at-"+j); if(el) el.value = at[j]; });
+}
+/* 公式記録の書き込み（試合時間・アディショナルタイム・選手交代の時間と番号・退場）から、選手ごとの出場時間（分）を出す。
+   先発＝0分から、途中出場＝交代した相手の「時間」から。交代で退いた／退場したらその時間まで。空の行は null。
+   アディショナルタイムを含める設定なら「90+3分」の交代は93分、含めないなら90分として数える */
 function officialPlayMinutes(o, side){
   const S = o && o[side]; if(!S || !Array.isArray(S.lineup)) return [];
   const m = (typeof curMatchAny==="function" && curMatchAny()) || null;
   const et = m ? matchETPlayed(m) : !!String(o.etMin||"").trim();
-  let reg = num(o.matchMin), ext = et ? num(o.etMin) : 0;
+  const pm = sheetTimeParts(o.matchMin), pe = sheetTimeParts(o.etMin);
+  let reg = pm && !pm.ht ? pm.n : 0, ext = et && pe && !pe.ht ? pe.n : 0;
   if(!reg && m) reg = matchHalfMin(m,"1H")*2;
   if(et && !ext && m) ext = matchHalfMin(m,"1ET")*2;
-  const total = reg + ext, half = reg/2;
-  if(!total) return S.lineup.map(()=> null);
+  if(!reg) return S.lineup.map(()=> null);
+  const useAT = playTimeIncludesAT();
+  const at = officialAT(o).map(v=> num(v));
+  if(!at[0] && !at[1] && pm && pm.plus) at[1] = pm.plus;   // 「90+5」だけ書いてあるとき
+  if(!at[2] && !at[3] && pe && pe.plus) at[3] = pe.plus;
+  const h = reg/2, e = ext/2;
+  const P = [{ s:0, len:h }, { s:h, len:h }].concat(et && ext ? [{ s:reg, len:e }, { s:reg+e, len:e }] : []);
+  // 交代・退場の「45+4」などから、記録が無いATも少なくともその分はあったとみなす
+  const times = [];
+  S.lineup.forEach(r=> times.push(r.subTime)); (S.cards||[]).forEach(c=> times.push(c.time));
+  P.forEach((p,i)=>{ p.at = useAT ? at[i]||0 : 0; });
+  if(useAT) times.forEach(t=>{ const x = sheetTimeParts(t); if(!x || x.ht || !x.plus) return;
+    const p = P.find(q=> q.s+q.len===x.n); if(p) p.at = Math.max(p.at, x.plus); });
+  let acc = 0; P.forEach(p=>{ p.a = acc; acc += p.len + p.at; });
+  const total = acc;
+  const elapsed = text=>{
+    const x = sheetTimeParts(text); if(!x) return null;
+    if(x.ht) return P[1].a;
+    if(x.plus){ const p = P.find(q=> q.s+q.len===x.n); if(p) return p.a + p.len + Math.min(x.plus, p.at); }
+    if(x.n<=0) return 0;
+    const p = P.find(q=> q.s < x.n && x.n <= q.s+q.len);
+    return p ? p.a + (x.n - p.s) : total;
+  };
   let starters = 11; try{ starters = startCountOf(state.t) || 11; }catch(_){}
   const clamp = v=> Math.max(0, Math.min(total, v));
   const noOf = r=> String(r.no??"").trim();
-  const reds = (S.cards||[]).filter(c=> /退|赤|R/i.test(String(c.kind||"")) && String(c.no??"").trim());
+  const reds = (S.cards||[]).filter(c=> /退/.test(String(c.kind||"")) && String(c.no??"").trim());
   return S.lineup.map((r,i)=>{
     if(!String(r.name||"").trim() && !noOf(r)) return null;
     let start;
@@ -1592,13 +1645,13 @@ function officialPlayMinutes(o, side){
     else {
       const sn = String(r.subNo??"").trim(); if(!sn) return 0;   // 控えのまま出ていない
       const out = S.lineup.find(x=> noOf(x)===sn);
-      const t = out ? sheetMinuteOf(out.subTime, half) : null;
+      const t = out ? elapsed(out.subTime) : null;
       if(t==null) return null;                                      // 入った時間がわからない
       start = clamp(t);
     }
     let end = total;
-    const tOut = sheetMinuteOf(r.subTime, half); if(tOut!=null) end = Math.min(end, clamp(tOut));
-    reds.filter(c=> String(c.no).trim()===noOf(r)).forEach(c=>{ const t = sheetMinuteOf(c.time, half); if(t!=null) end = Math.min(end, clamp(t)); });
+    const tOut = elapsed(r.subTime); if(tOut!=null) end = Math.min(end, clamp(tOut));
+    reds.filter(c=> String(c.no).trim()===noOf(r)).forEach(c=>{ const t = elapsed(c.time); if(t!=null) end = Math.min(end, clamp(t)); });
     return Math.max(0, Math.round(end - start));
   });
 }
