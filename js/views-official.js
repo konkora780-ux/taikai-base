@@ -852,6 +852,7 @@ async function deleteTournament(){
     await DB.remove("gn_matches", state.matches.map(m=>m.id));
     await DB.remove("gn_teams",   state.teams.map(t=>t.id));
     await DB.remove("gn_tournaments", state.t.id);
+    await DB.removeVenueEntries(state.t.id).catch(e=>console.warn("会場担当リンクを消せませんでした", e));   // setup-32 未実行でも大会の削除は止めない
     state.t = null; await reloadList(); go("home"); toast("削除しました");
   }catch(e){ toast("削除できませんでした: "+(e.message||e)); }
 }
