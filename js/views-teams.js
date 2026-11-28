@@ -1570,9 +1570,12 @@ function sheetTimeParts(text){
   const m = t.match(/^(\d+(?:\.\d+)?)\s*(?:\+\s*(\d+(?:\.\d+)?))?/);
   return m ? { n:+m[1], plus:m[2]!=null ? +m[2] : 0 } : null;
 }
-/* 出場時間にアディショナルタイムを含めるか（大会の設定。既定は含める） */
-function playTimeIncludesAT(){
-  try{ return cfgOf(state.t).playTimeAT !== false; }catch(_){ return true; }
+/* 出場時間とアディショナルタイム（大会の設定 settings.playTimeMode）
+   "sub"＝途中出場だけ含める（既定）：先発は試合時間（90）が上限・90+X分に退いても90。途中出場は入ってから終わるまでの実際の時間（ATも含む・最低1分）
+   "all"＝全員含める（フル出場は90+AT）／"none"＝含めない（90+X分は90として数える） */
+const PLAY_TIME_MODES = [["sub","途中出場だけ含める"],["all","全員含める"],["none","含めない"]];
+function playTimeMode(){
+  try{ const v = cfgOf(state.t).playTimeMode; return PLAY_TIME_MODES.some(x=>x[0]===v) ? v : "sub"; }catch(_){ return "sub"; }
 }
 /* 公式記録のアディショナルタイム（前半・後半・延長前半・延長後半）を、試合時間の欄「90+5」とそろえる */
 function officialAT(o){
@@ -1612,47 +1615,54 @@ function officialPlayMinutes(o, side){
   if(!reg && m) reg = matchHalfMin(m,"1H")*2;
   if(et && !ext && m) ext = matchHalfMin(m,"1ET")*2;
   if(!reg) return S.lineup.map(()=> null);
-  const useAT = playTimeIncludesAT();
+  const mode = playTimeMode();
   const at = officialAT(o).map(v=> num(v));
   if(!at[0] && !at[1] && pm && pm.plus) at[1] = pm.plus;   // 「90+5」だけ書いてあるとき
   if(!at[2] && !at[3] && pe && pe.plus) at[3] = pe.plus;
   const h = reg/2, e = ext/2;
-  const P = [{ s:0, len:h }, { s:h, len:h }].concat(et && ext ? [{ s:reg, len:e }, { s:reg+e, len:e }] : []);
-  // 交代・退場の「45+4」などから、記録が無いATも少なくともその分はあったとみなす
   const times = [];
   S.lineup.forEach(r=> times.push(r.subTime)); (S.cards||[]).forEach(c=> times.push(c.time));
-  P.forEach((p,i)=>{ p.at = useAT ? at[i]||0 : 0; });
-  if(useAT) times.forEach(t=>{ const x = sheetTimeParts(t); if(!x || x.ht || !x.plus) return;
-    const p = P.find(q=> q.s+q.len===x.n); if(p) p.at = Math.max(p.at, x.plus); });
-  let acc = 0; P.forEach(p=>{ p.a = acc; acc += p.len + p.at; });
-  const total = acc;
-  const elapsed = text=>{
-    const x = sheetTimeParts(text); if(!x) return null;
-    if(x.ht) return P[1].a;
-    if(x.plus){ const p = P.find(q=> q.s+q.len===x.n); if(p) return p.a + p.len + Math.min(x.plus, p.at); }
-    if(x.n<=0) return 0;
-    const p = P.find(q=> q.s < x.n && x.n <= q.s+q.len);
-    return p ? p.a + (x.n - p.s) : total;
+  // 時計：useAT＝各ハーフの実際の長さ（正規＋AT）で数える／しない＝正規の時間だけ（90+X は 90）
+  const clock = useAT=>{
+    const P = [{ s:0, len:h }, { s:h, len:h }].concat(et && ext ? [{ s:reg, len:e }, { s:reg+e, len:e }] : []);
+    P.forEach((p,i)=>{ p.at = useAT ? at[i]||0 : 0; });
+    // 交代・退場の「45+4」などから、記録が無いATも少なくともその分はあったとみなす
+    if(useAT) times.forEach(t=>{ const x = sheetTimeParts(t); if(!x || x.ht || !x.plus) return;
+      const p = P.find(q=> q.s+q.len===x.n); if(p) p.at = Math.max(p.at, x.plus); });
+    let acc = 0; P.forEach(p=>{ p.a = acc; acc += p.len + p.at; });
+    const total = acc;
+    const at_ = text=>{
+      const x = sheetTimeParts(text); if(!x) return null;
+      if(x.ht) return P[1].a;
+      if(x.plus){ const p = P.find(q=> q.s+q.len===x.n); if(p) return p.a + p.len + Math.min(x.plus, p.at); }
+      if(x.n<=0) return 0;
+      const p = P.find(q=> q.s < x.n && x.n <= q.s+q.len);
+      return p ? p.a + (x.n - p.s) : total;
+    };
+    const clamp = v=> Math.max(0, Math.min(total, v));
+    return { total, t: text=>{ const v = at_(text); return v==null ? null : clamp(v); } };
   };
+  const real = clock(mode!=="none"), nominal = clock(false);
   let starters = 11; try{ starters = startCountOf(state.t) || 11; }catch(_){}
-  const clamp = v=> Math.max(0, Math.min(total, v));
   const noOf = r=> String(r.no??"").trim();
   const reds = (S.cards||[]).filter(c=> /退/.test(String(c.kind||"")) && String(c.no??"").trim());
   return S.lineup.map((r,i)=>{
     if(!String(r.name||"").trim() && !noOf(r)) return null;
-    let start;
-    if(i < starters) start = 0;
-    else {
+    const isSub = i >= starters;
+    const C = (mode==="sub" && !isSub) ? nominal : real;   // 「途中出場だけ含める」なら先発は正規の時間で数える
+    let start = 0;
+    if(isSub){
       const sn = String(r.subNo??"").trim(); if(!sn) return 0;   // 控えのまま出ていない
       const out = S.lineup.find(x=> noOf(x)===sn);
-      const t = out ? elapsed(out.subTime) : null;
+      const t = out ? C.t(out.subTime) : null;
       if(t==null) return null;                                      // 入った時間がわからない
-      start = clamp(t);
+      start = t;
     }
-    let end = total;
-    const tOut = elapsed(r.subTime); if(tOut!=null) end = Math.min(end, clamp(tOut));
-    reds.filter(c=> String(c.no).trim()===noOf(r)).forEach(c=>{ const t = elapsed(c.time); if(t!=null) end = Math.min(end, clamp(t)); });
-    return Math.max(0, Math.round(end - start));
+    let end = C.total;
+    const tOut = C.t(r.subTime); if(tOut!=null) end = Math.min(end, tOut);
+    reds.filter(c=> String(c.no).trim()===noOf(r)).forEach(c=>{ const t = C.t(c.time); if(t!=null) end = Math.min(end, t); });
+    const v = Math.max(0, Math.round(end - start));
+    return (isSub && mode==="sub") ? Math.max(1, v) : v;   // 途中出場は最低1分
   });
 }
 /* 出場時間の列（メンバー表の左右の外側）。画面だけの表示（.noprint）・一般公開の閲覧ビューには出さない */

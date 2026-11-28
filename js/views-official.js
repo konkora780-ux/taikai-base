@@ -510,12 +510,10 @@ function viewSettings(){
           <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${cfg.overview?.etHalfMin??""}" onchange="ov_set('etHalfMin',this.value===''?null:Math.max(0,+this.value));render()">
           <span class="hint" style="margin:0">分（計 <b>${(cfg.overview?.etHalfMin||0)*2}</b> 分）</span>
         </div>`:""}
-      <label class="f">公式記録の出場時間（運営の画面だけの表示）</label>
-      <div class="seg">
-        <button class="${cfg.playTimeAT!==false?"on":""}" onclick="cfg_set('playTimeAT',true);render()">アディショナルタイムを含める</button>
-        <button class="${cfg.playTimeAT===false?"on":""}" onclick="cfg_set('playTimeAT',false);render()">含めない</button>
-      </div>
-      <p class="hint">含める：90+3分の交代は93分。含めない：90分として数えます。</p>
+      <label class="f">公式記録の出場時間：アディショナルタイム（運営の画面だけの表示）</label>
+      <div class="seg">${PLAY_TIME_MODES.map(([k,l])=>
+        `<button class="${(PLAY_TIME_MODES.some(x=>x[0]===cfg.playTimeMode)?cfg.playTimeMode:"sub")===k?"on":""}" onclick="cfg_set('playTimeMode','${k}');render()">${l}</button>`).join("")}</div>
+      <p class="hint">途中出場だけ含める：先発は試合時間（90分）が上限、途中出場は入ってから終わるまでの実際の時間（最低1分）。全員含める：フル出場は90＋AT。含めない：90+3分の交代も90分として数えます。</p>
       <label class="f">PK戦</label>
       <div class="seg">
         <button class="${!cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',false);render()">なし</button>
@@ -1837,6 +1835,6 @@ function officialATCard(){
   return `<div class="card" style="margin-bottom:12px">
     <div style="font-weight:700;margin-bottom:6px">⏱ アディショナルタイム</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap">${f(0,"前半")}${f(1,"後半")}${et ? f(2,"延長前半")+f(3,"延長後半") : ""}</div>
-    <p class="hint" style="margin:6px 0 0">合計が試合時間の欄に「90+5」のように入ります（印刷にも出ます）。メンバー表の脇の出場時間は${playTimeIncludesAT()?"アディショナルタイムを<b>含めて</b>":"アディショナルタイムを<b>含めずに</b>"}数えます（大会の設定で切り替え）。</p>
+    <p class="hint" style="margin:6px 0 0">合計が試合時間の欄に「90+5」のように入ります（印刷にも出ます）。メンバー表の脇の出場時間の数え方：アディショナルタイムを<b>${(PLAY_TIME_MODES.find(x=>x[0]===playTimeMode())||[])[1]}</b>（大会の設定で切り替え）。</p>
   </div>`;
 }
