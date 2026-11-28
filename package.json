@@ -8,7 +8,8 @@
     "test:e2e": "playwright test",
     "test:traffic": "node tests/poll-traffic.js && node tests/guest-traffic.js",
     "test:e2e:ui": "playwright test --ui",
-    "test:keynav": "node tests/official-keynav.js"
+    "test:keynav": "node tests/official-keynav.js",
+    "test:playtime": "node tests/official-playtime.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"

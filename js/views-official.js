@@ -21,6 +21,7 @@ function viewOfficial(){
       <div class="sheet-a4" style="transform:scale(${z})">${p2}</div>
     </div></div>` : ""; })()}
     <div class="screen noprint">
+      ${officialATCard()}
       <p class="hint">枠をタップするとそのまま書き込めます。<b>選手名の欄をタップ</b>すると、登録した選手からリストで選べます。${sheetPcInput()?"選手のシュート数は数字を直接打てます（矢印キー・Enterで次の枠へ）。":""}いまの試合の情報（チーム名・メンバー・得点・カード）は下書きとして入れてあります。</p>
       ${vmode ? `${venueDeadlineNote()}<div class="callout" style="margin-bottom:12px">記録者が内容を最終チェックしたら、右上のサイン欄を押して、その場で審判などに<b>指でサイン</b>をもらってください。このリンクは今日の24時まで使えます。公開・非公開の切り替えは運営（本部）が行います。</div>
       ${signed ? `<div class="callout" style="margin-bottom:12px;background:var(--warnbg);border-color:#f0d9a0;color:var(--warn)">⚠️ サイン済みです。サインのあとに内容を直したときは、サインをもらい直してください（サイン欄を押すと書き直せます）。</div>` : ""}`
@@ -509,6 +510,10 @@ function viewSettings(){
           <input class="in" type="number" inputmode="numeric" style="max-width:88px" value="${cfg.overview?.etHalfMin??""}" onchange="ov_set('etHalfMin',this.value===''?null:Math.max(0,+this.value));render()">
           <span class="hint" style="margin:0">分（計 <b>${(cfg.overview?.etHalfMin||0)*2}</b> 分）</span>
         </div>`:""}
+      <label class="f">公式記録の出場時間：アディショナルタイム（運営の画面だけの表示）</label>
+      <div class="seg">${PLAY_TIME_MODES.map(([k,l])=>
+        `<button class="${(PLAY_TIME_MODES.some(x=>x[0]===cfg.playTimeMode)?cfg.playTimeMode:"sub")===k?"on":""}" onclick="cfg_set('playTimeMode','${k}');render()">${l}</button>`).join("")}</div>
+      <p class="hint">途中出場だけ含める：先発は試合時間（90分）が上限、途中出場は入ってから終わるまでの実際の時間（最低1分）。全員含める：フル出場は90＋AT。含めない：90+3分の交代も90分として数えます。</p>
       <label class="f">PK戦</label>
       <div class="seg">
         <button class="${!cfg.overview?.hasPK?"on":""}" onclick="ov_set('hasPK',false);render()">なし</button>
@@ -1662,6 +1667,9 @@ $("#app").addEventListener("input", e=>{
   // 選手のシュート前半/後半を手入力→本人の計＋チーム合計を自動計算
   const sm = el.dataset.p.match(/^(H|A)\.lineup\.\d+\.(s1|s2|e1|e2)$/);
   if(sm){ computeShots(sm[1]); syncShotDOM(sm[1]); }
+  // 出場時間（画面だけの表示）を数え直す：試合時間・交代の時間/番号・背番号・退場
+  if(/^(matchMin|etMin)$/.test(el.dataset.p)) syncATFromSheet(el.dataset.p);   // 「90+5」→アディショナルタイムの内訳へ
+  if(/^((H|A)\.(lineup\.\d+\.(subTime|subNo|no|name)|cards\.\d+\.(time|kind|no))|matchMin|etMin)$/.test(el.dataset.p)) refreshPlayTime();
   // PK経過欄を手で直したら、チーム脇の〇の数を数え直す
   const pm = el.dataset.p.match(/^(H|A)\.pks\.\d+$/);
   if(pm){ const sp=document.getElementById("pkmaru-"+pm[1]); if(sp) sp.textContent = pkMaruCount(pm[1]); }
@@ -1814,4 +1822,19 @@ function ofNavFocus(x){
   // Excelと同じく、移った先の文字は全選択（そのまま打てば置き換わる）
   if(x.tagName==="INPUT"){ if(!x.readOnly) try{ x.select(); }catch(_){} }
   else { const rg = document.createRange(); rg.selectNodeContents(x); const s = getSelection(); s.removeAllRanges(); s.addRange(rg); }
+}
+
+/* アディショナルタイムの入力欄（画面だけ）。合計は試合時間の欄に「90+5」の形で入り、印刷にも出る */
+function officialATCard(){
+  const o = state.official; if(!o) return "";
+  const at = officialAT(o);
+  const et = matchETPlayed(curMatchAny()||{});
+  const f = (i, label)=> `<label style="display:flex;align-items:center;gap:4px;font-size:13px">${label}
+    <input class="in" id="of-at-${i}" inputmode="numeric" autocomplete="off" style="width:56px;padding:6px 8px" value="${esc(at[i]||"")}"
+      oninput="setOfficialAT(${i}, this.value)" onchange="this.value=state.official.at[${i}]">分</label>`;
+  return `<div class="card" style="margin-bottom:12px">
+    <div style="font-weight:700;margin-bottom:6px">⏱ アディショナルタイム</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">${f(0,"前半")}${f(1,"後半")}${et ? f(2,"延長前半")+f(3,"延長後半") : ""}</div>
+    <p class="hint" style="margin:6px 0 0">合計が試合時間の欄に「90+5」のように入ります（印刷にも出ます）。メンバー表の脇の出場時間の数え方：アディショナルタイムを<b>${(PLAY_TIME_MODES.find(x=>x[0]===playTimeMode())||[])[1]}</b>（大会の設定で切り替え）。</p>
+  </div>`;
 }
